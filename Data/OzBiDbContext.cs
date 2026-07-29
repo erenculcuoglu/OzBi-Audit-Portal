@@ -27,6 +27,18 @@ namespace OzBiPortalCRM.Data
             modelBuilder.Entity<OzBiAiModel>().ToTable("aimodel");
             modelBuilder.Entity<OzBiAssistant>().ToTable("asistant");
             modelBuilder.Entity<OzBiUser>().ToTable("aspnetusers");
+
+            // Explicitly set char(36) column types for string ID properties
+            foreach (var entity in modelBuilder.Model.GetEntityTypes())
+            {
+                foreach (var property in entity.GetProperties())
+                {
+                    if (property.ClrType == typeof(string) && (property.Name == "Id" || property.Name.EndsWith("Id")))
+                    {
+                        property.SetColumnType("char(36)");
+                    }
+                }
+            }
         }
     }
 }
