@@ -114,28 +114,42 @@ else
         <table class="custom-table">
             <thead>
                 <tr>
-                    <th style="width: 40px; cursor: pointer;" @onclick='() => SortBy("IsFavorited")'>
-                        Favori @GetSortIcon("IsFavorited")
+                    <th style="width: 70px; cursor: pointer; white-space: nowrap; text-align: center;" @onclick='() => SortBy("IsFavorited")'>
+                        <div class="d-inline-flex align-items-center justify-content-center gap-1">
+                            <span>Favori</span> @GetSortIcon("IsFavorited")
+                        </div>
                     </th>
-                    <th style="cursor: pointer;" @onclick='() => SortBy("Name")'>
-                        Tenant Adı @GetSortIcon("Name")
+                    <th style="cursor: pointer; white-space: nowrap;" @onclick='() => SortBy("Name")'>
+                        <div class="d-inline-flex align-items-center gap-1">
+                            <span>Tenant Adı</span> @GetSortIcon("Name")
+                        </div>
                     </th>
-                    <th style="cursor: pointer;" @onclick='() => SortBy("Email")'>
-                        E-posta @GetSortIcon("Email")
+                    <th style="cursor: pointer; white-space: nowrap;" @onclick='() => SortBy("Email")'>
+                        <div class="d-inline-flex align-items-center gap-1">
+                            <span>E-posta</span> @GetSortIcon("Email")
+                        </div>
                     </th>
-                    <th style="cursor: pointer;" @onclick='() => SortBy("IsActive")'>
-                        Durum @GetSortIcon("IsActive")
+                    <th style="cursor: pointer; white-space: nowrap;" @onclick='() => SortBy("IsActive")'>
+                        <div class="d-inline-flex align-items-center gap-1">
+                            <span>Durum</span> @GetSortIcon("IsActive")
+                        </div>
                     </th>
-                    <th style="cursor: pointer;" @onclick='() => SortBy("TotalChats")'>
-                        Chat Sayısı @GetSortIcon("TotalChats")
+                    <th style="cursor: pointer; white-space: nowrap;" @onclick='() => SortBy("TotalChats")'>
+                        <div class="d-inline-flex align-items-center gap-1">
+                            <span>Chat Sayısı</span> @GetSortIcon("TotalChats")
+                        </div>
                     </th>
-                    <th style="cursor: pointer;" @onclick='() => SortBy("TotalQueries")'>
-                        SQL Sorguları @GetSortIcon("TotalQueries")
+                    <th style="cursor: pointer; white-space: nowrap;" @onclick='() => SortBy("TotalQueries")'>
+                        <div class="d-inline-flex align-items-center gap-1">
+                            <span>SQL Sorguları</span> @GetSortIcon("TotalQueries")
+                        </div>
                     </th>
-                    <th style="cursor: pointer;" @onclick='() => SortBy("LastActivityDate")'>
-                        Son Aktivite @GetSortIcon("LastActivityDate")
+                    <th style="cursor: pointer; white-space: nowrap;" @onclick='() => SortBy("LastActivityDate")'>
+                        <div class="d-inline-flex align-items-center gap-1">
+                            <span>Son Aktivite</span> @GetSortIcon("LastActivityDate")
+                        </div>
                     </th>
-                    <th style="text-align: right;">İşlem</th>
+                    <th style="text-align: right; white-space: nowrap;">İşlem</th>
                 </tr>
             </thead>
             <tbody>
