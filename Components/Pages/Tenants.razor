@@ -182,7 +182,7 @@ else
                         </td>
                         <td>
                             <span class="badge-status badge-purple">
-                                <i class="bi bi-chat-text"></i> @item.TotalChats Sohbet
+                                <i class="bi bi-chat-text me-1"></i>@item.TotalChats
                             </span>
                         </td>
                         <td>
@@ -191,9 +191,17 @@ else
                             </span>
                         </td>
                         <td>
-                            <span class="text-muted" style="font-size: 0.85rem;">
-                                @(item.LastActivityDate?.ToString("dd.MM.yyyy HH:mm") ?? "-")
-                            </span>
+                            @if (item.LastActivityDate.HasValue)
+                            {
+                                <div class="d-flex flex-column text-muted" style="font-size: 0.825rem; line-height: 1.3;">
+                                    <span>@item.LastActivityDate.Value.ToString("dd.MM.yyyy")</span>
+                                    <span class="text-secondary" style="font-size: 0.775rem;">@item.LastActivityDate.Value.ToString("HH:mm")</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="text-muted small">-</span>
+                            }
                         </td>
                         <td>
                             <button class="btn btn-sm btn-primary-custom px-3" @onclick="() => SelectTenant(item.Tenant.Id)">
