@@ -11,9 +11,14 @@
         <p class="text-muted small mb-0">OzBI veritabanındaki aktif tenant'lar, sohbet sayıları ve sorgu metrikleri</p>
     </div>
     <div class="d-flex align-items-center gap-2">
+        <button class="btn @(showFavoritesOnly ? "btn-warning" : "btn-outline-secondary") btn-sm" @onclick="ToggleFavoritesOnlyFilter">
+            <i class="bi @(showFavoritesOnly ? "bi-star-fill" : "bi-star")"></i>
+            @(showFavoritesOnly ? "Favoriler Gösteriliyor" : "Sadece Favoriler")
+        </button>
+
         <button class="btn @(OzBiAuditService.UseDemoMode ? "btn-warning" : "btn-outline-secondary") btn-sm" @onclick="ToggleDemoMode">
             <i class="bi @(OzBiAuditService.UseDemoMode ? "bi-eye-fill" : "bi-eye")"></i>
-            @(OzBiAuditService.UseDemoMode ? "Demo Mod Aktif (Canlıya Geç)" : "Demo Moduna Geç")
+            @(OzBiAuditService.UseDemoMode ? "Demo Mod Aktif" : "Demo Moduna Geç")
         </button>
 
         <button class="btn btn-outline-secondary btn-sm" @onclick="LoadData">
@@ -54,7 +59,7 @@
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-info-circle-fill text-warning fs-5"></i>
             <div>
-                <strong>Demo Mod Aktif:</strong> Şu anda gerçekçi OzBI örnek verileri (Tenant'lar, Chat'ler, GPT-4o / Claude 3.5 SQL sorguları) gösterilmektedir.
+                <strong>Demo Mod Aktif:</strong> Şu anda örnek OzBI verileri gösterilmektedir.
             </div>
         </div>
         <button class="btn btn-sm btn-outline-dark" @onclick="DisableDemoMode">Canlı DB'ye Bağlanmayı Tekrar Dene</button>
@@ -140,6 +145,7 @@ else
         <table class="custom-table">
             <thead>
                 <tr>
+                    <th style="width: 40px;">Favori</th>
                     <th>Tenant Adı</th>
                     <th>E-posta</th>
                     <th>Durum</th>
@@ -153,6 +159,11 @@ else
                 @foreach (var item in tenantsList)
                 {
                     <tr>
+                        <td style="text-align: center;">
+                            <button class="btn btn-link p-0 text-decoration-none fs-5" @onclick="() => ToggleFavorite(item)">
+                                <i class="bi @(item.IsFavorited ? "bi-star-fill text-warning" : "bi-star text-muted opacity-50")"></i>
+                            </button>
+                        </td>
                         <td>
                             <div class="fw-bold text-main">@item.Tenant.Name</div>
                             <div class="text-muted" style="font-size: 0.75rem; font-family: monospace;">
@@ -188,8 +199,8 @@ else
                             </span>
                         </td>
                         <td style="text-align: right;">
-                            <button class="btn btn-sm btn-primary-custom" @onclick="() => SelectTenant(item.Tenant.Id)">
-                                <i class="bi bi-eye"></i> Chat'leri İncele
+                            <button class="btn btn-sm btn-primary-custom px-3" @onclick="() => SelectTenant(item.Tenant.Id)">
+                                <i class="bi bi-eye"></i> İncele
                             </button>
                         </td>
                     </tr>
@@ -200,10 +211,12 @@ else
 }
 
 @code {
+    private List<TenantAuditSummary>? rawTenantsList;
     private List<TenantAuditSummary>? tenantsList;
     private string searchTerm = string.Empty;
     private string? errorMessage;
     private bool isLoading = true;
+    private bool showFavoritesOnly = false;
 
     private int totalChats = 0;
     private int totalQueries = 0;
@@ -220,10 +233,8 @@ else
         errorMessage = null;
         try
         {
-            tenantsList = await AuditService.GetTenantsSummaryAsync(searchTerm);
-            totalChats = tenantsList.Sum(t => t.TotalChats);
-            totalQueries = tenantsList.Sum(t => t.TotalQueries);
-            totalMessages = tenantsList.Sum(t => t.TotalMessages);
+            rawTenantsList = await AuditService.GetTenantsSummaryAsync(searchTerm, portalUserId: 1);
+            ApplyFilters();
         }
         catch (Exception ex)
         {
@@ -233,6 +244,43 @@ else
         {
             isLoading = false;
         }
+    }
+
+    private void ApplyFilters()
+    {
+        if (rawTenantsList == null) return;
+
+        var list = rawTenantsList.AsEnumerable();
+
+        if (showFavoritesOnly)
+        {
+            list = list.Where(t => t.IsFavorited);
+        }
+
+        tenantsList = list.OrderByDescending(t => t.IsFavorited).ThenByDescending(t => t.TotalChats).ToList();
+
+        totalChats = tenantsList.Sum(t => t.TotalChats);
+        totalQueries = tenantsList.Sum(t => t.TotalQueries);
+        totalMessages = tenantsList.Sum(t => t.TotalMessages);
+    }
+
+    private async Task ToggleFavorite(TenantAuditSummary item)
+    {
+        item.IsFavorited = await AuditService.ToggleFavoriteAsync(
+            portalUserId: 1,
+            itemType: "Tenant",
+            itemId: item.Tenant.Id,
+            itemName: item.Tenant.Name,
+            itemSubText: item.Tenant.Email
+        );
+
+        ApplyFilters();
+    }
+
+    private void ToggleFavoritesOnlyFilter()
+    {
+        showFavoritesOnly = !showFavoritesOnly;
+        ApplyFilters();
     }
 
     private async Task EnableDemoMode()

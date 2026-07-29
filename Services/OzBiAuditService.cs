@@ -11,6 +11,7 @@ namespace OzBiPortalCRM.Services
     public class OzBiAuditService : IOzBiAuditService
     {
         private readonly IDbContextFactory<OzBiDbContext> _dbFactory;
+        private readonly IDbContextFactory<AppDbContext> _appDbFactory;
         private static bool _useDemoMode = false;
 
         public static bool UseDemoMode
@@ -19,12 +20,13 @@ namespace OzBiPortalCRM.Services
             set => _useDemoMode = value;
         }
 
-        public OzBiAuditService(IDbContextFactory<OzBiDbContext> dbFactory)
+        public OzBiAuditService(IDbContextFactory<OzBiDbContext> dbFactory, IDbContextFactory<AppDbContext> appDbFactory)
         {
             _dbFactory = dbFactory;
+            _appDbFactory = appDbFactory;
         }
 
-        public async Task<List<TenantAuditSummary>> GetTenantsSummaryAsync(string? searchTerm = null)
+        public async Task<List<TenantAuditSummary>> GetTenantsSummaryAsync(string? searchTerm = null, int portalUserId = 0)
         {
             if (_useDemoMode)
             {
@@ -60,6 +62,8 @@ namespace OzBiPortalCRM.Services
                     .Select(m => new { m.ChatId, HasQuery = !string.IsNullOrEmpty(m.Query) })
                     .ToListAsync();
 
+                var favoriteTenantIds = portalUserId > 0 ? await GetFavoriteItemIdsAsync(portalUserId, "Tenant") : new HashSet<string>();
+
                 var result = new List<TenantAuditSummary>();
 
                 foreach (var t in tenants)
@@ -84,7 +88,8 @@ namespace OzBiPortalCRM.Services
                         TotalChats = tenantChats.Count,
                         TotalMessages = tenantMessages.Count,
                         TotalQueries = tenantMessages.Count(m => m.HasQuery),
-                        LastActivityDate = lastAct
+                        LastActivityDate = lastAct,
+                        IsFavorited = favoriteTenantIds.Contains(t.Id)
                     });
                 }
 
@@ -96,141 +101,204 @@ namespace OzBiPortalCRM.Services
             }
         }
 
-        public async Task<OzBiTenant?> GetTenantByIdAsync(string tenantId)
+        public async Task<List<UserAuditSummary>> GetUsersFootprintSummaryAsync(string? searchTerm = null, int portalUserId = 0)
         {
             if (_useDemoMode)
             {
-                return GetDemoTenants().FirstOrDefault(t => t.Id == tenantId);
-            }
-
-            try
-            {
-                using var db = await _dbFactory.CreateDbContextAsync();
-                return await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tenantId);
-            }
-            catch
-            {
-                return GetDemoTenants().FirstOrDefault(t => t.Id == tenantId);
-            }
-        }
-
-        public async Task<List<ChatAuditSummary>> GetChatsForTenantAsync(string tenantId, string? searchTerm = null)
-        {
-            if (_useDemoMode)
-            {
-                return GetDemoChatsSummary(tenantId, searchTerm);
+                return GetDemoUsersSummary(searchTerm);
             }
 
             try
             {
                 using var db = await _dbFactory.CreateDbContextAsync();
 
-                var query = db.Chats.AsNoTracking()
-                    .Include(c => c.CreatedByUser)
-                    .Where(c => c.TenantId == tenantId);
+                var query = db.Users.AsNoTracking().Where(u => !u.IsDeleted).AsQueryable();
 
                 if (!string.IsNullOrWhiteSpace(searchTerm))
                 {
                     var term = searchTerm.Trim().ToLower();
-                    query = query.Where(c => (c.Title != null && c.Title.ToLower().Contains(term)) ||
-                                             c.Id.ToLower().Contains(term));
+                    query = query.Where(u => (u.NameSurname != null && u.NameSurname.ToLower().Contains(term)) ||
+                                             (u.Email != null && u.Email.ToLower().Contains(term)) ||
+                                             (u.UserName != null && u.UserName.ToLower().Contains(term)));
                 }
 
-                var chats = await query.OrderByDescending(c => c.DateCreated).Take(200).ToListAsync();
-                var chatIds = chats.Select(c => c.Id).ToList();
+                var users = await query.Take(200).ToListAsync();
+                var userIds = users.Select(u => u.Id).ToHashSet();
+                var tenantIds = users.Select(u => u.TenantId).Where(tid => !string.IsNullOrEmpty(tid)).ToHashSet();
 
-                var msgStats = await db.ChatMessages.AsNoTracking()
-                    .Where(m => chatIds.Contains(m.ChatId))
-                    .GroupBy(m => m.ChatId)
-                    .Select(g => new
-                    {
-                        ChatId = g.Key,
-                        Count = g.Count(),
-                        QueryCount = g.Count(m => !string.IsNullOrEmpty(m.Query)),
-                        TotalDuration = g.Sum(m => m.TotalDurationMs ?? 0),
-                        LastDate = g.Max(m => m.DateCreated),
-                        AiModelId = g.Where(m => m.AIModelId != null).Select(m => m.AIModelId).FirstOrDefault()
-                    })
-                    .ToDictionaryAsync(x => x.ChatId);
+                var tenantMap = await db.Tenants.AsNoTracking()
+                    .Where(t => tenantIds.Contains(t.Id))
+                    .ToDictionaryAsync(t => t.Id, t => t.Name);
 
-                var modelIds = msgStats.Values.Where(v => v.AiModelId != null).Select(v => v.AiModelId!).Distinct().ToList();
-                var modelMap = await db.AiModels.AsNoTracking()
-                    .Where(m => modelIds.Contains(m.Id))
-                    .ToDictionaryAsync(m => m.Id, m => m.Name ?? m.ProgrammaticName ?? "Bilinmeyen Model");
+                var chats = await db.Chats.AsNoTracking()
+                    .Where(c => !string.IsNullOrEmpty(c.CreatedByUserId) && userIds.Contains(c.CreatedByUserId))
+                    .Select(c => new { c.Id, c.CreatedByUserId, c.DateCreated })
+                    .ToListAsync();
 
-                var result = new List<ChatAuditSummary>();
-                foreach (var chat in chats)
+                var chatIds = chats.Select(c => c.Id).ToHashSet();
+
+                var messages = await db.ChatMessages.AsNoTracking()
+                    .Where(m => !string.IsNullOrEmpty(m.ChatId) && chatIds.Contains(m.ChatId))
+                    .Select(m => new { m.ChatId, HasQuery = !string.IsNullOrEmpty(m.Query) })
+                    .ToListAsync();
+
+                var favoriteUserIds = portalUserId > 0 ? await GetFavoriteItemIdsAsync(portalUserId, "User") : new HashSet<string>();
+
+                var result = new List<UserAuditSummary>();
+
+                foreach (var u in users)
                 {
-                    msgStats.TryGetValue(chat.Id, out var stat);
-                    string? modelName = null;
-                    if (stat?.AiModelId != null && modelMap.TryGetValue(stat.AiModelId, out var mName))
+                    var userChats = chats.Where(c => c.CreatedByUserId == u.Id).ToList();
+                    var userChatIds = userChats.Select(c => c.Id).ToHashSet();
+                    var userMessages = messages.Where(m => userChatIds.Contains(m.ChatId)).ToList();
+
+                    tenantMap.TryGetValue(u.TenantId, out var tenantName);
+
+                    DateTime? lastAct = null;
+                    if (userChats.Count > 0)
                     {
-                        modelName = mName;
+                        var dates = userChats.Where(c => c.DateCreated.HasValue).Select(c => c.DateCreated!.Value).ToList();
+                        if (dates.Count > 0) lastAct = dates.Max();
                     }
 
-                    result.Add(new ChatAuditSummary
+                    result.Add(new UserAuditSummary
                     {
-                        Chat = chat,
-                        MessageCount = stat?.Count ?? 0,
-                        QueryCount = stat?.QueryCount ?? 0,
-                        TotalDurationMs = stat?.TotalDuration ?? 0,
-                        LastMessageDate = stat?.LastDate ?? chat.DateCreated,
-                        PrimaryAiModelName = modelName
+                        User = u,
+                        TenantName = tenantName ?? u.TenantId,
+                        TotalChats = userChats.Count,
+                        TotalMessages = userMessages.Count,
+                        TotalQueries = userMessages.Count(m => m.HasQuery),
+                        LastActivityDate = lastAct,
+                        IsFavorited = favoriteUserIds.Contains(u.Id)
                     });
                 }
 
-                return result;
+                return result.OrderByDescending(r => r.IsFavorited).ThenByDescending(r => r.TotalChats).ToList();
             }
-            catch
+            catch (Exception ex)
             {
-                return GetDemoChatsSummary(tenantId, searchTerm);
+                throw new InvalidOperationException($"Kullanıcı Ayak İzi Sorgu Hatası: {ex.Message}", ex);
             }
+        }
+
+        public async Task<OzBiTenant?> GetTenantByIdAsync(string tenantId)
+        {
+            if (_useDemoMode) return GetDemoTenantsSummary().FirstOrDefault(t => t.Tenant.Id == tenantId)?.Tenant;
+
+            using var db = await _dbFactory.CreateDbContextAsync();
+            return await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tenantId);
+        }
+
+        public async Task<List<ChatAuditSummary>> GetChatsForTenantAsync(string tenantId, string? searchTerm = null)
+        {
+            if (_useDemoMode) return GetDemoChatsForTenant(tenantId, searchTerm);
+
+            using var db = await _dbFactory.CreateDbContextAsync();
+
+            var query = db.Chats.AsNoTracking().Where(c => c.TenantId == tenantId);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var term = searchTerm.Trim().ToLower();
+                query = query.Where(c => c.Title != null && c.Title.ToLower().Contains(term));
+            }
+
+            var chats = await query.OrderByDescending(c => c.DateCreated).ToListAsync();
+            var chatIds = chats.Select(c => c.Id).ToList();
+
+            var messages = await db.ChatMessages.AsNoTracking()
+                .Include(m => m.AIModel)
+                .Where(m => chatIds.Contains(m.ChatId))
+                .ToListAsync();
+
+            var result = new List<ChatAuditSummary>();
+
+            foreach (var c in chats)
+            {
+                var msgList = messages.Where(m => m.ChatId == c.Id).ToList();
+                var primaryModel = msgList.FirstOrDefault(m => m.AIModel != null)?.AIModel?.Name ?? "Standart AI";
+
+                result.Add(new ChatAuditSummary
+                {
+                    Chat = c,
+                    MessageCount = msgList.Count,
+                    QueryCount = msgList.Count(m => !string.IsNullOrEmpty(m.Query)),
+                    TotalDurationMs = msgList.Sum(m => m.TotalDurationMs ?? 0),
+                    LastMessageDate = msgList.Count > 0 ? msgList.Max(m => m.DateCreated) : c.DateCreated,
+                    PrimaryAiModelName = primaryModel
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<List<ChatAuditSummary>> GetChatsForUserAsync(string userId, string? searchTerm = null)
+        {
+            if (_useDemoMode) return GetDemoChatsForTenant("demo-tenant-1", searchTerm);
+
+            using var db = await _dbFactory.CreateDbContextAsync();
+
+            var query = db.Chats.AsNoTracking().Where(c => c.CreatedByUserId == userId);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var term = searchTerm.Trim().ToLower();
+                query = query.Where(c => c.Title != null && c.Title.ToLower().Contains(term));
+            }
+
+            var chats = await query.OrderByDescending(c => c.DateCreated).ToListAsync();
+            var chatIds = chats.Select(c => c.Id).ToList();
+
+            var messages = await db.ChatMessages.AsNoTracking()
+                .Include(m => m.AIModel)
+                .Where(m => chatIds.Contains(m.ChatId))
+                .ToListAsync();
+
+            var result = new List<ChatAuditSummary>();
+
+            foreach (var c in chats)
+            {
+                var msgList = messages.Where(m => m.ChatId == c.Id).ToList();
+                var primaryModel = msgList.FirstOrDefault(m => m.AIModel != null)?.AIModel?.Name ?? "Standart AI";
+
+                result.Add(new ChatAuditSummary
+                {
+                    Chat = c,
+                    MessageCount = msgList.Count,
+                    QueryCount = msgList.Count(m => !string.IsNullOrEmpty(m.Query)),
+                    TotalDurationMs = msgList.Sum(m => m.TotalDurationMs ?? 0),
+                    LastMessageDate = msgList.Count > 0 ? msgList.Max(m => m.DateCreated) : c.DateCreated,
+                    PrimaryAiModelName = primaryModel
+                });
+            }
+
+            return result;
         }
 
         public async Task<OzBiChat?> GetChatByIdAsync(string chatId)
         {
-            if (_useDemoMode)
-            {
-                return GetDemoChats().FirstOrDefault(c => c.Id == chatId);
-            }
+            if (_useDemoMode) return new OzBiChat { Id = chatId, Title = "Demo Analiz Sohbeti", TenantId = "demo-tenant-1", DateCreated = DateTime.Now.AddDays(-1) };
 
-            try
-            {
-                using var db = await _dbFactory.CreateDbContextAsync();
-                return await db.Chats.AsNoTracking()
-                    .Include(c => c.Tenant)
-                    .Include(c => c.CreatedByUser)
-                    .FirstOrDefaultAsync(c => c.Id == chatId);
-            }
-            catch
-            {
-                return GetDemoChats().FirstOrDefault(c => c.Id == chatId);
-            }
+            using var db = await _dbFactory.CreateDbContextAsync();
+            return await db.Chats.AsNoTracking()
+                .Include(c => c.Tenant)
+                .Include(c => c.CreatedByUser)
+                .FirstOrDefaultAsync(c => c.Id == chatId);
         }
 
         public async Task<List<OzBiChatMessage>> GetMessagesForChatAsync(string chatId)
         {
-            if (_useDemoMode)
-            {
-                return GetDemoMessages(chatId);
-            }
+            if (_useDemoMode) return GetDemoMessagesForChat(chatId);
 
-            try
-            {
-                using var db = await _dbFactory.CreateDbContextAsync();
-                return await db.ChatMessages.AsNoTracking()
-                    .Include(m => m.AIModel)
-                    .Include(m => m.Assistant)
-                        .ThenInclude(a => a!.DataConnection)
-                            .ThenInclude(c => c!.ConnectionSourceCode)
-                    .Where(m => m.ChatId == chatId)
-                    .OrderBy(m => m.DateCreated)
-                    .ToListAsync();
-            }
-            catch
-            {
-                return GetDemoMessages(chatId);
-            }
+            using var db = await _dbFactory.CreateDbContextAsync();
+            return await db.ChatMessages.AsNoTracking()
+                .Include(m => m.AIModel)
+                .Include(m => m.Assistant)
+                    .ThenInclude(a => a!.DataConnection)
+                        .ThenInclude(c => c!.ConnectionSourceCode)
+                .Where(m => m.ChatId == chatId)
+                .OrderBy(m => m.DateCreated)
+                .ToListAsync();
         }
 
         public async Task<List<OzBiChatMessage>> SearchGlobalQueriesAsync(
@@ -240,221 +308,235 @@ namespace OzBiPortalCRM.Services
             long? minDurationMs = null,
             int maxResults = 100)
         {
-            if (_useDemoMode)
+            if (_useDemoMode) return GetDemoGlobalQueries(querySearch, failedOnly, minDurationMs);
+
+            using var db = await _dbFactory.CreateDbContextAsync();
+
+            var query = db.ChatMessages.AsNoTracking()
+                .Include(m => m.Chat)
+                .Include(m => m.AIModel)
+                .Where(m => !string.IsNullOrEmpty(m.Query));
+
+            if (!string.IsNullOrWhiteSpace(tenantId))
+                query = query.Where(m => m.Chat != null && m.Chat.TenantId == tenantId);
+
+            if (!string.IsNullOrWhiteSpace(querySearch))
             {
-                return GetDemoGlobalQueries(querySearch, failedOnly, minDurationMs);
+                var term = querySearch.Trim().ToLower();
+                query = query.Where(m => m.Query!.ToLower().Contains(term) || (m.Prompt != null && m.Prompt.ToLower().Contains(term)));
             }
 
-            try
-            {
-                using var db = await _dbFactory.CreateDbContextAsync();
+            if (failedOnly == true)
+                query = query.Where(m => !m.IsSucceeded || !string.IsNullOrEmpty(m.ErrorMessage));
 
-                var query = db.ChatMessages.AsNoTracking()
-                    .Include(m => m.Chat)
-                    .ThenInclude(c => c!.Tenant)
-                    .Include(m => m.AIModel)
-                    .Where(m => !string.IsNullOrEmpty(m.Query));
+            if (minDurationMs.HasValue && minDurationMs.Value > 0)
+                query = query.Where(m => m.TotalDurationMs >= minDurationMs.Value);
 
-                if (!string.IsNullOrWhiteSpace(tenantId))
-                {
-                    query = query.Where(m => m.Chat != null && m.Chat.TenantId == tenantId);
-                }
-
-                if (!string.IsNullOrWhiteSpace(querySearch))
-                {
-                    var term = querySearch.Trim().ToLower();
-                    query = query.Where(m => (m.Query != null && m.Query.ToLower().Contains(term)) ||
-                                             (m.Prompt != null && m.Prompt.ToLower().Contains(term)) ||
-                                             (m.Message != null && m.Message.ToLower().Contains(term)));
-                }
-
-                if (failedOnly == true)
-                {
-                    query = query.Where(m => !m.IsSucceeded || !string.IsNullOrEmpty(m.ErrorMessage));
-                }
-
-                if (minDurationMs.HasValue && minDurationMs.Value > 0)
-                {
-                    query = query.Where(m => m.TotalDurationMs >= minDurationMs.Value);
-                }
-
-                return await query.OrderByDescending(m => m.DateCreated)
-                    .Take(maxResults)
-                    .ToListAsync();
-            }
-            catch
-            {
-                return GetDemoGlobalQueries(querySearch, failedOnly, minDurationMs);
-            }
+            return await query.OrderByDescending(m => m.DateCreated).Take(maxResults).ToListAsync();
         }
 
         public async Task<Dictionary<string, int>> GetAiModelUsageStatsAsync()
         {
-            return new Dictionary<string, int>
-            {
-                { "GPT-4o (OpenAI)", 45 },
-                { "Claude 3.5 Sonnet (Anthropic)", 32 },
-                { "Gemini 1.5 Pro (Google)", 18 }
-            };
+            if (_useDemoMode) return new Dictionary<string, int> { { "GPT-4o", 145 }, { "Claude 3.5 Sonnet", 98 }, { "DeepSeek V3", 42 } };
+
+            using var db = await _dbFactory.CreateDbContextAsync();
+            return await db.ChatMessages.AsNoTracking()
+                .Where(m => m.AIModel != null && m.AIModel.Name != null)
+                .GroupBy(m => m.AIModel!.Name!)
+                .Select(g => new { ModelName = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.ModelName, x => x.Count);
         }
+
+        #region Favorite & Footprint Persistence Methods
+        public async Task<bool> ToggleFavoriteAsync(int portalUserId, string itemType, string itemId, string itemName, string? itemSubText)
+        {
+            using var db = await _appDbFactory.CreateDbContextAsync();
+            await db.Database.EnsureCreatedAsync();
+
+            var existing = await db.Favorites.FirstOrDefaultAsync(f => f.PortalUserId == portalUserId && f.ItemType == itemType && f.ItemId == itemId);
+
+            if (existing != null)
+            {
+                db.Favorites.Remove(existing);
+                await db.SaveChangesAsync();
+                return false; // Removed from favorites
+            }
+            else
+            {
+                var newFav = new FavoriteItem
+                {
+                    PortalUserId = portalUserId,
+                    ItemType = itemType,
+                    ItemId = itemId,
+                    ItemName = itemName,
+                    ItemSubText = itemSubText,
+                    AddedAt = DateTime.UtcNow
+                };
+                db.Favorites.Add(newFav);
+                await db.SaveChangesAsync();
+                return true; // Added to favorites
+            }
+        }
+
+        public async Task<List<FavoriteItem>> GetUserFavoritesAsync(int portalUserId)
+        {
+            using var db = await _appDbFactory.CreateDbContextAsync();
+            await db.Database.EnsureCreatedAsync();
+            return await db.Favorites.AsNoTracking()
+                .Where(f => f.PortalUserId == portalUserId)
+                .OrderByDescending(f => f.AddedAt)
+                .ToListAsync();
+        }
+
+        public async Task<HashSet<string>> GetFavoriteItemIdsAsync(int portalUserId, string itemType)
+        {
+            using var db = await _appDbFactory.CreateDbContextAsync();
+            await db.Database.EnsureCreatedAsync();
+            var ids = await db.Favorites.AsNoTracking()
+                .Where(f => f.PortalUserId == portalUserId && f.ItemType == itemType)
+                .Select(f => f.ItemId)
+                .ToListAsync();
+            return ids.ToHashSet();
+        }
+        #endregion
 
         #region Demo Data Generator
-        private List<OzBiTenant> GetDemoTenants()
+        private List<TenantAuditSummary> GetDemoTenantsSummary(string? searchTerm = null)
         {
-            return new List<OzBiTenant>
+            var list = new List<TenantAuditSummary>
             {
-                new OzBiTenant { Id = "tenant-001", Name = "Test Bilişim A.Ş.", Email = "wohovo9001@lasttea.com", IsActive = true, DateCreated = DateTime.Now.AddDays(-10) },
-                new OzBiTenant { Id = "tenant-002", Name = "PARKİM Ambalaj Sanayi", Email = "info@parkim.com", IsActive = true, DateCreated = DateTime.Now.AddDays(-24) },
-                new OzBiTenant { Id = "tenant-003", Name = "Çözüm Bilgisayar Yazılım", Email = "destek@cozumbilgisayar.com", IsActive = true, DateCreated = DateTime.Now.AddDays(-23) },
-                new OzBiTenant { Id = "tenant-004", Name = "EGE TABAN Sanayi ve Ticaret", Email = "muhasebe@egetaban.com", IsActive = true, DateCreated = DateTime.Now.AddDays(-28) },
-                new OzBiTenant { Id = "tenant-005", Name = "In70Coffee Gıda Şti.", Email = "in70coffee@gmail.com", IsActive = true, DateCreated = DateTime.Now.AddDays(-28) }
+                new TenantAuditSummary
+                {
+                    Tenant = new OzBiTenant { Id = "demo-tenant-1", Name = "Test Bilişim A.Ş.", Email = "wohovo9001@lasttea.com", IsActive = true, DateCreated = DateTime.Now.AddDays(-30) },
+                    TotalChats = 7,
+                    TotalMessages = 45,
+                    TotalQueries = 17,
+                    LastActivityDate = DateTime.Now.AddHours(-2),
+                    IsFavorited = true
+                },
+                new TenantAuditSummary
+                {
+                    Tenant = new OzBiTenant { Id = "demo-tenant-2", Name = "Tarık İnşaat San. Ltd.", Email = "Afssd@gmail.com", IsActive = true, DateCreated = DateTime.Now.AddDays(-20) },
+                    TotalChats = 1,
+                    TotalMessages = 6,
+                    TotalQueries = 2,
+                    LastActivityDate = DateTime.Now.AddDays(-10),
+                    IsFavorited = false
+                },
+                new TenantAuditSummary
+                {
+                    Tenant = new OzBiTenant { Id = "demo-tenant-3", Name = "AYDIN Tekstil A.Ş.", Email = "feritaydin@yilmazsunger.com.tr", IsActive = true, DateCreated = DateTime.Now.AddDays(-15) },
+                    TotalChats = 4,
+                    TotalMessages = 28,
+                    TotalQueries = 13,
+                    LastActivityDate = DateTime.Now.AddDays(-15),
+                    IsFavorited = true
+                }
             };
-        }
 
-        private List<TenantAuditSummary> GetDemoTenantsSummary(string? searchTerm)
-        {
-            var tenants = GetDemoTenants();
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var term = searchTerm.ToLower();
-                tenants = tenants.Where(t => t.Name.ToLower().Contains(term) || (t.Email != null && t.Email.ToLower().Contains(term)) || t.Id.ToLower().Contains(term)).ToList();
+                list = list.Where(t => t.Tenant.Name.ToLower().Contains(term) || t.Tenant.Email?.ToLower().Contains(term) == true).ToList();
             }
 
-            return tenants.Select(t => new TenantAuditSummary
-            {
-                Tenant = t,
-                TotalChats = t.Id == "tenant-001" ? 8 : 4,
-                TotalMessages = t.Id == "tenant-001" ? 17 : 9,
-                TotalQueries = t.Id == "tenant-001" ? 12 : 5,
-                LastActivityDate = DateTime.Now.AddMinutes(-45)
-            }).ToList();
+            return list;
         }
 
-        private List<OzBiChat> GetDemoChats()
+        private List<UserAuditSummary> GetDemoUsersSummary(string? searchTerm = null)
         {
-            var user = new OzBiUser { Id = "usr-01", NameSurname = "Ahmet Yılmaz", Email = "ahmet@testbilisim.com" };
-            var tenant1 = GetDemoTenants()[0];
-
-            return new List<OzBiChat>
+            var list = new List<UserAuditSummary>
             {
-                new OzBiChat { Id = "chat-101", Title = "Satış Analizi ve Ödeme Almayan Cariler", TenantId = "tenant-001", Tenant = tenant1, CreatedByUserId = "usr-01", CreatedByUser = user, IsActive = true, DateCreated = DateTime.Now.AddHours(-3) },
-                new OzBiChat { Id = "chat-102", Title = "En Yüksek Adet Satılan Ürünler İlk 10", TenantId = "tenant-001", Tenant = tenant1, CreatedByUserId = "usr-01", CreatedByUser = user, IsActive = true, DateCreated = DateTime.Now.AddHours(-5) },
-                new OzBiChat { Id = "chat-103", Title = "Aylara Göre Toplam Satış ve Ödenmiş Faturalar", TenantId = "tenant-001", Tenant = tenant1, CreatedByUserId = "usr-01", CreatedByUser = user, IsActive = true, DateCreated = DateTime.Now.AddDays(-1) }
+                new UserAuditSummary
+                {
+                    User = new OzBiUser { Id = "demo-usr-1", NameSurname = "Ahmet Yılmaz", Email = "ahmet@testbilisim.com", TenantId = "demo-tenant-1", IsActive = true },
+                    TenantName = "Test Bilişim A.Ş.",
+                    TotalChats = 5,
+                    TotalMessages = 32,
+                    TotalQueries = 12,
+                    LastActivityDate = DateTime.Now.AddHours(-1),
+                    IsFavorited = true
+                },
+                new UserAuditSummary
+                {
+                    User = new OzBiUser { Id = "demo-usr-2", NameSurname = "Ferit Aydın", Email = "feritaydin@yilmazsunger.com.tr", TenantId = "demo-tenant-3", IsActive = true },
+                    TenantName = "AYDIN Tekstil A.Ş.",
+                    TotalChats = 4,
+                    TotalMessages = 28,
+                    TotalQueries = 13,
+                    LastActivityDate = DateTime.Now.AddDays(-2),
+                    IsFavorited = true
+                }
             };
-        }
 
-        private List<ChatAuditSummary> GetDemoChatsSummary(string tenantId, string? searchTerm)
-        {
-            var chats = GetDemoChats().Where(c => c.TenantId == tenantId).ToList();
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var term = searchTerm.ToLower();
-                chats = chats.Where(c => c.Title != null && c.Title.ToLower().Contains(term)).ToList();
+                list = list.Where(u => u.User.NameSurname?.ToLower().Contains(term) == true || u.User.Email?.ToLower().Contains(term) == true).ToList();
             }
 
-            return chats.Select(c => new ChatAuditSummary
-            {
-                Chat = c,
-                MessageCount = c.Id == "chat-101" ? 5 : 3,
-                QueryCount = c.Id == "chat-101" ? 4 : 2,
-                TotalDurationMs = 1840,
-                LastMessageDate = c.DateCreated,
-                PrimaryAiModelName = "GPT-4o (OpenAI)"
-            }).ToList();
+            return list;
         }
 
-        private List<OzBiChatMessage> GetDemoMessages(string chatId)
+        private List<ChatAuditSummary> GetDemoChatsForTenant(string tenantId, string? searchTerm = null)
         {
-            var gpt4 = new OzBiAiModel { Id = "m-1", Name = "GPT-4o (OpenAI)", ProgrammaticName = "gpt-4o", TokenLimit = 128000, HasTools = true, HasMcpSupport = true };
-            var claude = new OzBiAiModel { Id = "m-2", Name = "Claude 3.5 Sonnet (Anthropic)", ProgrammaticName = "claude-3-5-sonnet", TokenLimit = 200000, HasTools = true };
-            var asst = new OzBiAssistant { Id = "a-1", Name = "Mikro ERP Satış Danışmanı", Description = "Logo & Mikro ERP verilerini analiz eder" };
+            return new List<ChatAuditSummary>
+            {
+                new ChatAuditSummary
+                {
+                    Chat = new OzBiChat { Id = "demo-chat-101", Title = "Son 30 Gün Ödeme Yapmayan Cariler", TenantId = tenantId, IsActive = true, DateCreated = DateTime.Now.AddHours(-2) },
+                    MessageCount = 6,
+                    QueryCount = 3,
+                    TotalDurationMs = 1240,
+                    LastMessageDate = DateTime.Now.AddHours(-2),
+                    PrimaryAiModelName = "GPT-4o"
+                },
+                new ChatAuditSummary
+                {
+                    Chat = new OzBiChat { Id = "demo-chat-102", Title = "Aylık Stok & Satış Raporu Özeti", TenantId = tenantId, IsActive = true, DateCreated = DateTime.Now.AddDays(-1) },
+                    MessageCount = 4,
+                    QueryCount = 2,
+                    TotalDurationMs = 890,
+                    LastMessageDate = DateTime.Now.AddDays(-1),
+                    PrimaryAiModelName = "Claude 3.5 Sonnet"
+                }
+            };
+        }
 
+        private List<OzBiChatMessage> GetDemoMessagesForChat(string chatId)
+        {
             return new List<OzBiChatMessage>
             {
                 new OzBiChatMessage
                 {
-                    Id = "msg-01",
+                    Id = "demo-msg-1",
                     ChatId = chatId,
                     Role = "user",
-                    Prompt = "Son 90 günde ödeme yapmayan cari hesapların listesini ve bakiyelerini tavsiye vererek getir",
-                    DateCreated = DateTime.Now.AddHours(-3).AddMinutes(1)
+                    Message = "Son 30 günde ödeme yapmayan carileri ve bakiyelerini listeleyebilir misin?",
+                    DateCreated = DateTime.Now.AddHours(-2)
                 },
                 new OzBiChatMessage
                 {
-                    Id = "msg-02",
+                    Id = "demo-msg-2",
                     ChatId = chatId,
                     Role = "assistant",
-                    AIModelId = "m-1",
-                    AIModel = gpt4,
-                    Assistant = asst,
+                    Message = "Elbette, Mikro ERP veritabanınızdan son 30 günde tahsilat kaydı bulunmayan carilerin sorgusu çalıştırıldı ve sonuçlar listelendi.",
+                    Query = "SELECT cha_kod AS CariKod, cha_isim AS CariUnvan, SUM(cha_meblag) AS ToplamBakiye\nFROM CARI_HESAP_HAREKETLERI\nWHERE cha_tarih >= DATEADD(month, -1, GETDATE()) AND cha_evrak_tip NOT IN (1, 3)\nGROUP BY cha_kod, cha_isim\nHAVING SUM(cha_meblag) > 0;",
                     IsSucceeded = true,
-                    Prompt = "Son 90 günde ödeme yapmayan cariler ve bakiyeleri",
-                    Message = "Son 90 günde ödeme yapmayan carilerinize ait SQL sorgusu oluşturuldu ve veriler listelendi. Toplam 14 cari hesabın 450.000 TL gecikmiş borcu bulunmaktadır. Vadesi 60 günü geçen müşteriler için risk uyarısı yapılması tavsiye olunur.",
-                    Query = @"SELECT 
-    cha_kod AS [Cari Kod],
-    cha_unvan AS [Cari Unvan],
-    SUM(CASE WHEN cha_evrak_tip IN (1, 3) THEN cha_meblag ELSE -cha_meblag END) AS [Toplam Borç Bakiye],
-    MAX(cha_tarih) AS [Son İşlem Tarihi]
-FROM CARI_HESAP_HAREKETLERI WITH (NOLOCK)
-WHERE cha_tarih >= DATEADD(day, -90, GETDATE())
-GROUP BY cha_kod, cha_unvan
-HAVING SUM(CASE WHEN cha_evrak_tip IN (1, 3) THEN cha_meblag ELSE -cha_meblag END) > 0
-ORDER BY [Toplam Borç Bakiye] DESC;",
-                    TotalDurationMs = 1250,
-                    AIQueryDurationMs = 820,
-                    DataFetchDurationMs = 430,
-                    Limit = 50,
-                    HasComplicatedQuery = true,
-                    DateCreated = DateTime.Now.AddHours(-3).AddMinutes(2)
-                },
-                new OzBiChatMessage
-                {
-                    Id = "msg-03",
-                    ChatId = chatId,
-                    Role = "assistant",
-                    AIModelId = "m-2",
-                    AIModel = claude,
-                    Assistant = asst,
-                    IsSucceeded = false,
-                    Prompt = "Marmara bölgesinde en çok satan bayileri getir",
-                    ErrorMessage = "Invalid column name 'cha_bolge_kod' in WHERE clause.",
-                    Query = @"SELECT TOP 10 cha_kod, cha_unvan, SUM(sth_tutar) AS Ciro FROM CARI_HESAP_HAREKETLERI JOIN STOK_HAREKETLERI ON cha_kod = sth_cari_kodu WHERE cha_bolge_kod = 'MARMARA' GROUP BY cha_kod, cha_unvan ORDER BY Ciro DESC;",
-                    TotalDurationMs = 610,
-                    AIQueryDurationMs = 550,
-                    DataFetchDurationMs = 60,
-                    DateCreated = DateTime.Now.AddHours(-3).AddMinutes(5)
+                    TotalDurationMs = 450,
+                    AIQueryDurationMs = 320,
+                    AIModel = new OzBiAiModel { Name = "GPT-4o", TokenLimit = 128000 },
+                    Assistant = new OzBiAssistant { Name = "Mikro ERP Muhasebe Asistanı" },
+                    DateCreated = DateTime.Now.AddHours(-2).AddSeconds(2)
                 }
             };
         }
 
         private List<OzBiChatMessage> GetDemoGlobalQueries(string? querySearch, bool? failedOnly, long? minDurationMs)
         {
-            var msgs = GetDemoMessages("chat-101");
-            var chat = GetDemoChats()[0];
-            foreach (var m in msgs)
-            {
-                m.Chat = chat;
-            }
-
-            var queries = msgs.Where(m => !string.IsNullOrEmpty(m.Query)).ToList();
-
-            if (!string.IsNullOrWhiteSpace(querySearch))
-            {
-                var term = querySearch.ToLower();
-                queries = queries.Where(q => q.Query!.ToLower().Contains(term) || (q.Prompt != null && q.Prompt.ToLower().Contains(term))).ToList();
-            }
-
-            if (failedOnly == true)
-            {
-                queries = queries.Where(q => !q.IsSucceeded || !string.IsNullOrEmpty(q.ErrorMessage)).ToList();
-            }
-
-            if (minDurationMs.HasValue && minDurationMs.Value > 0)
-            {
-                queries = queries.Where(q => q.TotalDurationMs >= minDurationMs.Value).ToList();
-            }
-
-            return queries;
+            var msgs = GetDemoMessagesForChat("demo-chat-101");
+            msgs[1].Chat = new OzBiChat { Id = "demo-chat-101", Title = "Son 30 Gün Ödeme Yapmayan Cariler", TenantId = "demo-tenant-1" };
+            return msgs;
         }
         #endregion
     }

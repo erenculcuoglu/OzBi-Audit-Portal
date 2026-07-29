@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using OzBiPortalCRM.Models;
@@ -11,6 +12,18 @@ namespace OzBiPortalCRM.Services
         public int TotalMessages { get; set; }
         public int TotalQueries { get; set; }
         public DateTime? LastActivityDate { get; set; }
+        public bool IsFavorited { get; set; }
+    }
+
+    public class UserAuditSummary
+    {
+        public OzBiUser User { get; set; } = null!;
+        public string TenantName { get; set; } = string.Empty;
+        public int TotalChats { get; set; }
+        public int TotalMessages { get; set; }
+        public int TotalQueries { get; set; }
+        public DateTime? LastActivityDate { get; set; }
+        public bool IsFavorited { get; set; }
     }
 
     public class ChatAuditSummary
@@ -25,9 +38,11 @@ namespace OzBiPortalCRM.Services
 
     public interface IOzBiAuditService
     {
-        Task<List<TenantAuditSummary>> GetTenantsSummaryAsync(string? searchTerm = null);
+        Task<List<TenantAuditSummary>> GetTenantsSummaryAsync(string? searchTerm = null, int portalUserId = 0);
+        Task<List<UserAuditSummary>> GetUsersFootprintSummaryAsync(string? searchTerm = null, int portalUserId = 0);
         Task<OzBiTenant?> GetTenantByIdAsync(string tenantId);
         Task<List<ChatAuditSummary>> GetChatsForTenantAsync(string tenantId, string? searchTerm = null);
+        Task<List<ChatAuditSummary>> GetChatsForUserAsync(string userId, string? searchTerm = null);
         Task<OzBiChat?> GetChatByIdAsync(string chatId);
         Task<List<OzBiChatMessage>> GetMessagesForChatAsync(string chatId);
         Task<List<OzBiChatMessage>> SearchGlobalQueriesAsync(
@@ -37,5 +52,10 @@ namespace OzBiPortalCRM.Services
             long? minDurationMs = null,
             int maxResults = 100);
         Task<Dictionary<string, int>> GetAiModelUsageStatsAsync();
+
+        // Favorite & Footprint Persistence Methods
+        Task<bool> ToggleFavoriteAsync(int portalUserId, string itemType, string itemId, string itemName, string? itemSubText);
+        Task<List<FavoriteItem>> GetUserFavoritesAsync(int portalUserId);
+        Task<HashSet<string>> GetFavoriteItemIdsAsync(int portalUserId, string itemType);
     }
 }

@@ -10,6 +10,7 @@ namespace OzBiPortalCRM.Data
         }
 
         public DbSet<PortalUser> Users { get; set; } = null!;
+        public DbSet<FavoriteItem> Favorites { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -17,6 +18,10 @@ namespace OzBiPortalCRM.Data
 
             modelBuilder.Entity<PortalUser>()
                 .HasIndex(u => u.Email)
+                .IsUnique();
+
+            modelBuilder.Entity<FavoriteItem>()
+                .HasIndex(f => new { f.PortalUserId, f.ItemType, f.ItemId })
                 .IsUnique();
         }
     }
