@@ -1,0 +1,62 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Components.Authorization
+
+<AuthorizeView>
+    <Authorized>
+        <div class="page-container">
+            <NavMenu />
+            <div class="main-wrapper">
+                <header class="main-header">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="badge-status badge-purple">
+                            <i class="bi bi-circle-fill" style="font-size: 0.5rem;"></i> ReadOnly OzBI DB
+                        </span>
+                        <span class="badge-status badge-info">
+                            <i class="bi bi-database-check"></i> SQLite App Storage
+                        </span>
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="text-muted" style="font-size: 0.85rem;">
+                            <i class="bi bi-person-circle text-primary"></i> @context.User.Identity?.Name
+                        </span>
+                        <a href="/api/auth/logout" class="btn btn-sm btn-outline-danger d-flex align-items-center gap-1">
+                            <i class="bi bi-box-arrow-right"></i> Çıkış Yap
+                        </a>
+                    </div>
+                </header>
+                <main class="main-content">
+                    @Body
+                </main>
+            </div>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        @if (IsLoginPage)
+        {
+            @Body
+        }
+        else
+        {
+            <div class="d-flex flex-column align-items-center justify-content-center min-vh-100 bg-main text-center p-3">
+                <div class="spinner-border text-primary mb-3" role="status"></div>
+                <div class="text-muted mb-3">Oturum kontrol ediliyor, yönlendiriliyorsunuz...</div>
+                <a href="login" class="btn btn-primary-custom btn-sm">
+                    <i class="bi bi-box-arrow-in-right me-1"></i> Giriş Sayfasına Git
+                </a>
+            </div>
+        }
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private bool IsLoginPage => Navigation.Uri.Contains("/login", StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !IsLoginPage)
+        {
+            // If user is not authorized on protected routes, redirect to /login
+        }
+    }
+}

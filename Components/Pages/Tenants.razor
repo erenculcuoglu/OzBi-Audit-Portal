@@ -1,0 +1,267 @@
+@page "/"
+@page "/tenants"
+@inject IOzBiAuditService AuditService
+@inject NavigationManager Navigation
+@using OzBiPortalCRM.Services
+@using OzBiPortalCRM.Models
+
+<div class="mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3">
+    <div>
+        <h2 class="fw-bold mb-1"><i class="bi bi-buildings text-primary me-2"></i>Tenant Seçimi ve Denetim</h2>
+        <p class="text-muted small mb-0">OzBI veritabanındaki aktif tenant'lar, sohbet sayıları ve sorgu metrikleri</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <button class="btn @(OzBiAuditService.UseDemoMode ? "btn-warning" : "btn-outline-secondary") btn-sm" @onclick="ToggleDemoMode">
+            <i class="bi @(OzBiAuditService.UseDemoMode ? "bi-eye-fill" : "bi-eye")"></i>
+            @(OzBiAuditService.UseDemoMode ? "Demo Mod Aktif (Canlıya Geç)" : "Demo Moduna Geç")
+        </button>
+
+        <button class="btn btn-outline-secondary btn-sm" @onclick="LoadData">
+            <i class="bi bi-arrow-clockwise"></i> Yenile
+        </button>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMessage) && !OzBiAuditService.UseDemoMode)
+{
+    <div class="alert alert-danger p-3 mb-4" style="border-radius: var(--radius-md); border-left: 4px solid #ef4444;">
+        <div class="d-flex align-items-start gap-2 mb-2">
+            <i class="bi bi-exclamation-triangle-fill fs-4 text-danger"></i>
+            <div>
+                <div class="fw-bold fs-6">OzBI MySQL Veritabanı Erişim Engeli (IP Kısıtlaması)</div>
+                <div class="small text-light opacity-90 mt-1">
+                    MySQL sunucusu (<code>elegance.odeaweb.com</code>) istemci IP adresiniz olan <strong>176.235.138.62</strong> için henüz erişim izni vermedi.
+                </div>
+            </div>
+        </div>
+
+        <div class="p-2.5 rounded bg-black bg-opacity-40 border border-secondary border-opacity-25 small mb-3">
+            <div class="fw-semibold text-warning mb-1"><i class="bi bi-gear-fill me-1"></i> cPanel / Sunucu Yöneticisi İçin İzin Adımı:</div>
+            <div class="text-muted">
+                Hosting panelinizde (cPanel -> <strong>Uzak MySQL / Remote MySQL</strong>) erişim izinlerine <code>%</code> (Tüm IP'ler) veya <code>176.235.138.62</code> IP adresini eklediğinizde canlı veritabanı anında bağlanacaktır.
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-warning btn-sm fw-semibold" @onclick="EnableDemoMode">
+                <i class="bi bi-magic me-1"></i> Örnek / Demo Verilerle Uygulamayı İncele
+            </button>
+        </div>
+    </div>
+}
+
+@if (OzBiAuditService.UseDemoMode)
+{
+    <div class="alert alert-warning d-flex align-items-center justify-content-between p-3 mb-4" style="border-radius: var(--radius-md);">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-info-circle-fill text-warning fs-5"></i>
+            <div>
+                <strong>Demo Mod Aktif:</strong> Şu anda gerçekçi OzBI örnek verileri (Tenant'lar, Chat'ler, GPT-4o / Claude 3.5 SQL sorguları) gösterilmektedir.
+            </div>
+        </div>
+        <button class="btn btn-sm btn-outline-dark" @onclick="DisableDemoMode">Canlı DB'ye Bağlanmayı Tekrar Dene</button>
+    </div>
+}
+
+<!-- Metrics Summary -->
+<div class="metrics-grid">
+    <div class="metric-card">
+        <div class="metric-icon" style="background: rgba(99, 102, 241, 0.15); color: var(--primary);">
+            <i class="bi bi-building"></i>
+        </div>
+        <div>
+            <div class="metric-val">@(tenantsList?.Count ?? 0)</div>
+            <div class="metric-lbl">Toplam Tenant</div>
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-icon" style="background: rgba(16, 185, 129, 0.15); color: var(--success);">
+            <i class="bi bi-chat-left-text"></i>
+        </div>
+        <div>
+            <div class="metric-val">@totalChats</div>
+            <div class="metric-lbl">Toplam Sohbet (Chat)</div>
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-icon" style="background: rgba(6, 182, 212, 0.15); color: var(--accent);">
+            <i class="bi bi-terminal-code"></i>
+        </div>
+        <div>
+            <div class="metric-val">@totalQueries</div>
+            <div class="metric-lbl">Üretilen SQL Sorguları</div>
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--warning);">
+            <i class="bi bi-chat-square-dots"></i>
+        </div>
+        <div>
+            <div class="metric-val">@totalMessages</div>
+            <div class="metric-lbl">Toplam AI Mesajı</div>
+        </div>
+    </div>
+</div>
+
+<!-- Search & Filters -->
+<div class="glass-card mb-4">
+    <div class="row g-3 align-items-center">
+        <div class="col-md-8">
+            <div class="input-group">
+                <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control input-custom" placeholder="Tenant adı, e-posta adresi veya Tenant ID ile ara..." @bind="searchTerm" @bind:event="oninput" @onkeyup="HandleSearch" />
+            </div>
+        </div>
+        <div class="col-md-4 text-end">
+            <span class="text-muted small">Gösterilen: <strong>@(tenantsList?.Count ?? 0)</strong> kayıt</span>
+        </div>
+    </div>
+</div>
+
+<!-- Tenants Table -->
+@if (isLoading)
+{
+    <div class="glass-card text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status"></div>
+        <div class="text-muted">Tenant verileri yükleniyor...</div>
+    </div>
+}
+else if (tenantsList == null || tenantsList.Count == 0)
+{
+    <div class="glass-card text-center py-5">
+        <i class="bi bi-building-x text-muted" style="font-size: 3rem;"></i>
+        <h5 class="mt-3 text-muted">Aramanıza uygun Tenant bulunamadı</h5>
+    </div>
+}
+else
+{
+    <div class="custom-table-wrapper">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Tenant Adı</th>
+                    <th>E-posta</th>
+                    <th>Durum</th>
+                    <th>Chat Sayısı</th>
+                    <th>SQL Sorguları</th>
+                    <th>Son Aktivite</th>
+                    <th style="text-align: right;">İşlem</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in tenantsList)
+                {
+                    <tr>
+                        <td>
+                            <div class="fw-bold text-main">@item.Tenant.Name</div>
+                            <div class="text-muted" style="font-size: 0.75rem; font-family: monospace;">
+                                ID: @item.Tenant.Id
+                            </div>
+                        </td>
+                        <td>
+                            @(string.IsNullOrEmpty(item.Tenant.Email) ? "-" : item.Tenant.Email)
+                        </td>
+                        <td>
+                            @if (item.Tenant.IsActive)
+                            {
+                                <span class="badge-status badge-success"><i class="bi bi-check-circle-fill"></i> Aktif</span>
+                            }
+                            else
+                            {
+                                <span class="badge-status badge-danger"><i class="bi bi-x-circle-fill"></i> Pasif</span>
+                            }
+                        </td>
+                        <td>
+                            <span class="badge-status badge-purple">
+                                <i class="bi bi-chat-text"></i> @item.TotalChats Sohbet
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge-status badge-info">
+                                <i class="bi bi-code-slash"></i> @item.TotalQueries SQL
+                            </span>
+                        </td>
+                        <td>
+                            <span class="text-muted" style="font-size: 0.85rem;">
+                                @(item.LastActivityDate?.ToString("dd.MM.yyyy HH:mm") ?? "-")
+                            </span>
+                        </td>
+                        <td style="text-align: right;">
+                            <button class="btn btn-sm btn-primary-custom" @onclick="() => SelectTenant(item.Tenant.Id)">
+                                <i class="bi bi-eye"></i> Chat'leri İncele
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<TenantAuditSummary>? tenantsList;
+    private string searchTerm = string.Empty;
+    private string? errorMessage;
+    private bool isLoading = true;
+
+    private int totalChats = 0;
+    private int totalQueries = 0;
+    private int totalMessages = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            tenantsList = await AuditService.GetTenantsSummaryAsync(searchTerm);
+            totalChats = tenantsList.Sum(t => t.TotalChats);
+            totalQueries = tenantsList.Sum(t => t.TotalQueries);
+            totalMessages = tenantsList.Sum(t => t.TotalMessages);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task EnableDemoMode()
+    {
+        OzBiAuditService.UseDemoMode = true;
+        await LoadData();
+    }
+
+    private async Task DisableDemoMode()
+    {
+        OzBiAuditService.UseDemoMode = false;
+        await LoadData();
+    }
+
+    private async Task ToggleDemoMode()
+    {
+        OzBiAuditService.UseDemoMode = !OzBiAuditService.UseDemoMode;
+        await LoadData();
+    }
+
+    private async Task HandleSearch(KeyboardEventArgs e)
+    {
+        await LoadData();
+    }
+
+    private void SelectTenant(string tenantId)
+    {
+        Navigation.NavigateTo($"/tenant/{tenantId}/chats");
+    }
+}

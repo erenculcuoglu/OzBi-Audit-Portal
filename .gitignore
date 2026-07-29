@@ -1,0 +1,25 @@
+## .NET Build & Artifacts
+[Bb]in/
+[Oo]bj/
+out/
+.vs/
+.vscode/
+.idea/
+
+## Local App SQLite DB & Logs
+app/*.db
+app/*.db-shm
+app/*.db-wal
+*.log
+
+## User-specific & OS files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.DS_Store
+Thumbs.db
+
+## Publishing / Packages
+*.nupkg
+*.snupkg

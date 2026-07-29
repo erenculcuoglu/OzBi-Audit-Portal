@@ -1,0 +1,263 @@
+@page "/chat/{ChatId}"
+@inject IOzBiAuditService AuditService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@using OzBiPortalCRM.Services
+@using OzBiPortalCRM.Models
+
+<div class="mb-4">
+    @if (chat != null)
+    {
+        <a href="tenant/@chat.TenantId/chats" class="btn btn-outline-secondary btn-sm mb-3">
+            <i class="bi bi-arrow-left"></i> Chat Listesine Dön
+        </a>
+
+        <div class="glass-card mb-4">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                <div>
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="badge-status badge-info"><i class="bi bi-building"></i> @(chat.Tenant?.Name ?? "Tenant")</span>
+                        <span class="badge-status badge-purple"><i class="bi bi-chat-dots"></i> Chat Detayı</span>
+                    </div>
+                    <h3 class="fw-bold mb-1">@(string.IsNullOrWhiteSpace(chat.Title) ? "Başlıksız Sohbet" : chat.Title)</h3>
+                    <div class="text-muted small d-flex align-items-center gap-3 flex-wrap">
+                        <span><i class="bi bi-person"></i> Oluşturan: @(chat.CreatedByUser?.NameSurname ?? chat.CreatedByUser?.Email ?? "Sistem/Kullanıcı")</span>
+                        <span><i class="bi bi-calendar3"></i> Tarih: @(chat.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")</span>
+                        <span style="font-family: monospace;">Chat ID: @chat.Id</span>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25 px-3">
+                        <div class="fs-5 fw-bold text-primary">@messagesList?.Count</div>
+                        <div class="text-muted small">Mesaj</div>
+                    </div>
+                    <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25 px-3">
+                        <div class="fs-5 fw-bold text-success">@messagesList?.Count(m => !string.IsNullOrEmpty(m.Query))</div>
+                        <div class="text-muted small">SQL Sorgusu</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (isLoading)
+{
+    <div class="glass-card text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status"></div>
+        <div class="text-muted">Chat mesajları ve SQL detayları yükleniyor...</div>
+    </div>
+}
+else if (messagesList == null || messagesList.Count == 0)
+{
+    <div class="glass-card text-center py-5">
+        <i class="bi bi-chat-square-x text-muted" style="font-size: 3rem;"></i>
+        <h5 class="mt-3 text-muted">Bu sohbete ait mesaj bulunamadı</h5>
+    </div>
+}
+else
+{
+    <div class="d-flex flex-column gap-4">
+        @foreach (var (msg, index) in messagesList.Select((m, i) => (m, i + 1)))
+        {
+            <div class="glass-card border-secondary border-opacity-25" style="border-left: 4px solid @(string.IsNullOrEmpty(msg.Query) ? "var(--primary)" : "var(--accent)");">
+                <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-secondary opacity-75 rounded-pill px-2 py-1" style="font-size: 0.75rem;">#@index</span>
+                        <span class="fw-bold text-main" style="font-size: 0.95rem;">
+                            @if (msg.Role?.ToLower() == "user")
+                            {
+                                <i class="bi bi-person-fill text-info me-1"></i><span>Kullanıcı Sorduğu Soru</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-robot text-primary me-1"></i><span>OzBI AI Yanıtı & Sorgu Üretimi</span>
+                            }
+                        </span>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <!-- AI Model Info -->
+                        @if (msg.AIModel != null)
+                        {
+                            <span class="badge-status badge-purple" title="Çalıştırılan AI Modeli">
+                                <i class="bi bi-cpu-fill"></i> Model: @(msg.AIModel.Name ?? msg.AIModel.ProgrammaticName)
+                            </span>
+                            @if (msg.AIModel.TokenLimit > 0)
+                            {
+                                <span class="badge-status badge-info" title="Token Limiti">
+                                    <i class="bi bi-layers"></i> @msg.AIModel.TokenLimit.ToString("N0") Token
+                                </span>
+                            }
+                        }
+                        else if (!string.IsNullOrEmpty(msg.Assistant?.AIModelName))
+                        {
+                            <span class="badge-status badge-purple">
+                                <i class="bi bi-cpu-fill"></i> Model: @msg.Assistant.AIModelName
+                            </span>
+                        }
+
+                        <!-- Assistant Info -->
+                        @if (msg.Assistant != null)
+                        {
+                            <span class="badge-status badge-info" title="Asistan Adı">
+                                <i class="bi bi-bot"></i> Asistan: @msg.Assistant.Name
+                            </span>
+                        }
+
+                        <span class="text-muted small"><i class="bi bi-clock"></i> @(msg.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")</span>
+                    </div>
+                </div>
+
+                <!-- User Prompt / Question Text -->
+                @if (!string.IsNullOrEmpty(msg.Prompt) || (msg.Role?.ToLower() == "user" && !string.IsNullOrEmpty(msg.Message)))
+                {
+                    <div class="p-3 mb-3 rounded bg-black bg-opacity-40 border border-secondary border-opacity-25">
+                        <div class="text-muted small fw-bold mb-1 text-uppercase" style="letter-spacing: 0.5px; font-size: 0.7rem;">
+                            <i class="bi bi-question-circle text-info me-1"></i> Kullanıcı İletisi (Prompt)
+                        </div>
+                        <div class="text-main" style="white-space: pre-wrap; font-size: 0.95rem;">
+                            @(string.IsNullOrEmpty(msg.Prompt) ? msg.Message : msg.Prompt)
+                        </div>
+                    </div>
+                }
+
+                <!-- AI Response Message Text -->
+                @if (msg.Role?.ToLower() != "user" && !string.IsNullOrEmpty(msg.Message))
+                {
+                    <div class="p-3 mb-3 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25">
+                        <div class="text-muted small fw-bold mb-1 text-uppercase" style="letter-spacing: 0.5px; font-size: 0.7rem;">
+                            <i class="bi bi-chat-quote text-primary me-1"></i> AI Yanıt Metni / Özet
+                        </div>
+                        <div class="text-main" style="white-space: pre-wrap; font-size: 0.925rem;">
+                            @msg.Message
+                        </div>
+                    </div>
+                }
+
+                <!-- SQL Query Section -->
+                @if (!string.IsNullOrEmpty(msg.Query))
+                {
+                    <div class="mt-3">
+                        <div class="sql-header">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="bi bi-database-fill-gear text-info"></i>
+                                <span class="fw-bold text-info" style="font-size: 0.85rem;">Üretilen SQL Sorgusu (Query)</span>
+
+                                @if (msg.IsSucceeded)
+                                {
+                                    <span class="badge-status badge-success ms-2"><i class="bi bi-check-circle"></i> Başarılı Sorgu</span>
+                                }
+                                else
+                                {
+                                    <span class="badge-status badge-danger ms-2"><i class="bi bi-exclamation-triangle"></i> Sorgu Hatalı</span>
+                                }
+
+                                @if (msg.HasComplicatedQuery)
+                                {
+                                    <span class="badge-status badge-purple" title="Karmaşık Sorgu Yapısı"><i class="bi bi-diagram-3"></i> Karmaşık Sorgu</span>
+                                }
+
+                                @if (msg.Limit > 0)
+                                {
+                                    <span class="badge-status badge-info" title="Sorgu Limit Değeri">Limit: @msg.Limit</span>
+                                }
+                            </div>
+
+                            <button class="btn-copy" @onclick="() => CopySql(msg.Query)">
+                                <i class="bi bi-clipboard"></i> SQL Kopyala
+                            </button>
+                        </div>
+
+                        <div class="sql-box">
+                            <code>@msg.Query</code>
+                        </div>
+                    </div>
+                }
+
+                <!-- Error Message Alert if Failed -->
+                @if (!string.IsNullOrEmpty(msg.ErrorMessage))
+                {
+                    <div class="alert alert-danger mt-3 mb-0 d-flex align-items-start gap-2 p-3" style="border-radius: var(--radius-md); font-size: 0.875rem;">
+                        <i class="bi bi-bug-fill text-danger fs-5"></i>
+                        <div>
+                            <div class="fw-bold mb-1">Veritabanı / AI Hata Mesajı:</div>
+                            <div style="font-family: monospace; white-space: pre-wrap;">@msg.ErrorMessage</div>
+                        </div>
+                    </div>
+                }
+
+                <!-- Execution Timing Statistics -->
+                @if (msg.TotalDurationMs.HasValue || msg.AIQueryDurationMs.HasValue || msg.DataFetchDurationMs.HasValue)
+                {
+                    <div class="d-flex align-items-center gap-3 flex-wrap mt-3 pt-3 border-top border-secondary border-opacity-25" style="font-size: 0.8rem;">
+                        <span class="text-muted fw-semibold"><i class="bi bi-speedometer2 me-1"></i> Çalışma Metrikleri:</span>
+                        @if (msg.TotalDurationMs.HasValue)
+                        {
+                            <span class="badge bg-dark text-light border border-secondary border-opacity-50">
+                                Toplam: <strong class="text-info">@msg.TotalDurationMs ms</strong>
+                            </span>
+                        }
+                        @if (msg.AIQueryDurationMs.HasValue)
+                        {
+                            <span class="badge bg-dark text-light border border-secondary border-opacity-50">
+                                AI Sorgu Süresi: <strong class="text-purple">@msg.AIQueryDurationMs ms</strong>
+                            </span>
+                        }
+                        @if (msg.AIAnalysisDurationMs.HasValue)
+                        {
+                            <span class="badge bg-dark text-light border border-secondary border-opacity-50">
+                                AI Analiz Süresi: <strong class="text-warning">@msg.AIAnalysisDurationMs ms</strong>
+                            </span>
+                        }
+                        @if (msg.DataFetchDurationMs.HasValue)
+                        {
+                            <span class="badge bg-dark text-light border border-secondary border-opacity-50">
+                                Veri Çekme Süresi: <strong class="text-success">@msg.DataFetchDurationMs ms</strong>
+                            </span>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string ChatId { get; set; } = string.Empty;
+
+    private OzBiChat? chat;
+    private List<OzBiChatMessage>? messagesList;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            chat = await AuditService.GetChatByIdAsync(ChatId);
+            messagesList = await AuditService.GetMessagesForChatAsync(ChatId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error loading chat details: " + ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CopySql(string? sql)
+    {
+        if (string.IsNullOrEmpty(sql)) return;
+        await JSRuntime.InvokeVoidAsync("copyToClipboard", sql);
+    }
+}

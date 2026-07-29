@@ -1,0 +1,181 @@
+@page "/queries"
+@inject IOzBiAuditService AuditService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@using OzBiPortalCRM.Services
+@using OzBiPortalCRM.Models
+
+<div class="mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3">
+    <div>
+        <h2 class="fw-bold mb-1"><i class="bi bi-terminal-code text-info me-2"></i>SQL Sorgu Denetimi ve Arama</h2>
+        <p class="text-muted small mb-0">Tüm tenant ve sohbetlerde çalıştırılan SQL sorgularını filtreleyin ve inceleyin</p>
+    </div>
+    <div>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="LoadData">
+            <i class="bi bi-arrow-clockwise"></i> Yenile
+        </button>
+    </div>
+</div>
+
+<!-- Search & Filter Options -->
+<div class="glass-card mb-4">
+    <div class="row g-3 align-items-center">
+        <div class="col-md-5">
+            <label class="form-label text-muted small fw-semibold">SQL veya Metin İle Ara</label>
+            <div class="input-group">
+                <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control input-custom" placeholder="Tablo adı, SQL anahtar kelimesi..." @bind="querySearch" @bind:event="oninput" @onkeyup="HandleSearch" />
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label text-muted small fw-semibold">Min Çalışma Süresi (ms)</label>
+            <input type="number" class="form-control input-custom" placeholder="Örn: 500" @bind="minDurationMs" @bind:after="LoadData" />
+        </div>
+
+        <div class="col-md-4 d-flex align-items-end justify-content-between">
+            <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="failedOnlySwitch" @bind="failedOnly" @bind:after="LoadData">
+                <label class="form-check-input-label text-main small fw-semibold ms-2" for="failedOnlySwitch">
+                    <i class="bi bi-exclamation-triangle text-danger me-1"></i> Sadece Hatalı Sorgular
+                </label>
+            </div>
+
+            <span class="text-muted small mb-2">Bulunan: <strong>@queriesList?.Count</strong></span>
+        </div>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="glass-card text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status"></div>
+        <div class="text-muted">SQL sorguları veritabanından taranıyor...</div>
+    </div>
+}
+else if (queriesList == null || queriesList.Count == 0)
+{
+    <div class="glass-card text-center py-5">
+        <i class="bi bi-database-x text-muted" style="font-size: 3rem;"></i>
+        <h5 class="mt-3 text-muted">Arama kriterlerine uygun SQL sorgusu bulunamadı</h5>
+    </div>
+}
+else
+{
+    <div class="d-flex flex-column gap-3">
+        @foreach (var item in queriesList)
+        {
+            <div class="glass-card border-secondary border-opacity-25">
+                <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="badge-status badge-info">
+                            <i class="bi bi-building"></i> @(item.Chat?.Tenant?.Name ?? "Tenant")
+                        </span>
+
+                        <a href="chat/@item.ChatId" class="text-decoration-none fw-bold text-main" style="font-size: 0.95rem;">
+                            <i class="bi bi-chat-text text-primary me-1"></i> @(string.IsNullOrWhiteSpace(item.Chat?.Title) ? "Sohbete Git" : item.Chat.Title)
+                        </a>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        @if (item.AIModel != null)
+                        {
+                            <span class="badge-status badge-purple">
+                                <i class="bi bi-cpu"></i> @(item.AIModel.Name ?? item.AIModel.ProgrammaticName)
+                            </span>
+                        }
+
+                        @if (item.IsSucceeded)
+                        {
+                            <span class="badge-status badge-success"><i class="bi bi-check-circle"></i> Başarılı</span>
+                        }
+                        else
+                        {
+                            <span class="badge-status badge-danger"><i class="bi bi-x-circle"></i> Hatalı</span>
+                        }
+
+                        <span class="text-muted small"><i class="bi bi-clock"></i> @(item.DateCreated?.ToString("dd.MM.yyyy HH:mm") ?? "-")</span>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(item.Prompt))
+                {
+                    <div class="text-muted small mb-2">
+                        <strong>Kullanıcı Sorusu:</strong> @item.Prompt
+                    </div>
+                }
+
+                <div class="sql-header">
+                    <span class="text-info small fw-bold"><i class="bi bi-code"></i> SQL Sorgusu</span>
+                    <button class="btn-copy" @onclick="() => CopySql(item.Query)">
+                        <i class="bi bi-clipboard"></i> Kopyala
+                    </button>
+                </div>
+
+                <div class="sql-box mb-2">
+                    <code>@item.Query</code>
+                </div>
+
+                @if (!string.IsNullOrEmpty(item.ErrorMessage))
+                {
+                    <div class="alert alert-danger mb-2 p-2 small" style="border-radius: var(--radius-md);">
+                        <strong>Hata:</strong> @item.ErrorMessage
+                    </div>
+                }
+
+                <div class="d-flex align-items-center justify-content-between pt-2 border-top border-secondary border-opacity-25 text-muted small">
+                    <div>
+                        Süresi: <strong class="text-light">@(item.TotalDurationMs.HasValue ? $"{item.TotalDurationMs} ms" : "-")</strong>
+                    </div>
+                    <a href="chat/@item.ChatId" class="btn btn-sm btn-outline-primary py-0" style="font-size: 0.75rem;">
+                        <i class="bi bi-box-arrow-up-right"></i> Chat İncele
+                    </a>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<OzBiChatMessage>? queriesList;
+    private string querySearch = string.Empty;
+    private bool failedOnly = false;
+    private long? minDurationMs;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            queriesList = await AuditService.SearchGlobalQueriesAsync(
+                querySearch: querySearch,
+                failedOnly: failedOnly,
+                minDurationMs: minDurationMs);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error searching queries: " + ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleSearch(KeyboardEventArgs e)
+    {
+        await LoadData();
+    }
+
+    private async Task CopySql(string? sql)
+    {
+        if (string.IsNullOrEmpty(sql)) return;
+        await JSRuntime.InvokeVoidAsync("copyToClipboard", sql);
+    }
+}

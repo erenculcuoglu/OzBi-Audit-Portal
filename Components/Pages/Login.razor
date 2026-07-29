@@ -1,0 +1,82 @@
+@page "/login"
+@inject NavigationManager Navigation
+
+<div class="d-flex align-items-center justify-content-center min-vh-100 p-3" style="background: radial-gradient(circle at center, rgba(99, 102, 241, 0.15) 0%, transparent 60%), var(--bg-main);">
+    <div class="glass-card" style="width: 100%; max-width: 440px; border-radius: var(--radius-lg); padding: 2.5rem;">
+        <div class="text-center mb-4">
+            <div class="logo-badge mx-auto mb-3" style="width: 54px; height: 54px; font-size: 1.6rem;">
+                <i class="bi bi-shield-lock-fill"></i>
+            </div>
+            <h3 class="fw-bold mb-1">OzBI Audit Portal</h3>
+            <p class="text-muted small">Veritabanı ve AI Sorgu İzleme Paneli</p>
+        </div>
+
+        @if (hasError)
+        {
+            <div class="alert alert-danger d-flex align-items-center gap-2 py-2 px-3 mb-3" style="font-size: 0.85rem; border-radius: var(--radius-md);">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <div>E-posta adresi veya şifre hatalı. Lütfen tekrar deneyin.</div>
+            </div>
+        }
+
+        <form method="post" action="/api/auth/login">
+            <div class="mb-3">
+                <label class="form-label text-muted small fw-semibold">E-posta Adresi</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-envelope"></i></span>
+                    <input type="email" name="email" class="form-control input-custom" placeholder="ornek@ozbiapp.com.tr" value="@emailInput" required />
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label text-muted small fw-semibold">Şifre</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-key"></i></span>
+                    <input type="password" name="password" class="form-control input-custom" placeholder="••••••••" value="@passwordInput" required />
+                </div>
+            </div>
+
+            <button type="submit" class="btn-primary-custom w-100 justify-content-center py-2 mb-3">
+                <i class="bi bi-box-arrow-in-right"></i>
+                <span>Giriş Yap</span>
+            </button>
+        </form>
+
+        <div class="p-3 border border-secondary border-opacity-25 rounded-3 bg-black bg-opacity-20 text-center">
+            <div class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i> Seed Kullanıcı Bilgileri:</div>
+            <div class="d-flex align-items-center justify-content-between text-start small mb-2">
+                <span class="text-muted">E-posta:</span>
+                <code class="text-info">eren@ozbiapp.com.tr</code>
+            </div>
+            <div class="d-flex align-items-center justify-content-between text-start small mb-2">
+                <span class="text-muted">Şifre:</span>
+                <code class="text-info">123456</code>
+            </div>
+            <a href="/login?fill=seed" class="btn btn-sm btn-outline-secondary w-100 mt-1" style="font-size: 0.75rem;">
+                Seed Bilgileri Otomatik Doldur
+            </a>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool hasError = false;
+    private string emailInput = string.Empty;
+    private string passwordInput = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+
+        if (uri.Query.Contains("error=1"))
+        {
+            hasError = true;
+        }
+
+        if (uri.Query.Contains("fill=seed"))
+        {
+            emailInput = "eren@ozbiapp.com.tr";
+            passwordInput = "123456";
+        }
+    }
+}
