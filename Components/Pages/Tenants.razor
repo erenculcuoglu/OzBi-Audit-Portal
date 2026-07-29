@@ -186,9 +186,23 @@ else
                             </span>
                         </td>
                         <td>
-                            <span class="badge-status badge-info">
-                                <i class="bi bi-code-slash"></i> @item.TotalQueries SQL
-                            </span>
+                            <div class="d-flex flex-column gap-1">
+                                <div>
+                                    <span class="badge-status @(item.TotalQueries >= 50 ? "badge-danger" : (item.TotalQueries >= 35 ? "badge-warning" : "badge-info"))">
+                                        <i class="bi bi-code-slash"></i> @item.TotalQueries / @item.QueryQuotaLimit SQL
+                                    </span>
+                                </div>
+                                <div style="font-size: 0.725rem;">
+                                    @if (item.RemainingQueries == 0)
+                                    {
+                                        <span class="text-danger fw-bold"><i class="bi bi-exclamation-octagon-fill"></i> Kota Doldu</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Kalan: <strong class="text-success">@item.RemainingQueries</strong> Hak</span>
+                                    }
+                                </div>
+                            </div>
                         </td>
                         <td>
                             <span class="text-muted" style="font-size: 0.85rem;">

@@ -11,6 +11,9 @@ namespace OzBiPortalCRM.Services
         public int TotalChats { get; set; }
         public int TotalMessages { get; set; }
         public int TotalQueries { get; set; }
+        public int QueryQuotaLimit { get; set; } = 50;
+        public int RemainingQueries => Math.Max(0, QueryQuotaLimit - TotalQueries);
+        public double QuotaUsagePercentage => QueryQuotaLimit > 0 ? Math.Min(100.0, Math.Round((double)TotalQueries / QueryQuotaLimit * 100, 1)) : 0;
         public DateTime? LastActivityDate { get; set; }
         public bool IsFavorited { get; set; }
     }
@@ -22,6 +25,9 @@ namespace OzBiPortalCRM.Services
         public int TotalChats { get; set; }
         public int TotalMessages { get; set; }
         public int TotalQueries { get; set; }
+        public int QueryQuotaLimit { get; set; } = 50;
+        public int RemainingQueries => Math.Max(0, QueryQuotaLimit - TotalQueries);
+        public double QuotaUsagePercentage => QueryQuotaLimit > 0 ? Math.Min(100.0, Math.Round((double)TotalQueries / QueryQuotaLimit * 100, 1)) : 0;
         public DateTime? LastActivityDate { get; set; }
         public bool IsFavorited { get; set; }
     }

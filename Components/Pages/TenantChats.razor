@@ -22,14 +22,20 @@
                 </div>
             </div>
 
-            <div class="d-flex gap-3">
+            <div class="d-flex gap-3 align-items-center">
                 <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25 px-3">
-                    <div class="fs-4 fw-bold text-primary">@chatsList?.Count</div>
+                    <div class="fs-4 fw-bold text-primary">@(chatsList?.Count ?? 0)</div>
                     <div class="text-muted small">Sohbet (Chat)</div>
                 </div>
                 <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25 px-3">
-                    <div class="fs-4 fw-bold text-info">@chatsList?.Sum(c => c.QueryCount)</div>
-                    <div class="text-muted small">SQL Sorguları</div>
+                    <div class="fs-4 fw-bold text-info">@TotalQueries / 50</div>
+                    <div class="text-muted small">Kullanılan SQL</div>
+                </div>
+                <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25 px-3">
+                    <div class="fs-4 fw-bold @(RemainingQueries == 0 ? "text-danger" : "text-success")">
+                        @RemainingQueries
+                    </div>
+                    <div class="text-muted small">Kalan Hak</div>
                 </div>
             </div>
         </div>
@@ -150,6 +156,9 @@ else
     private List<ChatAuditSummary>? chatsList;
     private string searchTerm = string.Empty;
     private bool isLoading = true;
+
+    private int TotalQueries => chatsList?.Sum(c => c.QueryCount) ?? 0;
+    private int RemainingQueries => Math.Max(0, 50 - TotalQueries);
 
     protected override async Task OnInitializedAsync()
     {
