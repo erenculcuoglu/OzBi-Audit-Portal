@@ -59,7 +59,7 @@ namespace OzBiPortalCRM.Services
 
                 var messages = await db.ChatMessages.AsNoTracking()
                     .Where(m => !string.IsNullOrEmpty(m.ChatId) && chatIds.Contains(m.ChatId))
-                    .Select(m => new { m.ChatId, HasQuery = !string.IsNullOrEmpty(m.Query) })
+                    .Select(m => new { m.ChatId, HasQuery = !string.IsNullOrEmpty(m.Query), m.DateCreated })
                     .ToListAsync();
 
                 var favoriteTenantIds = portalUserId > 0 ? await GetFavoriteItemIdsAsync(portalUserId, "Tenant") : new HashSet<string>();
@@ -72,15 +72,16 @@ namespace OzBiPortalCRM.Services
                     var tenantChatIds = tenantChats.Select(c => c.Id).ToHashSet();
                     var tenantMessages = messages.Where(m => tenantChatIds.Contains(m.ChatId)).ToList();
 
-                    DateTime? lastAct = t.DateCreated;
-                    if (tenantChats.Count > 0)
+                    var dateList = tenantChats.Where(c => c.DateCreated.HasValue).Select(c => c.DateCreated!.Value)
+                        .Concat(tenantMessages.Where(m => m.DateCreated.HasValue).Select(m => m.DateCreated!.Value))
+                        .ToList();
+
+                    if (t.DateCreated.HasValue)
                     {
-                        var dates = tenantChats.Where(c => c.DateCreated.HasValue).Select(c => c.DateCreated!.Value).ToList();
-                        if (dates.Count > 0)
-                        {
-                            lastAct = dates.Max();
-                        }
+                        dateList.Add(t.DateCreated.Value);
                     }
+
+                    DateTime? lastAct = dateList.Count > 0 ? dateList.Max() : t.DateCreated;
 
                     result.Add(new TenantAuditSummary
                     {

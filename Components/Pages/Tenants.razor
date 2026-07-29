@@ -114,13 +114,27 @@ else
         <table class="custom-table">
             <thead>
                 <tr>
-                    <th style="width: 40px;">Favori</th>
-                    <th>Tenant Adı</th>
-                    <th>E-posta</th>
-                    <th>Durum</th>
-                    <th>Chat Sayısı</th>
-                    <th>SQL Sorguları</th>
-                    <th>Son Aktivite</th>
+                    <th style="width: 40px; cursor: pointer;" @onclick='() => SortBy("IsFavorited")'>
+                        Favori @GetSortIcon("IsFavorited")
+                    </th>
+                    <th style="cursor: pointer;" @onclick='() => SortBy("Name")'>
+                        Tenant Adı @GetSortIcon("Name")
+                    </th>
+                    <th style="cursor: pointer;" @onclick='() => SortBy("Email")'>
+                        E-posta @GetSortIcon("Email")
+                    </th>
+                    <th style="cursor: pointer;" @onclick='() => SortBy("IsActive")'>
+                        Durum @GetSortIcon("IsActive")
+                    </th>
+                    <th style="cursor: pointer;" @onclick='() => SortBy("TotalChats")'>
+                        Chat Sayısı @GetSortIcon("TotalChats")
+                    </th>
+                    <th style="cursor: pointer;" @onclick='() => SortBy("TotalQueries")'>
+                        SQL Sorguları @GetSortIcon("TotalQueries")
+                    </th>
+                    <th style="cursor: pointer;" @onclick='() => SortBy("LastActivityDate")'>
+                        Son Aktivite @GetSortIcon("LastActivityDate")
+                    </th>
                     <th style="text-align: right;">İşlem</th>
                 </tr>
             </thead>
@@ -187,6 +201,10 @@ else
     private bool isLoading = true;
     private bool showFavoritesOnly = false;
 
+    // Sorting state (Default: LastActivityDate Descending)
+    private string sortColumn = "LastActivityDate";
+    private bool sortAscending = false;
+
     private int totalChats = 0;
     private int totalQueries = 0;
     private int totalMessages = 0;
@@ -203,7 +221,7 @@ else
         try
         {
             rawTenantsList = await AuditService.GetTenantsSummaryAsync(searchTerm, portalUserId: 1);
-            ApplyFilters();
+            ApplyFiltersAndSorting();
         }
         catch (Exception ex)
         {
@@ -215,7 +233,7 @@ else
         }
     }
 
-    private void ApplyFilters()
+    private void ApplyFiltersAndSorting()
     {
         if (rawTenantsList == null) return;
 
@@ -226,11 +244,51 @@ else
             list = list.Where(t => t.IsFavorited);
         }
 
-        tenantsList = list.OrderByDescending(t => t.IsFavorited).ThenByDescending(t => t.TotalChats).ToList();
+        // Apply dynamic column sorting
+        list = sortColumn switch
+        {
+            "IsFavorited" => sortAscending ? list.OrderBy(t => t.IsFavorited) : list.OrderByDescending(t => t.IsFavorited),
+            "Name" => sortAscending ? list.OrderBy(t => t.Tenant.Name) : list.OrderByDescending(t => t.Tenant.Name),
+            "Email" => sortAscending ? list.OrderBy(t => t.Tenant.Email) : list.OrderByDescending(t => t.Tenant.Email),
+            "IsActive" => sortAscending ? list.OrderBy(t => t.Tenant.IsActive) : list.OrderByDescending(t => t.Tenant.IsActive),
+            "TotalChats" => sortAscending ? list.OrderBy(t => t.TotalChats) : list.OrderByDescending(t => t.TotalChats),
+            "TotalQueries" => sortAscending ? list.OrderBy(t => t.TotalQueries) : list.OrderByDescending(t => t.TotalQueries),
+            "LastActivityDate" => sortAscending ? list.OrderBy(t => t.LastActivityDate ?? DateTime.MinValue) : list.OrderByDescending(t => t.LastActivityDate ?? DateTime.MinValue),
+            _ => list.OrderByDescending(t => t.LastActivityDate ?? DateTime.MinValue)
+        };
+
+        tenantsList = list.ToList();
 
         totalChats = tenantsList.Sum(t => t.TotalChats);
         totalQueries = tenantsList.Sum(t => t.TotalQueries);
         totalMessages = tenantsList.Sum(t => t.TotalMessages);
+    }
+
+    private void SortBy(string columnName)
+    {
+        if (sortColumn == columnName)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = columnName;
+            // Default to descending for numbers & dates, ascending for text
+            sortAscending = (columnName == "Name" || columnName == "Email");
+        }
+
+        ApplyFiltersAndSorting();
+    }
+
+    private MarkupString GetSortIcon(string columnName)
+    {
+        if (sortColumn != columnName)
+        {
+            return new MarkupString("<i class=\"bi bi-arrow-down-up text-muted opacity-25 ms-1\" style=\"font-size: 0.75rem;\"></i>");
+        }
+
+        var iconClass = sortAscending ? "bi-arrow-up text-primary fw-bold ms-1" : "bi-arrow-down text-primary fw-bold ms-1";
+        return new MarkupString($"<i class=\"bi {iconClass}\"></i>");
     }
 
     private async Task ToggleFavorite(TenantAuditSummary item)
@@ -243,13 +301,13 @@ else
             itemSubText: item.Tenant.Email
         );
 
-        ApplyFilters();
+        ApplyFiltersAndSorting();
     }
 
     private void ToggleFavoritesOnlyFilter()
     {
         showFavoritesOnly = !showFavoritesOnly;
-        ApplyFilters();
+        ApplyFiltersAndSorting();
     }
 
     private async Task HandleSearch(KeyboardEventArgs e)
