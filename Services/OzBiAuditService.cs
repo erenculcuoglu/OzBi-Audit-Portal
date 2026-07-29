@@ -219,10 +219,17 @@ namespace OzBiPortalCRM.Services
                 var msgList = messages.Where(m => m.ChatId == c.Id).ToList();
                 var primaryModel = msgList.FirstOrDefault(m => m.AIModel != null)?.AIModel?.Name ?? "Standart AI";
 
+                var userQuestionCount = msgList.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt));
+                if (userQuestionCount == 0 && msgList.Count > 0)
+                {
+                    userQuestionCount = msgList.Count(m => m.Role?.ToLower() != "user");
+                }
+                if (userQuestionCount == 0) userQuestionCount = msgList.Count;
+
                 result.Add(new ChatAuditSummary
                 {
                     Chat = c,
-                    MessageCount = msgList.Count,
+                    MessageCount = userQuestionCount,
                     QueryCount = msgList.Count(m => !string.IsNullOrEmpty(m.Query)),
                     TotalDurationMs = msgList.Sum(m => m.TotalDurationMs ?? 0),
                     LastMessageDate = msgList.Count > 0 ? msgList.Max(m => m.DateCreated) : c.DateCreated,
@@ -262,10 +269,17 @@ namespace OzBiPortalCRM.Services
                 var msgList = messages.Where(m => m.ChatId == c.Id).ToList();
                 var primaryModel = msgList.FirstOrDefault(m => m.AIModel != null)?.AIModel?.Name ?? "Standart AI";
 
+                var userQuestionCount = msgList.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt));
+                if (userQuestionCount == 0 && msgList.Count > 0)
+                {
+                    userQuestionCount = msgList.Count(m => m.Role?.ToLower() != "user");
+                }
+                if (userQuestionCount == 0) userQuestionCount = msgList.Count;
+
                 result.Add(new ChatAuditSummary
                 {
                     Chat = c,
-                    MessageCount = msgList.Count,
+                    MessageCount = userQuestionCount,
                     QueryCount = msgList.Count(m => !string.IsNullOrEmpty(m.Query)),
                     TotalDurationMs = msgList.Sum(m => m.TotalDurationMs ?? 0),
                     LastMessageDate = msgList.Count > 0 ? msgList.Max(m => m.DateCreated) : c.DateCreated,

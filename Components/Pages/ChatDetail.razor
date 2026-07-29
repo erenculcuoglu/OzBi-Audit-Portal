@@ -29,11 +29,15 @@
 
                 <div class="d-flex gap-2">
                     <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25 px-3">
-                        <div class="fs-5 fw-bold text-primary">@messagesList?.Count</div>
-                        <div class="text-muted small">Mesaj</div>
+                        <div class="fs-5 fw-bold text-info">@UserPromptCount</div>
+                        <div class="text-muted small">Kullanıcı Sorusu</div>
                     </div>
                     <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25 px-3">
-                        <div class="fs-5 fw-bold text-success">@messagesList?.Count(m => !string.IsNullOrEmpty(m.Query))</div>
+                        <div class="fs-5 fw-bold text-primary">@AiResponseCount</div>
+                        <div class="text-muted small">AI Analiz Yanıtı</div>
+                    </div>
+                    <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25 px-3">
+                        <div class="fs-5 fw-bold text-success">@SqlCount</div>
                         <div class="text-muted small">SQL Sorgusu</div>
                     </div>
                 </div>
@@ -72,7 +76,7 @@ else
                             }
                             else
                             {
-                                <i class="bi bi-robot text-primary me-1"></i><span>OzBI AI Yanıtı & Sorgu Üretimi</span>
+                                <i class="bi bi-robot text-primary me-1"></i><span>OzBI AI Analiz Yanıtı</span>
                             }
                         </span>
                     </div>
@@ -179,53 +183,16 @@ else
                             </button>
                         </div>
 
-                        <div class="sql-box">
+                        <div class="sql-code-block">
                             <code>@msg.Query</code>
                         </div>
                     </div>
                 }
 
-                <!-- Error Message Alert if Failed -->
                 @if (!string.IsNullOrEmpty(msg.ErrorMessage))
                 {
-                    <div class="alert alert-danger mt-3 mb-0 d-flex align-items-start gap-2 p-3" style="border-radius: var(--radius-md); font-size: 0.875rem;">
-                        <i class="bi bi-bug-fill text-danger fs-5"></i>
-                        <div>
-                            <div class="fw-bold mb-1">Veritabanı / AI Hata Mesajı:</div>
-                            <div style="font-family: monospace; white-space: pre-wrap;">@msg.ErrorMessage</div>
-                        </div>
-                    </div>
-                }
-
-                <!-- Execution Timing Statistics -->
-                @if (msg.TotalDurationMs.HasValue || msg.AIQueryDurationMs.HasValue || msg.DataFetchDurationMs.HasValue)
-                {
-                    <div class="d-flex align-items-center gap-3 flex-wrap mt-3 pt-3 border-top border-secondary border-opacity-25" style="font-size: 0.8rem;">
-                        <span class="text-muted fw-semibold"><i class="bi bi-speedometer2 me-1"></i> Çalışma Metrikleri:</span>
-                        @if (msg.TotalDurationMs.HasValue)
-                        {
-                            <span class="badge bg-dark text-light border border-secondary border-opacity-50">
-                                Toplam: <strong class="text-info">@msg.TotalDurationMs ms</strong>
-                            </span>
-                        }
-                        @if (msg.AIQueryDurationMs.HasValue)
-                        {
-                            <span class="badge bg-dark text-light border border-secondary border-opacity-50">
-                                AI Sorgu Süresi: <strong class="text-purple">@msg.AIQueryDurationMs ms</strong>
-                            </span>
-                        }
-                        @if (msg.AIAnalysisDurationMs.HasValue)
-                        {
-                            <span class="badge bg-dark text-light border border-secondary border-opacity-50">
-                                AI Analiz Süresi: <strong class="text-warning">@msg.AIAnalysisDurationMs ms</strong>
-                            </span>
-                        }
-                        @if (msg.DataFetchDurationMs.HasValue)
-                        {
-                            <span class="badge bg-dark text-light border border-secondary border-opacity-50">
-                                Veri Çekme Süresi: <strong class="text-success">@msg.DataFetchDurationMs ms</strong>
-                            </span>
-                        }
+                    <div class="p-2.5 mt-3 rounded bg-danger bg-opacity-10 border border-danger border-opacity-20 text-danger small font-monospace">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i> <strong>Hata Detayı:</strong> @msg.ErrorMessage
                     </div>
                 }
             </div>
@@ -240,6 +207,10 @@ else
     private OzBiChat? chat;
     private List<OzBiChatMessage>? messagesList;
     private bool isLoading = true;
+
+    private int UserPromptCount => messagesList?.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt)) ?? 0;
+    private int AiResponseCount => messagesList?.Count(m => m.Role?.ToLower() != "user" && !string.IsNullOrEmpty(m.Message)) ?? 0;
+    private int SqlCount => messagesList?.Count(m => !string.IsNullOrEmpty(m.Query)) ?? 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -256,7 +227,7 @@ else
         }
         catch (Exception ex)
         {
-            Console.WriteLine("Error loading chat details: " + ex.Message);
+            Console.WriteLine("Error loading chat detail: " + ex.Message);
         }
         finally
         {
@@ -264,9 +235,8 @@ else
         }
     }
 
-    private async Task CopySql(string? sql)
+    private async Task CopySql(string text)
     {
-        if (string.IsNullOrEmpty(sql)) return;
-        await JSRuntime.InvokeVoidAsync("copyToClipboard", sql);
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
     }
 }
