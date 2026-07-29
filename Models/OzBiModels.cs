@@ -131,6 +131,55 @@ namespace OzBiPortalCRM.Models
         public DateTime? DateCreated { get; set; }
         public DateTime? DateModified { get; set; }
         public string? AIModelName { get; set; }
+
+        [ForeignKey("DataConnectionId")]
+        public virtual OzBiConnection? DataConnection { get; set; }
+    }
+
+    [Table("connection")]
+    public class OzBiConnection
+    {
+        [Key]
+        public string Id { get; set; } = string.Empty;
+        public string? Name { get; set; }
+        public bool IsSample { get; set; }
+        public bool IsSystem { get; set; }
+        public int CurrentUsage { get; set; }
+        public int TotalUsage { get; set; }
+        public string ConnectionSourceCodeId { get; set; } = string.Empty;
+        public string ConnectionSourceTypeCodeId { get; set; } = string.Empty;
+        public string TenantId { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+        public DateTime? DateCreated { get; set; }
+
+        [ForeignKey("ConnectionSourceCodeId")]
+        public virtual OzBiCode? ConnectionSourceCode { get; set; }
+    }
+
+    [Table("code")]
+    public class OzBiCode
+    {
+        [Key]
+        public string Id { get; set; } = string.Empty;
+        public string? DisplayName_TR { get; set; }
+        public string? DisplayName_EN { get; set; }
+        public string? ProgrammaticName { get; set; }
+        public string CodeTypeId { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+
+        [ForeignKey("CodeTypeId")]
+        public virtual OzBiCodeType? CodeType { get; set; }
+    }
+
+    [Table("codetype")]
+    public class OzBiCodeType
+    {
+        [Key]
+        public string Id { get; set; } = string.Empty;
+        public string? DisplayName_TR { get; set; }
+        public string? DisplayName_EN { get; set; }
+        public string? ProgrammaticName { get; set; }
+        public bool IsActive { get; set; }
     }
 
     [Table("aspnetusers")]

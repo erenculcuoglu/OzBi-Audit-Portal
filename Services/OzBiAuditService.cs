@@ -221,6 +221,8 @@ namespace OzBiPortalCRM.Services
                 return await db.ChatMessages.AsNoTracking()
                     .Include(m => m.AIModel)
                     .Include(m => m.Assistant)
+                        .ThenInclude(a => a!.DataConnection)
+                            .ThenInclude(c => c!.ConnectionSourceCode)
                     .Where(m => m.ChatId == chatId)
                     .OrderBy(m => m.DateCreated)
                     .ToListAsync();

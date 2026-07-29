@@ -16,6 +16,9 @@ namespace OzBiPortalCRM.Data
         public DbSet<OzBiAiModel> AiModels { get; set; } = null!;
         public DbSet<OzBiAssistant> Assistants { get; set; } = null!;
         public DbSet<OzBiUser> Users { get; set; } = null!;
+        public DbSet<OzBiConnection> Connections { get; set; } = null!;
+        public DbSet<OzBiCode> Codes { get; set; } = null!;
+        public DbSet<OzBiCodeType> CodeTypes { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -27,6 +30,9 @@ namespace OzBiPortalCRM.Data
             modelBuilder.Entity<OzBiAiModel>().ToTable("aimodel");
             modelBuilder.Entity<OzBiAssistant>().ToTable("asistant");
             modelBuilder.Entity<OzBiUser>().ToTable("aspnetusers");
+            modelBuilder.Entity<OzBiConnection>().ToTable("connection");
+            modelBuilder.Entity<OzBiCode>().ToTable("code");
+            modelBuilder.Entity<OzBiCodeType>().ToTable("codetype");
 
             // Explicitly set char(36) column types for string ID properties
             foreach (var entity in modelBuilder.Model.GetEntityTypes())

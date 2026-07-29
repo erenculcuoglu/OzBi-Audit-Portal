@@ -104,6 +104,15 @@ else
                             <span class="badge-status badge-info" title="Asistan Adı">
                                 <i class="bi bi-bot"></i> Asistan: @msg.Assistant.Name
                             </span>
+
+                            @if (msg.Assistant.DataConnection?.ConnectionSourceCode != null)
+                            {
+                                var code = msg.Assistant.DataConnection.ConnectionSourceCode;
+                                var sourceName = code.DisplayName_TR ?? code.DisplayName_EN ?? code.ProgrammaticName;
+                                <span class="badge-status badge-success" title="Bağlı ERP / Veri Kaynağı">
+                                    <i class="bi bi-database-check"></i> Veri Kaynağı: @sourceName
+                                </span>
+                            }
                         }
 
                         <span class="text-muted small"><i class="bi bi-clock"></i> @(msg.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")</span>
