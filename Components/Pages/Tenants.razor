@@ -35,11 +35,9 @@
             </div>
         </div>
 
-        <div class="p-2.5 rounded bg-black bg-opacity-40 border border-secondary border-opacity-25 small mb-3">
-            <div class="fw-semibold text-warning mb-1"><i class="bi bi-gear-fill me-1"></i> cPanel / Sunucu Yöneticisi İçin İzin Adımı:</div>
-            <div class="text-muted">
-                Hosting panelinizde (cPanel -> <strong>Uzak MySQL / Remote MySQL</strong>) erişim izinlerine <code>%</code> (Tüm IP'ler) veya <code>176.235.138.62</code> IP adresini eklediğinizde canlı veritabanı anında bağlanacaktır.
-            </div>
+        <div class="p-2.5 rounded bg-black bg-opacity-40 border border-secondary border-opacity-25 small mb-3 text-danger font-monospace">
+            <div class="fw-semibold text-warning mb-1"><i class="bi bi-bug-fill me-1"></i> Veritabanı Hata Detayı:</div>
+            <div>@errorMessage</div>
         </div>
 
         <div class="d-flex align-items-center gap-2">

@@ -33,18 +33,6 @@ namespace OzBiPortalCRM.Data
             modelBuilder.Entity<OzBiConnection>().ToTable("connection");
             modelBuilder.Entity<OzBiCode>().ToTable("code");
             modelBuilder.Entity<OzBiCodeType>().ToTable("codetype");
-
-            // Explicitly set char(36) column types for string ID properties
-            foreach (var entity in modelBuilder.Model.GetEntityTypes())
-            {
-                foreach (var property in entity.GetProperties())
-                {
-                    if (property.ClrType == typeof(string) && (property.Name == "Id" || property.Name.EndsWith("Id")))
-                    {
-                        property.SetColumnType("char(36)");
-                    }
-                }
-            }
         }
     }
 }

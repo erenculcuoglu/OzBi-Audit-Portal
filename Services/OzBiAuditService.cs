@@ -42,21 +42,21 @@ namespace OzBiPortalCRM.Services
                     var term = searchTerm.Trim().ToLower();
                     query = query.Where(t => (t.Name != null && t.Name.ToLower().Contains(term)) ||
                                              (t.Email != null && t.Email.ToLower().Contains(term)) ||
-                                             t.Id.ToLower().Contains(term));
+                                             (t.Id != null && t.Id.ToLower().Contains(term)));
                 }
 
                 var tenants = await query.OrderByDescending(t => t.DateCreated).Take(200).ToListAsync();
-                var tenantIds = tenants.Select(t => t.Id).ToHashSet();
+                var tenantIds = tenants.Where(t => !string.IsNullOrEmpty(t.Id)).Select(t => t.Id).ToHashSet();
 
                 var chats = await db.Chats.AsNoTracking()
-                    .Where(c => tenantIds.Contains(c.TenantId))
+                    .Where(c => !string.IsNullOrEmpty(c.TenantId) && tenantIds.Contains(c.TenantId))
                     .Select(c => new { c.Id, c.TenantId, c.DateCreated })
                     .ToListAsync();
 
-                var chatIds = chats.Select(c => c.Id).ToHashSet();
+                var chatIds = chats.Where(c => !string.IsNullOrEmpty(c.Id)).Select(c => c.Id).ToHashSet();
 
                 var messages = await db.ChatMessages.AsNoTracking()
-                    .Where(m => chatIds.Contains(m.ChatId))
+                    .Where(m => !string.IsNullOrEmpty(m.ChatId) && chatIds.Contains(m.ChatId))
                     .Select(m => new { m.ChatId, HasQuery = !string.IsNullOrEmpty(m.Query) })
                     .ToListAsync();
 
@@ -68,13 +68,23 @@ namespace OzBiPortalCRM.Services
                     var tenantChatIds = tenantChats.Select(c => c.Id).ToHashSet();
                     var tenantMessages = messages.Where(m => tenantChatIds.Contains(m.ChatId)).ToList();
 
+                    DateTime? lastAct = t.DateCreated;
+                    if (tenantChats.Count > 0)
+                    {
+                        var dates = tenantChats.Where(c => c.DateCreated.HasValue).Select(c => c.DateCreated!.Value).ToList();
+                        if (dates.Count > 0)
+                        {
+                            lastAct = dates.Max();
+                        }
+                    }
+
                     result.Add(new TenantAuditSummary
                     {
                         Tenant = t,
                         TotalChats = tenantChats.Count,
                         TotalMessages = tenantMessages.Count,
                         TotalQueries = tenantMessages.Count(m => m.HasQuery),
-                        LastActivityDate = tenantChats.Count > 0 ? tenantChats.Max(c => c.DateCreated) : t.DateCreated
+                        LastActivityDate = lastAct
                     });
                 }
 
