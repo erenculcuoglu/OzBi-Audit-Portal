@@ -1,3 +1,4 @@
+@page "/favorites"
 @page "/ozbi-users"
 @inject IOzBiAuditService AuditService
 @inject NavigationManager Navigation
@@ -6,8 +7,8 @@
 
 <div class="mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3">
     <div>
-        <h2 class="fw-bold mb-1"><i class="bi bi-person-lines-fill text-primary me-2"></i>Kullanıcı Ayak İzi ve Favoriler</h2>
-        <p class="text-muted small mb-0">Sisteme kayıtlı OzBI kullanıcıları, etkileşim sayıları, sohbet geçmişi ve favoriler</p>
+        <h2 class="fw-bold mb-1"><i class="bi bi-star-fill text-warning me-2"></i>Favoriler ve Kullanıcı Takibi</h2>
+        <p class="text-muted small mb-0">Favoriye eklediğiniz OzBI kullanıcıları, etkileşim sayıları ve sohbet geçmişi</p>
     </div>
     <div class="d-flex align-items-center gap-2">
         <button class="btn @(showFavoritesOnly ? "btn-warning" : "btn-outline-secondary") btn-sm" @onclick="ToggleFavoritesOnlyFilter">
@@ -31,22 +32,22 @@
 <!-- Metrics Summary -->
 <div class="metrics-grid mb-4">
     <div class="metric-card">
-        <div class="metric-icon" style="background: rgba(99, 102, 241, 0.15); color: var(--primary);">
-            <i class="bi bi-people"></i>
-        </div>
-        <div>
-            <div class="metric-val">@(usersList?.Count ?? 0)</div>
-            <div class="metric-lbl">Toplam Kullanıcı</div>
-        </div>
-    </div>
-
-    <div class="metric-card">
         <div class="metric-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--warning);">
             <i class="bi bi-star"></i>
         </div>
         <div>
             <div class="metric-val">@favoritedCount</div>
             <div class="metric-lbl">Favori Kullanıcılar</div>
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-icon" style="background: rgba(99, 102, 241, 0.15); color: var(--primary);">
+            <i class="bi bi-people"></i>
+        </div>
+        <div>
+            <div class="metric-val">@(usersList?.Count ?? 0)</div>
+            <div class="metric-lbl">Toplam Kullanıcı</div>
         </div>
     </div>
 
@@ -86,12 +87,12 @@
     </div>
 </div>
 
-<!-- Users Footprint Table -->
+<!-- Users Table -->
 @if (isLoading)
 {
     <div class="glass-card text-center py-5">
         <div class="spinner-border text-primary mb-3" role="status"></div>
-        <div class="text-muted">OzBI kullanıcı ayak izi yükleniyor...</div>
+        <div class="text-muted">Kullanıcı verileri yükleniyor...</div>
     </div>
 }
 else if (usersList == null || usersList.Count == 0)

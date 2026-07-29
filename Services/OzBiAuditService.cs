@@ -351,7 +351,7 @@ namespace OzBiPortalCRM.Services
         public async Task<bool> ToggleFavoriteAsync(int portalUserId, string itemType, string itemId, string itemName, string? itemSubText)
         {
             using var db = await _appDbFactory.CreateDbContextAsync();
-            await db.Database.EnsureCreatedAsync();
+            await db.EnsureTablesCreatedAsync();
 
             var existing = await db.Favorites.FirstOrDefaultAsync(f => f.PortalUserId == portalUserId && f.ItemType == itemType && f.ItemId == itemId);
 
@@ -381,7 +381,7 @@ namespace OzBiPortalCRM.Services
         public async Task<List<FavoriteItem>> GetUserFavoritesAsync(int portalUserId)
         {
             using var db = await _appDbFactory.CreateDbContextAsync();
-            await db.Database.EnsureCreatedAsync();
+            await db.EnsureTablesCreatedAsync();
             return await db.Favorites.AsNoTracking()
                 .Where(f => f.PortalUserId == portalUserId)
                 .OrderByDescending(f => f.AddedAt)
@@ -391,7 +391,7 @@ namespace OzBiPortalCRM.Services
         public async Task<HashSet<string>> GetFavoriteItemIdsAsync(int portalUserId, string itemType)
         {
             using var db = await _appDbFactory.CreateDbContextAsync();
-            await db.Database.EnsureCreatedAsync();
+            await db.EnsureTablesCreatedAsync();
             var ids = await db.Favorites.AsNoTracking()
                 .Where(f => f.PortalUserId == portalUserId && f.ItemType == itemType)
                 .Select(f => f.ItemId)

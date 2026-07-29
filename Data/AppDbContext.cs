@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using OzBiPortalCRM.Models;
 
@@ -23,6 +24,22 @@ namespace OzBiPortalCRM.Data
             modelBuilder.Entity<FavoriteItem>()
                 .HasIndex(f => new { f.PortalUserId, f.ItemType, f.ItemId })
                 .IsUnique();
+        }
+
+        public async Task EnsureTablesCreatedAsync()
+        {
+            await Database.EnsureCreatedAsync();
+            await Database.ExecuteSqlRawAsync(@"
+                CREATE TABLE IF NOT EXISTS FavoriteItems (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    PortalUserId INTEGER NOT NULL,
+                    ItemType TEXT NOT NULL,
+                    ItemId TEXT NOT NULL,
+                    ItemName TEXT,
+                    ItemSubText TEXT,
+                    AddedAt TEXT NOT NULL
+                );
+            ");
         }
     }
 }
