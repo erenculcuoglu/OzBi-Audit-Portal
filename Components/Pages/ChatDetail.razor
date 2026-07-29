@@ -17,7 +17,7 @@
                 <div>
                     <div class="d-flex align-items-center gap-2 mb-2">
                         <span class="badge-status badge-info"><i class="bi bi-building"></i> @(chat.Tenant?.Name ?? "Tenant")</span>
-                        <span class="badge-status badge-purple"><i class="bi bi-chat-dots"></i> Chat Detayı</span>
+                        <span class="badge-status badge-purple"><i class="bi bi-chat-dots"></i> Chat Denetim Kaydı</span>
                     </div>
                     <h3 class="fw-bold mb-1">@(string.IsNullOrWhiteSpace(chat.Title) ? "Başlıksız Sohbet" : chat.Title)</h3>
                     <div class="text-muted small d-flex align-items-center gap-3 flex-wrap">
@@ -37,8 +37,8 @@
                         <div class="text-muted small">AI Analiz Yanıtı</div>
                     </div>
                     <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25 px-3">
-                        <div class="fs-5 fw-bold text-success">@TotalIndividualSqlCount</div>
-                        <div class="text-muted small">Üretilen SQL</div>
+                        <div class="fs-5 fw-bold text-success">@SqlCount</div>
+                        <div class="text-muted small">SQL Sorgu Kaydı</div>
                     </div>
                 </div>
             </div>
@@ -50,131 +50,82 @@
 {
     <div class="glass-card text-center py-5">
         <div class="spinner-border text-primary mb-3" role="status"></div>
-        <div class="text-muted">Chat mesajları ve SQL detayları yükleniyor...</div>
+        <div class="text-muted">Chat veritabanı logları yükleniyor...</div>
     </div>
 }
 else if (messagesList == null || messagesList.Count == 0)
 {
     <div class="glass-card text-center py-5">
         <i class="bi bi-chat-square-x text-muted" style="font-size: 3rem;"></i>
-        <h5 class="mt-3 text-muted">Bu sohbete ait mesaj bulunamadı</h5>
+        <h5 class="mt-3 text-muted">Bu sohbete ait veritabanı logu bulunamadı</h5>
     </div>
 }
 else
 {
-    <!-- Tab Switcher Header (Veri | Sorgu) -->
-    <div class="tab-container mb-4">
-        <button class="btn-tab @(activeTab == "veri" ? "active" : "")" @onclick='() => SetActiveTab("veri")'>
-            Veri
-        </button>
-        <button class="btn-tab @(activeTab == "sorgu" ? "active" : "")" @onclick='() => SetActiveTab("sorgu")'>
-            Sorgu (@TotalIndividualSqlCount)
-        </button>
-    </div>
+    <div class="d-flex flex-column gap-4">
+        @foreach (var (msg, index) in messagesList.Select((m, i) => (m, i + 1)))
+        {
+            var parsedSqls = GetSqlItemsFromMessage(msg.Query);
 
-    @if (activeTab == "veri")
-    {
-        <!-- VERİ TAB: Displays User Prompts & AI Analysis Response Text -->
-        <div class="d-flex flex-column gap-4">
-            @foreach (var (msg, index) in messagesList.Select((m, i) => (m, i + 1)))
-            {
-                <div class="glass-card border-secondary border-opacity-25">
-                    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="badge bg-secondary opacity-75 rounded-pill px-2 py-1" style="font-size: 0.75rem;">#@index</span>
-                            <span class="fw-bold text-main" style="font-size: 0.95rem;">
-                                @if (msg.Role?.ToLower() == "user")
-                                {
-                                    <i class="bi bi-person-fill text-info me-1"></i><span>Kullanıcı Sorduğu Soru</span>
-                                }
-                                else
-                                {
-                                    <i class="bi bi-robot text-primary me-1"></i><span>OzBI AI Analiz Yanıtı</span>
-                                }
-                            </span>
-                        </div>
-
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                            @if (msg.AIModel != null)
+            <div class="glass-card border-secondary border-opacity-25">
+                <!-- Header Info for message log entry -->
+                <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2 pb-2 border-bottom border-secondary border-opacity-25">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-secondary opacity-75 rounded-pill px-2 py-1" style="font-size: 0.75rem;">#@index Log Kaydı</span>
+                        <span class="fw-bold text-main" style="font-size: 0.95rem;">
+                            @if (msg.Role?.ToLower() == "user")
                             {
-                                <span class="badge-status badge-purple" title="Çalıştırılan AI Modeli">
-                                    <i class="bi bi-cpu-fill"></i> Model: @(msg.AIModel.Name ?? msg.AIModel.ProgrammaticName)
-                                </span>
+                                <i class="bi bi-person-fill text-info me-1"></i><span>Kullanıcı İletisi</span>
                             }
-
-                            @if (msg.Assistant != null)
+                            else
                             {
-                                <span class="badge-status badge-info" title="Asistan Adı">
-                                    <i class="bi bi-bot"></i> Asistan: @msg.Assistant.Name
-                                </span>
+                                <i class="bi bi-robot text-primary me-1"></i><span>OzBI AI Yanıt & Sorgu Logu</span>
                             }
-
-                            <span class="text-muted small"><i class="bi bi-clock"></i> @(msg.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")</span>
-                        </div>
+                        </span>
                     </div>
 
-                    <!-- User Prompt / Question Text -->
-                    @if (!string.IsNullOrEmpty(msg.Prompt) || (msg.Role?.ToLower() == "user" && !string.IsNullOrEmpty(msg.Message)))
-                    {
-                        <div class="p-3 mb-3 rounded bg-black bg-opacity-40 border border-secondary border-opacity-25">
-                            <div class="text-muted small fw-bold mb-1 text-uppercase" style="letter-spacing: 0.5px; font-size: 0.7rem;">
-                                <i class="bi bi-question-circle text-info me-1"></i> Kullanıcı İletisi (Prompt)
-                            </div>
-                            <div class="text-main" style="white-space: pre-wrap; font-size: 0.95rem;">
-                                @(string.IsNullOrEmpty(msg.Prompt) ? msg.Message : msg.Prompt)
-                            </div>
-                        </div>
-                    }
-
-                    <!-- AI Analysis Response Message Text -->
-                    @if (msg.Role?.ToLower() != "user" && !string.IsNullOrEmpty(msg.Message))
-                    {
-                        <div class="p-3 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25">
-                            <div class="text-muted small fw-bold mb-1 text-uppercase" style="letter-spacing: 0.5px; font-size: 0.7rem;">
-                                <i class="bi bi-chat-quote text-primary me-1"></i> OzBI AI Analiz Yanıtı / Özet
-                            </div>
-                            <div class="text-main" style="white-space: pre-wrap; font-size: 0.925rem;">
-                                @msg.Message
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-        </div>
-    }
-    else if (activeTab == "sorgu")
-    {
-        <!-- SORGU TAB: Displays Clean SQL Queries with clear numbering matching reference design -->
-        var allQueries = GetAllSqlQueriesWithDetails();
-
-        if (allQueries.Count == 0)
-        {
-            <div class="glass-card text-center py-5">
-                <i class="bi bi-code-slash text-muted" style="font-size: 3rem;"></i>
-                <h5 class="mt-3 text-muted">Bu sohbete ait üretilmiş SQL sorgusu bulunamadı</h5>
-            </div>
-        }
-        else
-        {
-            <div class="d-flex flex-column gap-4">
-                @foreach (var (sqlItem, globalIdx) in allQueries.Select((s, i) => (s, i + 1)))
-                {
-                    <div class="glass-card border-secondary border-opacity-25">
-                        <!-- Query Summary Description Header (Above dark code block) -->
-                        @if (!string.IsNullOrEmpty(sqlItem.Description))
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        @if (msg.AIModel != null)
                         {
-                            <div class="fw-bold text-main mb-3" style="font-size: 0.95rem; line-height: 1.45;">
-                                @sqlItem.Description
-                            </div>
+                            <span class="badge-status badge-purple" title="AI Modeli">
+                                <i class="bi bi-cpu-fill"></i> Model: @(msg.AIModel.Name ?? msg.AIModel.ProgrammaticName)
+                            </span>
                         }
+                        @if (msg.Assistant != null)
+                        {
+                            <span class="badge-status badge-info" title="Asistan">
+                                <i class="bi bi-bot"></i> Asistan: @msg.Assistant.Name
+                            </span>
+                        }
+                        <span class="text-muted small"><i class="bi bi-clock"></i> @(msg.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")</span>
+                    </div>
+                </div>
 
-                        <!-- Dark Code Block with SQL Code -->
-                        <div class="sql-header py-2 px-3">
+                <!-- 1. Kullanıcı Sorusu (Prompt) -->
+                @if (!string.IsNullOrEmpty(msg.Prompt) || (msg.Role?.ToLower() == "user" && !string.IsNullOrEmpty(msg.Message)))
+                {
+                    <div class="p-3 mb-3 rounded bg-black bg-opacity-40 border border-secondary border-opacity-25">
+                        <div class="text-muted small fw-bold mb-1 text-uppercase" style="letter-spacing: 0.5px; font-size: 0.7rem;">
+                            <i class="bi bi-question-circle text-info me-1"></i> Kullanıcı Sorusu
+                        </div>
+                        <div class="text-main fw-semibold" style="white-space: pre-wrap; font-size: 0.95rem;">
+                            @(string.IsNullOrEmpty(msg.Prompt) ? msg.Message : msg.Prompt)
+                        </div>
+                    </div>
+                }
+
+                <!-- 2. Üretilen SQL Sorgusu (Query Log) -->
+                @if (parsedSqls.Count > 0)
+                {
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
                             <div class="d-flex align-items-center gap-2">
-                                <span class="badge bg-dark text-info border border-info border-opacity-50 px-2 py-1 font-monospace" style="font-size: 0.8rem;">
-                                    Sorgu @globalIdx / @allQueries.Count
+                                <i class="bi bi-database-fill-gear text-success"></i>
+                                <span class="fw-bold text-success" style="font-size: 0.9rem;">
+                                    Üretilen SQL Sorgusu @(parsedSqls.Count > 1 ? $"({parsedSqls.Count} Sorgu)" : "")
                                 </span>
-                                @if (sqlItem.IsSucceeded)
+
+                                @if (msg.IsSucceeded)
                                 {
                                     <span class="badge-status badge-success ms-1"><i class="bi bi-check-circle"></i> Başarılı</span>
                                 }
@@ -183,25 +134,56 @@ else
                                     <span class="badge-status badge-danger ms-1"><i class="bi bi-exclamation-triangle"></i> Sorgu Hatalı</span>
                                 }
                             </div>
-                            <button class="btn-copy" @onclick="() => CopySql(sqlItem.Query)">
-                                <i class="bi bi-clipboard"></i> SQL Kopyala
-                            </button>
-                        </div>
-                        <div class="sql-code-block">
-                            <code>@sqlItem.Query</code>
                         </div>
 
-                        @if (!string.IsNullOrEmpty(sqlItem.ErrorMessage))
+                        @foreach (var (sqlItem, subIdx) in parsedSqls.Select((s, i) => (s, i + 1)))
                         {
-                            <div class="p-2.5 mt-3 rounded bg-danger bg-opacity-10 border border-danger border-opacity-20 text-danger small font-monospace">
-                                <i class="bi bi-exclamation-triangle-fill me-1"></i> <strong>Hata Detayı:</strong> @sqlItem.ErrorMessage
+                            <div class="mb-3">
+                                @if (!string.IsNullOrEmpty(sqlItem.Description))
+                                {
+                                    <div class="text-main fw-semibold mb-2" style="font-size: 0.9rem; line-height: 1.4;">
+                                        @sqlItem.Description
+                                    </div>
+                                }
+
+                                <div class="sql-header py-2 px-3">
+                                    <span class="badge bg-dark text-info border border-secondary px-2 py-1 font-monospace" style="font-size: 0.75rem;">
+                                        Sorgu @(parsedSqls.Count > 1 ? $"{subIdx}" : "1")
+                                    </span>
+                                    <button class="btn-copy" @onclick="() => CopySql(sqlItem.Sql)">
+                                        <i class="bi bi-clipboard"></i> SQL Kopyala
+                                    </button>
+                                </div>
+                                <div class="sql-code-block">
+                                    <code>@sqlItem.Sql</code>
+                                </div>
                             </div>
                         }
                     </div>
                 }
+
+                @if (!string.IsNullOrEmpty(msg.ErrorMessage))
+                {
+                    <div class="p-2.5 mb-3 rounded bg-danger bg-opacity-10 border border-danger border-opacity-20 text-danger small font-monospace">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i> <strong>Hata Detayı:</strong> @msg.ErrorMessage
+                    </div>
+                }
+
+                <!-- 3. OzBI AI Analiz Yanıtı (Message Log) -->
+                @if (msg.Role?.ToLower() != "user" && !string.IsNullOrEmpty(msg.Message))
+                {
+                    <div class="p-3 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25">
+                        <div class="text-muted small fw-bold mb-1 text-uppercase" style="letter-spacing: 0.5px; font-size: 0.7rem;">
+                            <i class="bi bi-chat-quote text-primary me-1"></i> OzBI AI Analiz Yanıtı
+                        </div>
+                        <div class="text-main" style="white-space: pre-wrap; font-size: 0.925rem;">
+                            @msg.Message
+                        </div>
+                    </div>
+                }
             </div>
         }
-    }
+    </div>
 }
 
 @code {
@@ -211,18 +193,15 @@ else
     private OzBiChat? chat;
     private List<OzBiChatMessage>? messagesList;
     private bool isLoading = true;
-    private string activeTab = "sorgu"; // Default to "Sorgu" tab per user preference
 
     private int UserPromptCount => messagesList?.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt)) ?? 0;
     private int AiResponseCount => messagesList?.Count(m => m.Role?.ToLower() != "user" && !string.IsNullOrEmpty(m.Message)) ?? 0;
-    private int TotalIndividualSqlCount => GetAllSqlQueriesWithDetails().Count;
+    private int SqlCount => messagesList?.Sum(m => GetSqlItemsFromMessage(m.Query).Count) ?? 0;
 
-    public class SqlItemDetail
+    public class SqlLogItem
     {
         public string Description { get; set; } = string.Empty;
-        public string Query { get; set; } = string.Empty;
-        public bool IsSucceeded { get; set; }
-        public string? ErrorMessage { get; set; }
+        public string Sql { get; set; } = string.Empty;
     }
 
     protected override async Task OnInitializedAsync()
@@ -248,52 +227,14 @@ else
         }
     }
 
-    private void SetActiveTab(string tabName)
+    private List<SqlLogItem> GetSqlItemsFromMessage(string? rawQuery)
     {
-        activeTab = tabName;
-    }
+        var result = new List<SqlLogItem>();
+        if (string.IsNullOrWhiteSpace(rawQuery)) return result;
 
-    private List<SqlItemDetail> GetAllSqlQueriesWithDetails()
-    {
-        var result = new List<SqlItemDetail>();
-        if (messagesList == null) return result;
-
-        foreach (var (msg, msgIdx) in messagesList.Select((m, i) => (m, i + 1)))
-        {
-            if (string.IsNullOrWhiteSpace(msg.Query)) continue;
-
-            var promptText = !string.IsNullOrEmpty(msg.Prompt) ? msg.Prompt : (msg.Role?.ToLower() == "user" ? msg.Message : null);
-            var defaultDesc = promptText ?? chat?.Title ?? $"Sohbet Sorgusu #{msgIdx}";
-
-            var parsedItems = ParseQueryPayload(msg.Query, defaultDesc);
-
-            foreach (var item in parsedItems)
-            {
-                result.Add(new SqlItemDetail
-                {
-                    Description = item.Description,
-                    Query = item.Query,
-                    IsSucceeded = msg.IsSucceeded,
-                    ErrorMessage = msg.ErrorMessage
-                });
-            }
-        }
-
-        return result;
-    }
-
-    private class ParsedQueryItem
-    {
-        public string Description { get; set; } = string.Empty;
-        public string Query { get; set; } = string.Empty;
-    }
-
-    private List<ParsedQueryItem> ParseQueryPayload(string rawQuery, string fallbackDesc)
-    {
-        var list = new List<ParsedQueryItem>();
         var trimmed = rawQuery.Trim();
 
-        // 1. Try JSON parsing if payload starts with [ or {
+        // Check if rawQuery is JSON array/object
         if ((trimmed.StartsWith("[") && trimmed.EndsWith("]")) || (trimmed.StartsWith("{") && trimmed.EndsWith("}")))
         {
             try
@@ -305,128 +246,53 @@ else
                 {
                     foreach (var element in root.EnumerateArray())
                     {
-                        var parsed = ExtractQueryFromElement(element, fallbackDesc);
-                        if (parsed != null)
-                        {
-                            var subStmts = SplitSqlStatements(parsed.Query);
-                            for (int k = 0; k < subStmts.Count; k++)
-                            {
-                                list.Add(new ParsedQueryItem
-                                {
-                                    Description = subStmts.Count > 1 ? $"{parsed.Description} (Sorgu {k + 1})" : parsed.Description,
-                                    Query = subStmts[k]
-                                });
-                            }
-                        }
+                        var item = ExtractFromElement(element);
+                        if (item != null) result.Add(item);
                     }
                 }
                 else if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
                 {
-                    var parsed = ExtractQueryFromElement(root, fallbackDesc);
-                    if (parsed != null)
-                    {
-                        var subStmts = SplitSqlStatements(parsed.Query);
-                        for (int k = 0; k < subStmts.Count; k++)
-                        {
-                            list.Add(new ParsedQueryItem
-                            {
-                                Description = subStmts.Count > 1 ? $"{parsed.Description} (Sorgu {k + 1})" : parsed.Description,
-                                Query = subStmts[k]
-                            });
-                        }
-                    }
+                    var item = ExtractFromElement(root);
+                    if (item != null) result.Add(item);
                 }
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine("JSON Query Parse exception: " + ex.Message);
+                // JSON parse fallback
             }
         }
 
-        // 2. If not JSON or JSON parsing produced 0 items, process raw string with smart SQL statement splitting
-        if (list.Count == 0)
+        // Fallback for non-JSON raw query strings
+        if (result.Count == 0)
         {
-            var statements = SplitSqlStatements(trimmed);
-            for (int i = 0; i < statements.Count; i++)
+            result.Add(new SqlLogItem
             {
-                list.Add(new ParsedQueryItem
-                {
-                    Description = statements.Count > 1 ? $"{fallbackDesc} (Sorgu {i + 1})" : fallbackDesc,
-                    Query = statements[i]
-                });
-            }
+                Description = string.Empty,
+                Sql = trimmed
+            });
         }
 
-        return list;
+        return result;
     }
 
-    private List<string> SplitSqlStatements(string sqlText)
-    {
-        if (string.IsNullOrWhiteSpace(sqlText)) return new List<string>();
-
-        // Split by semicolon ';' first
-        var semiSplit = sqlText.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(s => s.Trim())
-            .Where(s => s.Length > 5)
-            .ToList();
-
-        var result = new List<string>();
-
-        foreach (var chunk in semiSplit)
-        {
-            // Split chunk by SQL keywords if multiple SELECT/WITH/INSERT statements are combined without ';'
-            var subStatements = SplitBySqlKeywords(chunk);
-            result.AddRange(subStatements);
-        }
-
-        return result.Count > 0 ? result : new List<string> { sqlText.Trim() };
-    }
-
-    private List<string> SplitBySqlKeywords(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return new List<string>();
-
-        var regex = new System.Text.RegularExpressions.Regex(
-            @"(?=(?:\r?\n|^)\s*(?:SELECT|WITH|INSERT|UPDATE|DELETE|EXEC|EXECUTE)\b)",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-
-        var parts = regex.Split(text)
-            .Select(p => p.Trim())
-            .Where(p => p.Length > 10 && (
-                p.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase) ||
-                p.StartsWith("WITH", StringComparison.OrdinalIgnoreCase) ||
-                p.StartsWith("INSERT", StringComparison.OrdinalIgnoreCase) ||
-                p.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) ||
-                p.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase) ||
-                p.StartsWith("EXEC", StringComparison.OrdinalIgnoreCase)
-            ))
-            .ToList();
-
-        return parts.Count > 0 ? parts : new List<string> { text.Trim() };
-    }
-
-    private ParsedQueryItem? ExtractQueryFromElement(System.Text.Json.JsonElement elem, string fallbackDesc)
+    private SqlLogItem? ExtractFromElement(System.Text.Json.JsonElement elem)
     {
         string desc = string.Empty;
         string sql = string.Empty;
 
-        // Search for description / summary
-        if (TryGetJsonString(elem, "description", out var val) ||
-            TryGetJsonString(elem, "Description", out val) ||
-            TryGetJsonString(elem, "summary", out val) ||
-            TryGetJsonString(elem, "title", out val))
+        if (TryGetJsonProp(elem, "description", out var val) ||
+            TryGetJsonProp(elem, "Description", out val) ||
+            TryGetJsonProp(elem, "summary", out val) ||
+            TryGetJsonProp(elem, "title", out val))
         {
             desc = val;
         }
 
-        // Search for SQL query property
-        if (TryGetJsonString(elem, "sql", out var sqlVal) ||
-            TryGetJsonString(elem, "Sql", out sqlVal) ||
-            TryGetJsonString(elem, "query", out sqlVal) ||
-            TryGetJsonString(elem, "Query", out sqlVal) ||
-            TryGetJsonString(elem, "tSql", out sqlVal) ||
-            TryGetJsonString(elem, "TSql", out sqlVal) ||
-            TryGetJsonString(elem, "statement", out sqlVal))
+        if (TryGetJsonProp(elem, "sql", out var sqlVal) ||
+            TryGetJsonProp(elem, "Sql", out sqlVal) ||
+            TryGetJsonProp(elem, "query", out sqlVal) ||
+            TryGetJsonProp(elem, "Query", out sqlVal) ||
+            TryGetJsonProp(elem, "tSql", out sqlVal))
         {
             sql = sqlVal;
         }
@@ -434,25 +300,21 @@ else
         if (string.IsNullOrWhiteSpace(sql))
         {
             if (elem.ValueKind == System.Text.Json.JsonValueKind.String)
-            {
                 sql = elem.GetString() ?? string.Empty;
-            }
             else
-            {
                 sql = elem.GetRawText();
-            }
         }
 
         if (string.IsNullOrWhiteSpace(sql)) return null;
 
-        return new ParsedQueryItem
+        return new SqlLogItem
         {
-            Description = !string.IsNullOrWhiteSpace(desc) ? desc : fallbackDesc,
-            Query = sql
+            Description = desc,
+            Sql = sql
         };
     }
 
-    private bool TryGetJsonString(System.Text.Json.JsonElement elem, string propName, out string value)
+    private bool TryGetJsonProp(System.Text.Json.JsonElement elem, string propName, out string value)
     {
         value = string.Empty;
         if (elem.ValueKind == System.Text.Json.JsonValueKind.Object && elem.TryGetProperty(propName, out var prop))
