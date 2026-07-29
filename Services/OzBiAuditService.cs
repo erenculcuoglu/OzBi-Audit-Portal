@@ -190,13 +190,20 @@ namespace OzBiPortalCRM.Services
             return await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tenantId);
         }
 
-        public async Task<List<ChatAuditSummary>> GetChatsForTenantAsync(string tenantId, string? searchTerm = null)
+        public async Task<List<ChatAuditSummary>> GetChatsForTenantAsync(string tenantId, string? searchTerm = null, string? filterUserId = null)
         {
             if (_useDemoMode) return GetDemoChatsForTenant(tenantId, searchTerm);
 
             using var db = await _dbFactory.CreateDbContextAsync();
 
-            var query = db.Chats.AsNoTracking().Where(c => c.TenantId == tenantId);
+            var query = db.Chats.AsNoTracking()
+                .Include(c => c.CreatedByUser)
+                .Where(c => c.TenantId == tenantId);
+
+            if (!string.IsNullOrWhiteSpace(filterUserId))
+            {
+                query = query.Where(c => c.CreatedByUserId == filterUserId);
+            }
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -238,6 +245,25 @@ namespace OzBiPortalCRM.Services
             }
 
             return result;
+        }
+
+        public async Task<List<OzBiUser>> GetUsersForTenantAsync(string tenantId)
+        {
+            if (_useDemoMode) return new List<OzBiUser>();
+
+            using var db = await _dbFactory.CreateDbContextAsync();
+
+            // Get users connected to tenant directly or via tenant chats
+            var tenantUserIds = await db.Chats.AsNoTracking()
+                .Where(c => c.TenantId == tenantId && !string.IsNullOrEmpty(c.CreatedByUserId))
+                .Select(c => c.CreatedByUserId!)
+                .Distinct()
+                .ToListAsync();
+
+            return await db.Users.AsNoTracking()
+                .Where(u => u.TenantId == tenantId || tenantUserIds.Contains(u.Id))
+                .OrderBy(u => u.NameSurname ?? u.Email ?? u.UserName)
+                .ToListAsync();
         }
 
         public async Task<List<ChatAuditSummary>> GetChatsForUserAsync(string userId, string? searchTerm = null)

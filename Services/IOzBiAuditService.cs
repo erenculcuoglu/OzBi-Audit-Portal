@@ -47,7 +47,8 @@ namespace OzBiPortalCRM.Services
         Task<List<TenantAuditSummary>> GetTenantsSummaryAsync(string? searchTerm = null, int portalUserId = 0);
         Task<List<UserAuditSummary>> GetUsersFootprintSummaryAsync(string? searchTerm = null, int portalUserId = 0);
         Task<OzBiTenant?> GetTenantByIdAsync(string tenantId);
-        Task<List<ChatAuditSummary>> GetChatsForTenantAsync(string tenantId, string? searchTerm = null);
+        Task<List<ChatAuditSummary>> GetChatsForTenantAsync(string tenantId, string? searchTerm = null, string? filterUserId = null);
+        Task<List<OzBiUser>> GetUsersForTenantAsync(string tenantId);
         Task<List<ChatAuditSummary>> GetChatsForUserAsync(string userId, string? searchTerm = null);
         Task<OzBiChat?> GetChatByIdAsync(string chatId);
         Task<List<OzBiChatMessage>> GetMessagesForChatAsync(string chatId);
