@@ -27,16 +27,16 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 
-// Configure MySQL ReadOnly DbContext Factory with explicit ServerVersion
+// Configure MariaDB / MySQL ReadOnly DbContext Factory with explicit ServerVersion
 var ozBiConnStr = builder.Configuration.GetConnectionString("OzBiDatabase");
-var serverVersion = new MySqlServerVersion(new Version(8, 0, 30));
+var serverVersion = new MariaDbServerVersion(new Version(10, 11, 8));
 
 builder.Services.AddDbContextFactory<OzBiDbContext>(options =>
 {
     options.UseMySql(ozBiConnStr, serverVersion, mysqlOptions =>
     {
         mysqlOptions.EnableRetryOnFailure(2);
-        mysqlOptions.CommandTimeout(10);
+        mysqlOptions.CommandTimeout(15);
     });
 });
 
