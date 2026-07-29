@@ -68,7 +68,7 @@ else
             Veri
         </button>
         <button class="btn-tab @(activeTab == "sorgu" ? "active" : "")" @onclick='() => SetActiveTab("sorgu")'>
-            Sorgu
+            Sorgu (@TotalIndividualSqlCount)
         </button>
     </div>
 
@@ -144,7 +144,7 @@ else
     }
     else if (activeTab == "sorgu")
     {
-        <!-- SORGU TAB: Displays Clean SQL Queries with summaries matching reference design -->
+        <!-- SORGU TAB: Displays Clean SQL Queries with clear numbering matching reference design -->
         var allQueries = GetAllSqlQueriesWithDetails();
 
         if (allQueries.Count == 0)
@@ -157,7 +157,7 @@ else
         else
         {
             <div class="d-flex flex-column gap-4">
-                @foreach (var sqlItem in allQueries)
+                @foreach (var (sqlItem, globalIdx) in allQueries.Select((s, i) => (s, i + 1)))
                 {
                     <div class="glass-card border-secondary border-opacity-25">
                         <!-- Query Summary Description Header (Above dark code block) -->
@@ -171,8 +171,8 @@ else
                         <!-- Dark Code Block with SQL Code -->
                         <div class="sql-header py-2 px-3">
                             <div class="d-flex align-items-center gap-2">
-                                <span class="badge bg-info bg-opacity-20 text-info border border-info border-opacity-30" style="font-size: 0.7rem;">
-                                    @sqlItem.Label
+                                <span class="badge bg-dark text-info border border-info border-opacity-50 px-2 py-1 font-monospace" style="font-size: 0.8rem;">
+                                    Sorgu @globalIdx / @allQueries.Count
                                 </span>
                                 @if (sqlItem.IsSucceeded)
                                 {
@@ -219,7 +219,6 @@ else
 
     public class SqlItemDetail
     {
-        public string Label { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public string Query { get; set; } = string.Empty;
         public bool IsSucceeded { get; set; }
@@ -268,12 +267,10 @@ else
 
             var parsedItems = ParseQueryPayload(msg.Query, defaultDesc);
 
-            for (int subIdx = 0; subIdx < parsedItems.Count; subIdx++)
+            foreach (var item in parsedItems)
             {
-                var item = parsedItems[subIdx];
                 result.Add(new SqlItemDetail
                 {
-                    Label = parsedItems.Count > 1 ? $"Sorgu #{msgIdx}.{subIdx + 1}" : $"Sorgu #{msgIdx}",
                     Description = item.Description,
                     Query = item.Query,
                     IsSucceeded = msg.IsSucceeded,
@@ -309,13 +306,35 @@ else
                     foreach (var element in root.EnumerateArray())
                     {
                         var parsed = ExtractQueryFromElement(element, fallbackDesc);
-                        if (parsed != null) list.Add(parsed);
+                        if (parsed != null)
+                        {
+                            var subStmts = SplitSqlStatements(parsed.Query);
+                            for (int k = 0; k < subStmts.Count; k++)
+                            {
+                                list.Add(new ParsedQueryItem
+                                {
+                                    Description = subStmts.Count > 1 ? $"{parsed.Description} (Sorgu {k + 1})" : parsed.Description,
+                                    Query = subStmts[k]
+                                });
+                            }
+                        }
                     }
                 }
                 else if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
                 {
                     var parsed = ExtractQueryFromElement(root, fallbackDesc);
-                    if (parsed != null) list.Add(parsed);
+                    if (parsed != null)
+                    {
+                        var subStmts = SplitSqlStatements(parsed.Query);
+                        for (int k = 0; k < subStmts.Count; k++)
+                        {
+                            list.Add(new ParsedQueryItem
+                            {
+                                Description = subStmts.Count > 1 ? $"{parsed.Description} (Sorgu {k + 1})" : parsed.Description,
+                                Query = subStmts[k]
+                            });
+                        }
+                    }
                 }
             }
             catch (Exception ex)
@@ -324,27 +343,66 @@ else
             }
         }
 
-        // 2. If not JSON or JSON parsing produced 0 items, process as raw SQL string (splitting on ;)
+        // 2. If not JSON or JSON parsing produced 0 items, process raw string with smart SQL statement splitting
         if (list.Count == 0)
         {
-            var rawStatements = trimmed.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => s.Length > 5)
-                .ToList();
-
-            if (rawStatements.Count == 0) rawStatements.Add(trimmed);
-
-            for (int i = 0; i < rawStatements.Count; i++)
+            var statements = SplitSqlStatements(trimmed);
+            for (int i = 0; i < statements.Count; i++)
             {
                 list.Add(new ParsedQueryItem
                 {
-                    Description = rawStatements.Count > 1 ? $"{fallbackDesc} (Parça {i + 1})" : fallbackDesc,
-                    Query = rawStatements[i]
+                    Description = statements.Count > 1 ? $"{fallbackDesc} (Sorgu {i + 1})" : fallbackDesc,
+                    Query = statements[i]
                 });
             }
         }
 
         return list;
+    }
+
+    private List<string> SplitSqlStatements(string sqlText)
+    {
+        if (string.IsNullOrWhiteSpace(sqlText)) return new List<string>();
+
+        // Split by semicolon ';' first
+        var semiSplit = sqlText.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => s.Length > 5)
+            .ToList();
+
+        var result = new List<string>();
+
+        foreach (var chunk in semiSplit)
+        {
+            // Split chunk by SQL keywords if multiple SELECT/WITH/INSERT statements are combined without ';'
+            var subStatements = SplitBySqlKeywords(chunk);
+            result.AddRange(subStatements);
+        }
+
+        return result.Count > 0 ? result : new List<string> { sqlText.Trim() };
+    }
+
+    private List<string> SplitBySqlKeywords(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return new List<string>();
+
+        var regex = new System.Text.RegularExpressions.Regex(
+            @"(?=(?:\r?\n|^)\s*(?:SELECT|WITH|INSERT|UPDATE|DELETE|EXEC|EXECUTE)\b)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        var parts = regex.Split(text)
+            .Select(p => p.Trim())
+            .Where(p => p.Length > 10 && (
+                p.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase) ||
+                p.StartsWith("WITH", StringComparison.OrdinalIgnoreCase) ||
+                p.StartsWith("INSERT", StringComparison.OrdinalIgnoreCase) ||
+                p.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) ||
+                p.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase) ||
+                p.StartsWith("EXEC", StringComparison.OrdinalIgnoreCase)
+            ))
+            .ToList();
+
+        return parts.Count > 0 ? parts : new List<string> { text.Trim() };
     }
 
     private ParsedQueryItem? ExtractQueryFromElement(System.Text.Json.JsonElement elem, string fallbackDesc)
