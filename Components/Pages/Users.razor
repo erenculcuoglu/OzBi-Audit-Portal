@@ -6,7 +6,7 @@
 <div class="mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3">
     <div>
         <h2 class="fw-bold mb-1"><i class="bi bi-people-fill text-primary me-2"></i>Kullanıcı Yönetimi</h2>
-        <p class="text-muted small mb-0">Portal erişim kullanıcıları (Yerel SQLite Veritabanı - app/ozbi_audit.db)</p>
+        <p class="text-muted small mb-0">Portal kullanıcı hesapları, şifre ve rol yönetimi (SQLite Veritabanı)</p>
     </div>
     <div>
         <button class="btn-primary-custom" @onclick="OpenAddModal">
@@ -92,9 +92,16 @@ else
                             <span class="text-muted small">@(user.LastLoginAt?.ToString("dd.MM.yyyy HH:mm") ?? "Hiç girmediler")</span>
                         </td>
                         <td style="text-align: right;">
-                            <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => OpenEditModal(user)">
+                            <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenEditModal(user)">
                                 <i class="bi bi-pencil-square"></i> Düzenle
                             </button>
+
+                            @if (!user.Email.Equals("eren@ozbiapp.com.tr", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteUser(user)">
+                                    <i class="bi bi-trash"></i> Sil
+                                </button>
+                            }
                         </td>
                     </tr>
                 }
@@ -109,62 +116,65 @@ else
     <div class="modal-backdrop-custom">
         <div class="modal-dialog-custom">
             <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom border-secondary border-opacity-25">
-                <h5 class="fw-bold mb-0">
+                <h5 class="fw-bold mb-0 text-main">
                     <i class="bi @(editingUser.Id == 0 ? "bi-person-plus-fill text-primary" : "bi-pencil-square text-info") me-2"></i>
-                    @(editingUser.Id == 0 ? "Yeni Kullanıcı Ekle" : "Kullanıcı Düzenle")
+                    @(editingUser.Id == 0 ? "Yeni Kullanıcı Ekle" : "Kullanıcı Bilgilerini Düzenle")
                 </h5>
                 <button type="button" class="btn-close btn-close-white" @onclick="CloseModal"></button>
             </div>
 
-            <EditForm Model="editingUser" OnValidSubmit="SaveUser">
-                <DataAnnotationsValidator />
-
-                <div class="mb-3">
-                    <label class="form-label text-muted small fw-semibold">Ad Soyad</label>
-                    <InputText @bind-Value="editingUser.FullName" class="form-control input-custom" placeholder="Örn: Eren Çülcüoğlu" />
+            @if (!string.IsNullOrEmpty(modalErrorMessage))
+            {
+                <div class="alert alert-danger py-2 px-3 mb-3 small" style="border-radius: var(--radius-md);">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i> @modalErrorMessage
                 </div>
+            }
 
-                <div class="mb-3">
-                    <label class="form-label text-muted small fw-semibold">E-posta Adresi</label>
-                    <InputText @bind-Value="editingUser.Email" class="form-control input-custom" placeholder="ornek@ozbiapp.com.tr" />
-                </div>
+            <div class="mb-3">
+                <label class="form-label text-muted small fw-semibold">Ad Soyad</label>
+                <input type="text" class="form-control input-custom" placeholder="Örn: Kaan Arslan" @bind="editingUser.FullName" />
+            </div>
 
-                <div class="mb-3">
-                    <label class="form-label text-muted small fw-semibold">
-                        Şifre @(editingUser.Id > 0 ? "(Boş bırakılırsa değişmez)" : "")
-                    </label>
-                    <input type="password" class="form-control input-custom" placeholder="••••••••" @bind="passwordInput" />
-                </div>
+            <div class="mb-3">
+                <label class="form-label text-muted small fw-semibold">E-posta Adresi</label>
+                <input type="email" class="form-control input-custom" placeholder="ornek@ozbiapp.com.tr" @bind="editingUser.Email" />
+            </div>
 
-                <div class="mb-3">
-                    <label class="form-label text-muted small fw-semibold">Kullanıcı Rolü</label>
-                    <InputSelect @bind-Value="editingUser.Role" class="form-select input-custom">
-                        <option value="Admin">Admin (Yönetici)</option>
-                        <option value="Auditor">Auditor (Denetçi)</option>
-                    </InputSelect>
-                </div>
+            <div class="mb-3">
+                <label class="form-label text-muted small fw-semibold">
+                    Şifre @(editingUser.Id > 0 ? "(Boş bırakılırsa mevcut şifre korunur)" : "")
+                </label>
+                <input type="password" class="form-control input-custom" placeholder="••••••••" @bind="passwordInput" />
+            </div>
 
-                <div class="mb-4 form-check form-switch">
-                    <InputCheckbox @bind-Value="editingUser.IsActive" class="form-check-input" id="activeSwitch" />
-                    <label class="form-check-label text-main small ms-2" for="activeSwitch">Kullanıcı Aktif</label>
-                </div>
+            <div class="mb-3">
+                <label class="form-label text-muted small fw-semibold">Kullanıcı Rolü</label>
+                <select class="form-select input-custom" @bind="editingUser.Role">
+                    <option value="Admin">Admin (Yönetici)</option>
+                    <option value="Auditor">Auditor (Denetçi)</option>
+                </select>
+            </div>
 
-                <div class="d-flex justify-content-end gap-2 pt-2 border-top border-secondary border-opacity-25">
-                    <button type="button" class="btn btn-outline-secondary" @onclick="CloseModal">İptal</button>
-                    <button type="submit" class="btn-primary-custom" disabled="@isSaving">
-                        @if (isSaving)
-                        {
-                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                            <span>Kaydediliyor...</span>
-                        }
-                        else
-                        {
-                            <i class="bi bi-check-lg"></i>
-                            <span>Kaydet</span>
-                        }
-                    </button>
-                </div>
-            </EditForm>
+            <div class="mb-4 form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="activeSwitch" @bind="editingUser.IsActive" />
+                <label class="form-check-label text-main small ms-2" for="activeSwitch">Kullanıcı Hesabı Aktif</label>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 pt-2 border-top border-secondary border-opacity-25">
+                <button type="button" class="btn btn-outline-secondary" @onclick="CloseModal">İptal</button>
+                <button type="button" class="btn-primary-custom" @onclick="SaveUser" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        <span>Kaydediliyor...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-check-lg"></i>
+                        <span>Kaydet</span>
+                    }
+                </button>
+            </div>
         </div>
     </div>
 }
@@ -179,6 +189,7 @@ else
     private bool isSaving = false;
 
     private string? statusMessage;
+    private string? modalErrorMessage;
     private bool isSuccessStatus = true;
 
     protected override async Task OnInitializedAsync()
@@ -208,6 +219,7 @@ else
     {
         editingUser = new PortalUser { IsActive = true, Role = "Auditor" };
         passwordInput = string.Empty;
+        modalErrorMessage = null;
         showModal = true;
     }
 
@@ -223,6 +235,7 @@ else
             CreatedAt = user.CreatedAt
         };
         passwordInput = string.Empty;
+        modalErrorMessage = null;
         showModal = true;
     }
 
@@ -233,36 +246,81 @@ else
 
     private async Task SaveUser()
     {
+        modalErrorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(editingUser.FullName))
+        {
+            modalErrorMessage = "Lütfen Ad Soyad giriniz.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(editingUser.Email))
+        {
+            modalErrorMessage = "Lütfen geçerli bir E-posta adresi giriniz.";
+            return;
+        }
+
+        if (editingUser.Id == 0 && (string.IsNullOrWhiteSpace(passwordInput) || passwordInput.Length < 6))
+        {
+            modalErrorMessage = "Yeni kullanıcı için şifre en az 6 karakter olmalıdır.";
+            return;
+        }
+
         isSaving = true;
         try
         {
+            (bool Success, string Message) result;
             if (editingUser.Id == 0)
             {
-                var result = await UserService.CreateUserAsync(editingUser, passwordInput);
-                statusMessage = result.Message;
-                isSuccessStatus = result.Success;
+                result = await UserService.CreateUserAsync(editingUser, passwordInput);
             }
             else
             {
-                var result = await UserService.UpdateUserAsync(editingUser, passwordInput);
-                statusMessage = result.Message;
-                isSuccessStatus = result.Success;
+                result = await UserService.UpdateUserAsync(editingUser, passwordInput);
             }
 
-            if (isSuccessStatus)
+            if (result.Success)
             {
+                statusMessage = result.Message;
+                isSuccessStatus = true;
                 showModal = false;
                 await LoadUsers();
+            }
+            else
+            {
+                modalErrorMessage = result.Message;
             }
         }
         catch (Exception ex)
         {
-            statusMessage = "Kaydetme hatası: " + ex.Message;
-            isSuccessStatus = false;
+            modalErrorMessage = "İşlem sırasında hata oluştu: " + ex.Message;
         }
         finally
         {
             isSaving = false;
+        }
+    }
+
+    private async Task DeleteUser(PortalUser user)
+    {
+        if (user.Email.Equals("eren@ozbiapp.com.tr", StringComparison.OrdinalIgnoreCase))
+        {
+            statusMessage = "Seed yönetici hesabı silinemez.";
+            isSuccessStatus = false;
+            return;
+        }
+
+        var deleted = await UserService.DeleteUserAsync(user.Id);
+        if (deleted)
+        {
+            statusMessage = $"{user.FullName} kullanıcısı silindi.";
+            isSuccessStatus = true;
+            await LoadUsers();
+        }
+        else
+        {
+            statusMessage = "Kullanıcı silinemedi.";
+            isSuccessStatus = false;
         }
     }
 }

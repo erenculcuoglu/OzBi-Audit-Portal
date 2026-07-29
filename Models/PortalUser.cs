@@ -10,15 +10,14 @@ namespace OzBiPortalCRM.Models
         [Key]
         public int Id { get; set; }
 
-        [Required]
-        [EmailAddress]
+        [Required(ErrorMessage = "E-posta adresi zorunludur.")]
+        [EmailAddress(ErrorMessage = "Geçerli bir e-posta adresi giriniz.")]
         [MaxLength(256)]
         public string Email { get; set; } = string.Empty;
 
-        [Required]
         public string PasswordHash { get; set; } = string.Empty;
 
-        [Required]
+        [Required(ErrorMessage = "Ad Soyad alanı zorunludur.")]
         [MaxLength(250)]
         public string FullName { get; set; } = string.Empty;
 
