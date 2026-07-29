@@ -149,7 +149,7 @@ else
                             <span>Son Aktivite</span> @GetSortIcon("LastActivityDate")
                         </div>
                     </th>
-                    <th style="text-align: right; white-space: nowrap;">İşlem</th>
+                    <th style="white-space: nowrap;">İşlem</th>
                 </tr>
             </thead>
             <tbody>
@@ -195,7 +195,7 @@ else
                                 @(item.LastActivityDate?.ToString("dd.MM.yyyy HH:mm") ?? "-")
                             </span>
                         </td>
-                        <td style="text-align: right;">
+                        <td>
                             <button class="btn btn-sm btn-primary-custom px-3" @onclick="() => SelectTenant(item.Tenant.Id)">
                                 <i class="bi bi-eye"></i> İncele
                             </button>

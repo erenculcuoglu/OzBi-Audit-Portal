@@ -115,7 +115,7 @@ else
                     <th>Chat Sayısı</th>
                     <th>SQL Sorguları</th>
                     <th>Son Aktivite</th>
-                    <th style="text-align: right;">İşlem</th>
+                    <th>İşlem</th>
                 </tr>
             </thead>
             <tbody>
@@ -157,7 +157,7 @@ else
                                 @(item.LastActivityDate?.ToString("dd.MM.yyyy HH:mm") ?? "-")
                             </span>
                         </td>
-                        <td style="text-align: right;">
+                        <td>
                             <button class="btn btn-sm btn-primary-custom px-3" @onclick="() => InspectUserChats(item.User.Id)">
                                 <i class="bi bi-eye"></i> İncele
                             </button>
