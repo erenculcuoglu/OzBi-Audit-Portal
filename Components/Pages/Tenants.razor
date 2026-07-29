@@ -16,53 +16,22 @@
             @(showFavoritesOnly ? "Favoriler Gösteriliyor" : "Sadece Favoriler")
         </button>
 
-        <button class="btn @(OzBiAuditService.UseDemoMode ? "btn-warning" : "btn-outline-secondary") btn-sm" @onclick="ToggleDemoMode">
-            <i class="bi @(OzBiAuditService.UseDemoMode ? "bi-eye-fill" : "bi-eye")"></i>
-            @(OzBiAuditService.UseDemoMode ? "Demo Mod Aktif" : "Demo Moduna Geç")
-        </button>
-
         <button class="btn btn-outline-secondary btn-sm" @onclick="LoadData">
             <i class="bi bi-arrow-clockwise"></i> Yenile
         </button>
     </div>
 </div>
 
-@if (!string.IsNullOrEmpty(errorMessage) && !OzBiAuditService.UseDemoMode)
+@if (!string.IsNullOrEmpty(errorMessage))
 {
     <div class="alert alert-danger p-3 mb-4" style="border-radius: var(--radius-md); border-left: 4px solid #ef4444;">
         <div class="d-flex align-items-start gap-2 mb-2">
             <i class="bi bi-exclamation-triangle-fill fs-4 text-danger"></i>
             <div>
-                <div class="fw-bold fs-6">OzBI MySQL Veritabanı Erişim Engeli (IP Kısıtlaması)</div>
-                <div class="small text-light opacity-90 mt-1">
-                    MySQL sunucusu (<code>elegance.odeaweb.com</code>) istemci IP adresiniz olan <strong>176.235.138.62</strong> için henüz erişim izni vermedi.
-                </div>
+                <div class="fw-bold fs-6">Veritabanı Bağlantı / Sorgu Uyarısı</div>
+                <div class="small text-light opacity-90 mt-1">@errorMessage</div>
             </div>
         </div>
-
-        <div class="p-2.5 rounded bg-black bg-opacity-40 border border-secondary border-opacity-25 small mb-3 text-danger font-monospace">
-            <div class="fw-semibold text-warning mb-1"><i class="bi bi-bug-fill me-1"></i> Veritabanı Hata Detayı:</div>
-            <div>@errorMessage</div>
-        </div>
-
-        <div class="d-flex align-items-center gap-2">
-            <button class="btn btn-warning btn-sm fw-semibold" @onclick="EnableDemoMode">
-                <i class="bi bi-magic me-1"></i> Örnek / Demo Verilerle Uygulamayı İncele
-            </button>
-        </div>
-    </div>
-}
-
-@if (OzBiAuditService.UseDemoMode)
-{
-    <div class="alert alert-warning d-flex align-items-center justify-content-between p-3 mb-4" style="border-radius: var(--radius-md);">
-        <div class="d-flex align-items-center gap-2">
-            <i class="bi bi-info-circle-fill text-warning fs-5"></i>
-            <div>
-                <strong>Demo Mod Aktif:</strong> Şu anda örnek OzBI verileri gösterilmektedir.
-            </div>
-        </div>
-        <button class="btn btn-sm btn-outline-dark" @onclick="DisableDemoMode">Canlı DB'ye Bağlanmayı Tekrar Dene</button>
     </div>
 }
 
@@ -281,24 +250,6 @@ else
     {
         showFavoritesOnly = !showFavoritesOnly;
         ApplyFilters();
-    }
-
-    private async Task EnableDemoMode()
-    {
-        OzBiAuditService.UseDemoMode = true;
-        await LoadData();
-    }
-
-    private async Task DisableDemoMode()
-    {
-        OzBiAuditService.UseDemoMode = false;
-        await LoadData();
-    }
-
-    private async Task ToggleDemoMode()
-    {
-        OzBiAuditService.UseDemoMode = !OzBiAuditService.UseDemoMode;
-        await LoadData();
     }
 
     private async Task HandleSearch(KeyboardEventArgs e)
