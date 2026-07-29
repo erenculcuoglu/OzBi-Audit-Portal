@@ -144,7 +144,7 @@ else
     }
     else if (activeTab == "sorgu")
     {
-        <!-- SORGU TAB: Displays SQL Queries with summaries above code blocks matching reference design -->
+        <!-- SORGU TAB: Displays Clean SQL Queries with summaries matching reference design -->
         var allQueries = GetAllSqlQueriesWithDetails();
 
         if (allQueries.Count == 0)
@@ -263,27 +263,19 @@ else
         {
             if (string.IsNullOrWhiteSpace(msg.Query)) continue;
 
-            var rawStatements = msg.Query.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => s.Length > 5)
-                .ToList();
-
-            if (rawStatements.Count == 0)
-            {
-                rawStatements.Add(msg.Query.Trim());
-            }
-
             var promptText = !string.IsNullOrEmpty(msg.Prompt) ? msg.Prompt : (msg.Role?.ToLower() == "user" ? msg.Message : null);
             var defaultDesc = promptText ?? chat?.Title ?? $"Sohbet Sorgusu #{msgIdx}";
 
-            for (int subIdx = 0; subIdx < rawStatements.Count; subIdx++)
+            var parsedItems = ParseQueryPayload(msg.Query, defaultDesc);
+
+            for (int subIdx = 0; subIdx < parsedItems.Count; subIdx++)
             {
-                var stmt = rawStatements[subIdx];
+                var item = parsedItems[subIdx];
                 result.Add(new SqlItemDetail
                 {
-                    Label = rawStatements.Count > 1 ? $"Sorgu #{msgIdx}.{subIdx + 1}" : $"Sorgu #{msgIdx}",
-                    Description = rawStatements.Count > 1 ? $"{defaultDesc} (Parça {subIdx + 1})" : defaultDesc,
-                    Query = stmt,
+                    Label = parsedItems.Count > 1 ? $"Sorgu #{msgIdx}.{subIdx + 1}" : $"Sorgu #{msgIdx}",
+                    Description = item.Description,
+                    Query = item.Query,
                     IsSucceeded = msg.IsSucceeded,
                     ErrorMessage = msg.ErrorMessage
                 });
@@ -291,6 +283,129 @@ else
         }
 
         return result;
+    }
+
+    private class ParsedQueryItem
+    {
+        public string Description { get; set; } = string.Empty;
+        public string Query { get; set; } = string.Empty;
+    }
+
+    private List<ParsedQueryItem> ParseQueryPayload(string rawQuery, string fallbackDesc)
+    {
+        var list = new List<ParsedQueryItem>();
+        var trimmed = rawQuery.Trim();
+
+        // 1. Try JSON parsing if payload starts with [ or {
+        if ((trimmed.StartsWith("[") && trimmed.EndsWith("]")) || (trimmed.StartsWith("{") && trimmed.EndsWith("}")))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(trimmed);
+                var root = doc.RootElement;
+
+                if (root.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var element in root.EnumerateArray())
+                    {
+                        var parsed = ExtractQueryFromElement(element, fallbackDesc);
+                        if (parsed != null) list.Add(parsed);
+                    }
+                }
+                else if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    var parsed = ExtractQueryFromElement(root, fallbackDesc);
+                    if (parsed != null) list.Add(parsed);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("JSON Query Parse exception: " + ex.Message);
+            }
+        }
+
+        // 2. If not JSON or JSON parsing produced 0 items, process as raw SQL string (splitting on ;)
+        if (list.Count == 0)
+        {
+            var rawStatements = trimmed.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => s.Length > 5)
+                .ToList();
+
+            if (rawStatements.Count == 0) rawStatements.Add(trimmed);
+
+            for (int i = 0; i < rawStatements.Count; i++)
+            {
+                list.Add(new ParsedQueryItem
+                {
+                    Description = rawStatements.Count > 1 ? $"{fallbackDesc} (Parça {i + 1})" : fallbackDesc,
+                    Query = rawStatements[i]
+                });
+            }
+        }
+
+        return list;
+    }
+
+    private ParsedQueryItem? ExtractQueryFromElement(System.Text.Json.JsonElement elem, string fallbackDesc)
+    {
+        string desc = string.Empty;
+        string sql = string.Empty;
+
+        // Search for description / summary
+        if (TryGetJsonString(elem, "description", out var val) ||
+            TryGetJsonString(elem, "Description", out val) ||
+            TryGetJsonString(elem, "summary", out val) ||
+            TryGetJsonString(elem, "title", out val))
+        {
+            desc = val;
+        }
+
+        // Search for SQL query property
+        if (TryGetJsonString(elem, "sql", out var sqlVal) ||
+            TryGetJsonString(elem, "Sql", out sqlVal) ||
+            TryGetJsonString(elem, "query", out sqlVal) ||
+            TryGetJsonString(elem, "Query", out sqlVal) ||
+            TryGetJsonString(elem, "tSql", out sqlVal) ||
+            TryGetJsonString(elem, "TSql", out sqlVal) ||
+            TryGetJsonString(elem, "statement", out sqlVal))
+        {
+            sql = sqlVal;
+        }
+
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            if (elem.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                sql = elem.GetString() ?? string.Empty;
+            }
+            else
+            {
+                sql = elem.GetRawText();
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(sql)) return null;
+
+        return new ParsedQueryItem
+        {
+            Description = !string.IsNullOrWhiteSpace(desc) ? desc : fallbackDesc,
+            Query = sql
+        };
+    }
+
+    private bool TryGetJsonString(System.Text.Json.JsonElement elem, string propName, out string value)
+    {
+        value = string.Empty;
+        if (elem.ValueKind == System.Text.Json.JsonValueKind.Object && elem.TryGetProperty(propName, out var prop))
+        {
+            if (prop.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                value = prop.GetString() ?? string.Empty;
+                return !string.IsNullOrWhiteSpace(value);
+            }
+        }
+        return false;
     }
 
     private async Task CopySql(string text)
