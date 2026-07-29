@@ -46,44 +46,35 @@ namespace OzBiPortalCRM.Services
                 }
 
                 var tenants = await query.OrderByDescending(t => t.DateCreated).Take(200).ToListAsync();
-                var tenantIds = tenants.Select(t => t.Id).ToList();
+                var tenantIds = tenants.Select(t => t.Id).ToHashSet();
 
-                var chatStats = await db.Chats.AsNoTracking()
+                var chats = await db.Chats.AsNoTracking()
                     .Where(c => tenantIds.Contains(c.TenantId))
-                    .GroupBy(c => c.TenantId)
-                    .Select(g => new
-                    {
-                        TenantId = g.Key,
-                        ChatCount = g.Count(),
-                        LastChatDate = g.Max(c => c.DateCreated)
-                    })
-                    .ToDictionaryAsync(x => x.TenantId);
+                    .Select(c => new { c.Id, c.TenantId, c.DateCreated })
+                    .ToListAsync();
 
-                var messageStats = await db.ChatMessages.AsNoTracking()
-                    .Where(m => m.Chat != null && tenantIds.Contains(m.Chat.TenantId))
-                    .GroupBy(m => m.Chat!.TenantId)
-                    .Select(g => new
-                    {
-                        TenantId = g.Key,
-                        MessageCount = g.Count(),
-                        QueryCount = g.Count(m => !string.IsNullOrEmpty(m.Query))
-                    })
-                    .ToDictionaryAsync(x => x.TenantId);
+                var chatIds = chats.Select(c => c.Id).ToHashSet();
+
+                var messages = await db.ChatMessages.AsNoTracking()
+                    .Where(m => chatIds.Contains(m.ChatId))
+                    .Select(m => new { m.ChatId, HasQuery = !string.IsNullOrEmpty(m.Query) })
+                    .ToListAsync();
 
                 var result = new List<TenantAuditSummary>();
 
                 foreach (var t in tenants)
                 {
-                    chatStats.TryGetValue(t.Id, out var cStat);
-                    messageStats.TryGetValue(t.Id, out var mStat);
+                    var tenantChats = chats.Where(c => c.TenantId == t.Id).ToList();
+                    var tenantChatIds = tenantChats.Select(c => c.Id).ToHashSet();
+                    var tenantMessages = messages.Where(m => tenantChatIds.Contains(m.ChatId)).ToList();
 
                     result.Add(new TenantAuditSummary
                     {
                         Tenant = t,
-                        TotalChats = cStat?.ChatCount ?? 0,
-                        TotalMessages = mStat?.MessageCount ?? 0,
-                        TotalQueries = mStat?.QueryCount ?? 0,
-                        LastActivityDate = cStat?.LastChatDate ?? t.DateCreated
+                        TotalChats = tenantChats.Count,
+                        TotalMessages = tenantMessages.Count,
+                        TotalQueries = tenantMessages.Count(m => m.HasQuery),
+                        LastActivityDate = tenantChats.Count > 0 ? tenantChats.Max(c => c.DateCreated) : t.DateCreated
                     });
                 }
 
@@ -91,8 +82,7 @@ namespace OzBiPortalCRM.Services
             }
             catch (Exception ex)
             {
-                // If connection is refused or IP access denied, enable demo mode fallback option
-                throw new InvalidOperationException($"MySQL Veritabanı Bağlantı Hatası: {ex.Message}", ex);
+                throw new InvalidOperationException($"MySQL Veritabanı Sorgu Hatası: {ex.Message}", ex);
             }
         }
 
