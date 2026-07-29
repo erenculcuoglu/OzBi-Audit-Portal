@@ -350,6 +350,7 @@ else
         if (string.IsNullOrWhiteSpace(rawQuery)) return result;
 
         var trimmed = rawQuery.Trim();
+        bool actualSuccess = string.IsNullOrEmpty(errorMessage);
 
         // JSON array/object parsing
         if ((trimmed.StartsWith("[") && trimmed.EndsWith("]")) || (trimmed.StartsWith("{") && trimmed.EndsWith("}")))
@@ -363,13 +364,13 @@ else
                 {
                     foreach (var element in root.EnumerateArray())
                     {
-                        var item = ExtractFromElement(element, isSucceeded, errorMessage);
+                        var item = ExtractFromElement(element, actualSuccess, errorMessage);
                         if (item != null) result.Add(item);
                     }
                 }
                 else if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
                 {
-                    var item = ExtractFromElement(root, isSucceeded, errorMessage);
+                    var item = ExtractFromElement(root, actualSuccess, errorMessage);
                     if (item != null) result.Add(item);
                 }
             }
@@ -386,7 +387,7 @@ else
             {
                 Description = string.Empty,
                 Sql = trimmed,
-                IsSucceeded = isSucceeded,
+                IsSucceeded = actualSuccess,
                 ErrorMessage = errorMessage
             });
         }
