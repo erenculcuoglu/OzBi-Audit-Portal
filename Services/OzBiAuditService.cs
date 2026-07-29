@@ -355,6 +355,9 @@ namespace OzBiPortalCRM.Services
 
             var query = db.ChatMessages.AsNoTracking()
                 .Include(m => m.Chat)
+                    .ThenInclude(c => c!.Tenant)
+                .Include(m => m.Chat)
+                    .ThenInclude(c => c!.CreatedByUser)
                 .Include(m => m.AIModel)
                 .Where(m => !string.IsNullOrEmpty(m.Query));
 

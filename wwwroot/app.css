@@ -144,6 +144,16 @@ a:hover {
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.nav-item-link i {
+    font-size: 1.15rem;
+    width: 1.5rem;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
 .nav-item-link:hover {
     color: var(--text-main);
     background: rgba(255, 255, 255, 0.04);

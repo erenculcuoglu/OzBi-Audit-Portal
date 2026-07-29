@@ -50,6 +50,7 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
 // Register Business Services
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IOzBiAuditService, OzBiAuditService>();
+builder.Services.AddSingleton<IMikroAuditEngine, MikroAuditEngine>();
 
 var app = builder.Build();
 

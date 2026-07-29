@@ -1,51 +1,50 @@
 @page "/queries"
 @inject IOzBiAuditService AuditService
+@inject IMikroAuditEngine MikroAuditEngine
 @inject IJSRuntime JSRuntime
-@inject NavigationManager Navigation
 @using OzBiPortalCRM.Services
 @using OzBiPortalCRM.Models
+@using OzBiPortalCRM.Components.Shared
 
-<div class="mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3">
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
     <div>
-        <h2 class="fw-bold mb-1"><i class="bi bi-terminal-code text-info me-2"></i>SQL Sorgu Denetimi ve Arama</h2>
-        <p class="text-muted small mb-0">Tüm tenant ve sohbetlerde çalıştırılan SQL sorgularını filtreleyin ve inceleyin</p>
+        <h2 class="fw-bold mb-1"><i class="bi bi-database-fill-gear text-info me-2"></i>SQL Sorgu Denetimi ve Arama</h2>
+        <div class="text-muted">Tüm tenant ve sohbetlerde çalıştırılan SQL sorgularını canlı akış halinde filtreleyin ve inceleyin</div>
     </div>
-    <div>
-        <button class="btn btn-outline-secondary btn-sm" @onclick="LoadData">
-            <i class="bi bi-arrow-clockwise"></i> Yenile
-        </button>
-    </div>
+    <button class="btn btn-outline-secondary btn-sm" @onclick="LoadData">
+        <i class="bi bi-arrow-clockwise"></i> Yenile
+    </button>
 </div>
 
-<!-- Search & Filter Options -->
+<!-- Search & Filters -->
 <div class="glass-card mb-4">
     <div class="row g-3 align-items-center">
         <div class="col-md-5">
-            <label class="form-label text-muted small fw-semibold">SQL veya Metin İle Ara</label>
+            <label class="form-label text-muted small mb-1">SQL veya Metin İle Ara</label>
             <div class="input-group">
                 <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-search"></i></span>
-                <input type="text" class="form-control input-custom" placeholder="Tablo adı, SQL anahtar kelimesi..." @bind="querySearch" @bind:event="oninput" @onkeyup="HandleSearch" />
+                <input type="text" class="form-control input-custom" placeholder="Tablo adı, SQL anahtar kelimesi..." @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleSearch" />
             </div>
         </div>
 
         <div class="col-md-3">
-            <label class="form-label text-muted small fw-semibold">Min Çalışma Süresi (ms)</label>
+            <label class="form-label text-muted small mb-1">Min Çalışma Süresi (ms)</label>
             <input type="number" class="form-control input-custom" placeholder="Örn: 500" @bind="minDurationMs" @bind:after="LoadData" />
         </div>
 
-        <div class="col-md-4 d-flex align-items-end justify-content-between">
-            <div class="form-check form-switch mb-2">
-                <input class="form-check-input" type="checkbox" id="failedOnlySwitch" @bind="failedOnly" @bind:after="LoadData">
-                <label class="form-check-input-label text-main small fw-semibold ms-2" for="failedOnlySwitch">
-                    <i class="bi bi-exclamation-triangle text-danger me-1"></i> Sadece Hatalı Sorgular
+        <div class="col-md-4 d-flex align-items-center justify-content-end gap-3 pt-3">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" id="failedOnlySwitch" @bind="failedOnly" @bind:after="LoadData">
+                <label class="form-check-label text-danger small fw-semibold" for="failedOnlySwitch">
+                    <i class="bi bi-exclamation-triangle me-1"></i>Sadece Hatalı Sorgular
                 </label>
             </div>
-
-            <span class="text-muted small mb-2">Bulunan: <strong>@queriesList?.Count</strong></span>
+            <span class="text-muted small">Bulunan: <strong>@(queriesList?.Count ?? 0)</strong></span>
         </div>
     </div>
 </div>
 
+<!-- SQL Query Feed List -->
 @if (isLoading)
 {
     <div class="glass-card text-center py-5">
@@ -62,73 +61,107 @@ else if (queriesList == null || queriesList.Count == 0)
 }
 else
 {
-    <div class="d-flex flex-column gap-3">
+    <div class="d-flex flex-column gap-4">
         @foreach (var item in queriesList)
         {
+            var sqlItems = ExtractSqlItemsFromQuery(item.Query, item.Prompt ?? item.Chat?.Title ?? "Sohbet Sorgusu");
+            var compliance = MikroAuditEngine.EvaluateQuery(item.Query ?? string.Empty, item.Prompt ?? item.Chat?.Title, item.Chat?.Tenant?.Name);
+
             <div class="glass-card border-secondary border-opacity-25">
-                <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                <!-- Top Metadata Header: Tenant, User, Model, Status, Date -->
+                <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2 pb-2 border-bottom border-secondary border-opacity-25">
                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <span class="badge-status badge-info">
-                            <i class="bi bi-building"></i> @(item.Chat?.Tenant?.Name ?? "Tenant")
+                        <!-- Tenant Badge -->
+                        <span class="badge-status badge-info" title="Tenant Firması">
+                            <i class="bi bi-building me-1"></i>@(item.Chat?.Tenant?.Name ?? "Tenant")
                         </span>
 
-                        <a href="chat/@item.ChatId" class="text-decoration-none fw-bold text-main" style="font-size: 0.95rem;">
-                            <i class="bi bi-chat-text text-primary me-1"></i> @(string.IsNullOrWhiteSpace(item.Chat?.Title) ? "Sohbete Git" : item.Chat.Title)
-                        </a>
-                    </div>
+                        <!-- User Badge -->
+                        <span class="badge-status badge-success" title="Sorguyu Çalıştıran Kullanıcı">
+                            <i class="bi bi-person-fill me-1"></i>@(item.Chat?.CreatedByUser?.NameSurname ?? item.Chat?.CreatedByUser?.Email ?? "Kullanıcı Belli Değil")
+                        </span>
 
-                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <!-- AI Model Badge -->
                         @if (item.AIModel != null)
                         {
-                            <span class="badge-status badge-purple">
-                                <i class="bi bi-cpu"></i> @(item.AIModel.Name ?? item.AIModel.ProgrammaticName)
+                            <span class="badge-status badge-purple" title="AI Modeli">
+                                <i class="bi bi-cpu me-1"></i>@(item.AIModel.Name ?? item.AIModel.ProgrammaticName)
                             </span>
                         }
 
-                        @if (item.IsSucceeded)
+                        <!-- Mikro v26 Compliance Score Badge -->
+                        @if (compliance.IsMikroQuery)
                         {
-                            <span class="badge-status badge-success"><i class="bi bi-check-circle"></i> Başarılı</span>
+                            <button type="button" class="btn btn-sm p-0 border-0 bg-transparent text-decoration-none" @onclick="() => OpenComplianceModal(compliance, item.Query ?? string.Empty)">
+                                <span class="badge-status" style="background: rgba(15, 23, 42, 0.8); border: 1px solid @GetScoreColor(compliance.Score); color: @GetScoreColor(compliance.Score); cursor: pointer;" title="Detaylı Mikro v26 Raporu İçin Tıklayın">
+                                    <i class="bi bi-shield-check me-1"></i>Mikro v26: <strong>@compliance.Score/100</strong> (@compliance.Grade)
+                                </span>
+                            </button>
+                        }
+
+                        <!-- Status Badge -->
+                        @if (string.IsNullOrEmpty(item.ErrorMessage))
+                        {
+                            <span class="badge-status badge-success"><i class="bi bi-check-circle me-1"></i>Başarılı</span>
                         }
                         else
                         {
-                            <span class="badge-status badge-danger"><i class="bi bi-x-circle"></i> Hatalı</span>
+                            <span class="badge-status badge-danger"><i class="bi bi-exclamation-triangle me-1"></i>Hatalı</span>
+                        }
+                    </div>
+
+                    <!-- Date & Time -->
+                    <div class="text-muted small">
+                        <i class="bi bi-clock me-1"></i>@(item.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")
+                    </div>
+                </div>
+
+                <!-- User Question Title -->
+                @if (!string.IsNullOrEmpty(item.Prompt) || !string.IsNullOrEmpty(item.Chat?.Title))
+                {
+                    <div class="fw-bold text-main fs-6 mb-3">
+                        <i class="bi bi-chat-left-text text-primary me-2"></i>@(item.Prompt ?? item.Chat?.Title)
+                    </div>
+                }
+
+                <!-- Extracted SQL Code Blocks -->
+                @foreach (var sqlItem in sqlItems)
+                {
+                    <div class="mb-3">
+                        @if (!string.IsNullOrEmpty(sqlItem.Description))
+                        {
+                            <div class="text-muted small fw-semibold mb-1">
+                                @sqlItem.Description
+                            </div>
                         }
 
-                        <span class="text-muted small"><i class="bi bi-clock"></i> @(item.DateCreated?.ToString("dd.MM.yyyy HH:mm") ?? "-")</span>
-                    </div>
-                </div>
-
-                @if (!string.IsNullOrEmpty(item.Prompt))
-                {
-                    <div class="text-muted small mb-2">
-                        <strong>Kullanıcı Sorusu:</strong> @item.Prompt
+                        <div class="sql-header py-2 px-3">
+                            <span class="text-info small fw-bold"><i class="bi bi-code-slash me-1"></i>SQL Sorgusu</span>
+                            <button class="btn-copy" @onclick="() => CopySql(sqlItem.Sql)">
+                                <i class="bi bi-clipboard"></i> SQL Kopyala
+                            </button>
+                        </div>
+                        <div class="sql-code-block">
+                            <code>@sqlItem.Sql</code>
+                        </div>
                     </div>
                 }
 
-                <div class="sql-header">
-                    <span class="text-info small fw-bold"><i class="bi bi-code"></i> SQL Sorgusu</span>
-                    <button class="btn-copy" @onclick="() => CopySql(item.Query)">
-                        <i class="bi bi-clipboard"></i> Kopyala
-                    </button>
-                </div>
-
-                <div class="sql-box mb-2">
-                    <code>@item.Query</code>
-                </div>
-
+                <!-- Error Message if present -->
                 @if (!string.IsNullOrEmpty(item.ErrorMessage))
                 {
-                    <div class="alert alert-danger mb-2 p-2 small" style="border-radius: var(--radius-md);">
-                        <strong>Hata:</strong> @item.ErrorMessage
+                    <div class="p-2.5 mb-3 rounded bg-danger bg-opacity-10 border border-danger border-opacity-20 text-danger small font-monospace">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i> <strong>Hata Detayı:</strong> @item.ErrorMessage
                     </div>
                 }
 
+                <!-- Footer Info -->
                 <div class="d-flex align-items-center justify-content-between pt-2 border-top border-secondary border-opacity-25 text-muted small">
                     <div>
-                        Süresi: <strong class="text-light">@(item.TotalDurationMs.HasValue ? $"{item.TotalDurationMs} ms" : "-")</strong>
+                        Çalışma Süresi: <strong class="text-light">@(item.TotalDurationMs.HasValue ? $"{item.TotalDurationMs} ms" : "-")</strong>
                     </div>
-                    <a href="chat/@item.ChatId" class="btn btn-sm btn-outline-primary py-0" style="font-size: 0.75rem;">
-                        <i class="bi bi-box-arrow-up-right"></i> Chat İncele
+                    <a href="chat/@item.ChatId" class="btn btn-sm btn-outline-primary px-3">
+                        <i class="bi bi-box-arrow-up-right me-1"></i> Chat İncele
                     </a>
                 </div>
             </div>
@@ -136,12 +169,25 @@ else
     </div>
 }
 
+<!-- Mikro Compliance Modal -->
+<MikroComplianceModal @bind-IsOpen="isComplianceModalOpen" Report="selectedComplianceReport" TestedSql="selectedTestedSql" />
+
 @code {
     private List<OzBiChatMessage>? queriesList;
-    private string querySearch = string.Empty;
+    private string searchQuery = string.Empty;
     private bool failedOnly = false;
     private long? minDurationMs;
     private bool isLoading = true;
+
+    private bool isComplianceModalOpen = false;
+    private MikroComplianceReport? selectedComplianceReport;
+    private string selectedTestedSql = string.Empty;
+
+    public class FeedSqlItem
+    {
+        public string Description { get; set; } = string.Empty;
+        public string Sql { get; set; } = string.Empty;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -154,13 +200,14 @@ else
         try
         {
             queriesList = await AuditService.SearchGlobalQueriesAsync(
-                querySearch: querySearch,
+                tenantId: null,
+                querySearch: searchQuery,
                 failedOnly: failedOnly,
                 minDurationMs: minDurationMs);
         }
         catch (Exception ex)
         {
-            Console.WriteLine("Error searching queries: " + ex.Message);
+            Console.WriteLine("Error loading global queries: " + ex.Message);
         }
         finally
         {
@@ -173,9 +220,124 @@ else
         await LoadData();
     }
 
-    private async Task CopySql(string? sql)
+    private void OpenComplianceModal(MikroComplianceReport report, string sql)
     {
-        if (string.IsNullOrEmpty(sql)) return;
-        await JSRuntime.InvokeVoidAsync("copyToClipboard", sql);
+        selectedComplianceReport = report;
+        selectedTestedSql = sql;
+        isComplianceModalOpen = true;
+    }
+
+    private string GetScoreColor(int score)
+    {
+        if (score >= 90) return "#10b981"; // Green
+        if (score >= 75) return "#3b82f6"; // Blue
+        if (score >= 60) return "#f59e0b"; // Yellow/Amber
+        return "#ef4444"; // Red
+    }
+
+    private List<FeedSqlItem> ExtractSqlItemsFromQuery(string? rawQuery, string fallbackDesc)
+    {
+        var result = new List<FeedSqlItem>();
+        if (string.IsNullOrWhiteSpace(rawQuery)) return result;
+
+        var trimmed = rawQuery.Trim();
+
+        // JSON array/object parsing
+        if ((trimmed.StartsWith("[") && trimmed.EndsWith("]")) || (trimmed.StartsWith("{") && trimmed.EndsWith("}")))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(trimmed);
+                var root = doc.RootElement;
+
+                if (root.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var element in root.EnumerateArray())
+                    {
+                        var item = ExtractFromElement(element);
+                        if (item != null) result.Add(item);
+                    }
+                }
+                else if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    var item = ExtractFromElement(root);
+                    if (item != null) result.Add(item);
+                }
+            }
+            catch
+            {
+                // Fallback
+            }
+        }
+
+        // Fallback for non-JSON raw query strings
+        if (result.Count == 0)
+        {
+            result.Add(new FeedSqlItem
+            {
+                Description = string.Empty,
+                Sql = trimmed
+            });
+        }
+
+        return result;
+    }
+
+    private FeedSqlItem? ExtractFromElement(System.Text.Json.JsonElement elem)
+    {
+        string desc = string.Empty;
+        string sql = string.Empty;
+
+        if (TryGetJsonProp(elem, "description", out var val) ||
+            TryGetJsonProp(elem, "Description", out val) ||
+            TryGetJsonProp(elem, "summary", out val) ||
+            TryGetJsonProp(elem, "title", out val))
+        {
+            desc = val;
+        }
+
+        if (TryGetJsonProp(elem, "sql", out var sqlVal) ||
+            TryGetJsonProp(elem, "Sql", out sqlVal) ||
+            TryGetJsonProp(elem, "query", out sqlVal) ||
+            TryGetJsonProp(elem, "Query", out sqlVal) ||
+            TryGetJsonProp(elem, "tSql", out sqlVal))
+        {
+            sql = sqlVal;
+        }
+
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            if (elem.ValueKind == System.Text.Json.JsonValueKind.String)
+                sql = elem.GetString() ?? string.Empty;
+            else
+                sql = elem.GetRawText();
+        }
+
+        if (string.IsNullOrWhiteSpace(sql)) return null;
+
+        return new FeedSqlItem
+        {
+            Description = desc,
+            Sql = sql
+        };
+    }
+
+    private bool TryGetJsonProp(System.Text.Json.JsonElement elem, string propName, out string value)
+    {
+        value = string.Empty;
+        if (elem.ValueKind == System.Text.Json.JsonValueKind.Object && elem.TryGetProperty(propName, out var prop))
+        {
+            if (prop.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                value = prop.GetString() ?? string.Empty;
+                return !string.IsNullOrWhiteSpace(value);
+            }
+        }
+        return false;
+    }
+
+    private async Task CopySql(string text)
+    {
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
     }
 }
