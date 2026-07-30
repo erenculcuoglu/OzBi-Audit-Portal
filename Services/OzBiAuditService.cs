@@ -118,9 +118,15 @@ namespace OzBiPortalCRM.Services
                 if (!string.IsNullOrWhiteSpace(searchTerm))
                 {
                     var term = searchTerm.Trim().ToLower();
+                    var matchingTenantIds = await db.Tenants.AsNoTracking()
+                        .Where(t => t.Name != null && t.Name.ToLower().Contains(term))
+                        .Select(t => t.Id)
+                        .ToListAsync();
+
                     query = query.Where(u => (u.NameSurname != null && u.NameSurname.ToLower().Contains(term)) ||
                                              (u.Email != null && u.Email.ToLower().Contains(term)) ||
-                                             (u.UserName != null && u.UserName.ToLower().Contains(term)));
+                                             (u.UserName != null && u.UserName.ToLower().Contains(term)) ||
+                                             (matchingTenantIds.Contains(u.TenantId)));
                 }
 
                 var users = await query.Take(200).ToListAsync();

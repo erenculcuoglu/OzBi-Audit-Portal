@@ -89,12 +89,13 @@ else
                             </span>
                         }
 
-                        <!-- Mikro v26 Compliance Score Badge -->
+                        <!-- Multi-ERP Compliance Score Badge (Mikro / Logo) -->
                         @if (compliance.IsMikroQuery)
                         {
+                            var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro v27";
                             <button type="button" class="btn btn-sm p-0 border-0 bg-transparent text-decoration-none" @onclick="() => OpenComplianceModal(compliance, item.Query ?? string.Empty)">
-                                <span class="badge-status" style="background: rgba(15, 23, 42, 0.8); border: 1px solid @GetScoreColor(compliance.Score); color: @GetScoreColor(compliance.Score); cursor: pointer;" title="Detaylı Mikro v26 Raporu İçin Tıklayın">
-                                    <i class="bi bi-shield-check me-1"></i>Mikro v26: <strong>@compliance.Score/100</strong> (@compliance.Grade)
+                                <span class="badge-status" style="background: rgba(15, 23, 42, 0.8); border: 1px solid @GetScoreColor(compliance.Score); color: @GetScoreColor(compliance.Score); cursor: pointer;" title="Detaylı ERP Uyum Raporu İçin Tıklayın">
+                                    <i class="bi bi-shield-check me-1"></i>@erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)
                                 </span>
                             </button>
                         }
@@ -169,8 +170,8 @@ else
     </div>
 }
 
-<!-- Mikro Compliance Modal -->
-<MikroComplianceModal @bind-IsOpen="isComplianceModalOpen" Report="selectedComplianceReport" TestedSql="selectedTestedSql" />
+<!-- ERP Compliance Modal -->
+<ErpComplianceModal @bind-IsOpen="isComplianceModalOpen" Report="@selectedComplianceReport" TestedSql="@selectedTestedSql" />
 
 @code {
     private List<OzBiChatMessage>? queriesList;

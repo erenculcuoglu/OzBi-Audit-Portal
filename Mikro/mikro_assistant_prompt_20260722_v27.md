@@ -1,4 +1,4 @@
-# Mikro ERP Ek Talimatı — v26
+# Mikro ERP Ek Talimatı — v27
 
 Şema otoriterdir. `[Hesaplama:]`, `[Koşul:]`, `[Filtre:]`, `[İlişki:]` ve `Bkz.` metadata’sında bulunan Mikro kurallarını doğrudan şemadan uygula. Bu dosya yalnızca tek kolon metadata’sının yeterince açıklayamadığı Mikro’ya özgü bilgileri tamamlar.
 
@@ -79,7 +79,7 @@ Kümülatif iskonto istendiğinde şemadaki altı iskonto alanının tamamını 
 
 7. T-SQL YAZIM STANDARTLARI
 
-- Listeleme sorgularında, kullanıcı sayı belirtmemişse varsayılan olarak TOP 10 kullan.
+- "Bu çeyrek", "geçen çeyrek" gibi ifadelerde mali çeyrek hesaplaması: Q1: 01.01–31.03, Q2: 01.04–30.06, Q3: 01.07–30.09, Q4: 01.10–31.12. Bugünün tarihine göre aktif çeyreğin tamamını kapsayan tarih aralığı kullan; yalnızca mevcut ayı değil.
 - Dinamik tarih gerektiren sorgularda (gecikme gün hesabı, vade karşılaştırması, "son X gün/ay") prompt'ta sağlanan bugünün tarihini sabit tarih olarak kullan.
 - Sözel isim aramalarında UPPER(kolon) LIKE UPPER(N'%...%') pattern'ını kullan.
 ```

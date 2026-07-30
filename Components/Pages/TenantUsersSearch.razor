@@ -1,0 +1,287 @@
+@page "/tenant-users"
+@inject IOzBiAuditService AuditService
+@inject NavigationManager Navigation
+@using OzBiPortalCRM.Services
+@using OzBiPortalCRM.Models
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <h2 class="fw-bold mb-1"><i class="bi bi-person-search text-primary me-2"></i>Tenant & Kullanıcı Sorgulama</h2>
+        <div class="text-muted">Tüm tenant firmalarına ait aktif kullanıcıları, rollerini ve çalıştırdıkları sorgu aktivitelerini arayın ve denetleyin</div>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" @onclick="LoadData">
+        <i class="bi bi-arrow-clockwise"></i> Yenile
+    </button>
+</div>
+
+<!-- Header Metric Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-sm-6">
+        <div class="glass-card text-center p-3 h-100">
+            <div class="text-muted small mb-1"><i class="bi bi-people me-1"></i>Toplam Kullanıcı</div>
+            <div class="fs-3 fw-bold text-primary">@(allUsersList?.Count ?? 0)</div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+        <div class="glass-card text-center p-3 h-100">
+            <div class="text-muted small mb-1"><i class="bi bi-check-circle me-1"></i>Aktif Kullanıcı</div>
+            <div class="fs-3 fw-bold text-success">@(allUsersList?.Count(u => u.User.IsActive) ?? 0)</div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+        <div class="glass-card text-center p-3 h-100">
+            <div class="text-muted small mb-1"><i class="bi bi-person-badge me-1"></i>Tenant Sahibi (Admin)</div>
+            <div class="fs-3 fw-bold text-warning">@(allUsersList?.Count(u => u.User.IsTenantOwner) ?? 0)</div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+        <div class="glass-card text-center p-3 h-100">
+            <div class="text-muted small mb-1"><i class="bi bi-building me-1"></i>Kayıtlı Tenant</div>
+            <div class="fs-3 fw-bold text-info">@TotalUniqueTenantsCount</div>
+        </div>
+    </div>
+</div>
+
+<!-- Search & Filters -->
+<div class="glass-card mb-4">
+    <div class="row g-3 align-items-center">
+        <div class="col-md-5">
+            <label class="form-label text-muted small mb-1">Tenant veya Kullanıcı Ara</label>
+            <div class="input-group">
+                <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control input-custom" placeholder="Firma adı (Parkim vb.), Kullanıcı adı, E-posta..." @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleSearch" />
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label text-muted small mb-1">Rol Filtresi</label>
+            <select class="form-select input-custom" @bind="selectedRoleFilter" @bind:after="ApplyFilters">
+                <option value="all">Tüm Roller</option>
+                <option value="owner">Sadece Tenant Sahipleri (Admin)</option>
+                <option value="user">Sadece Standart Kullanıcılar</option>
+            </select>
+        </div>
+
+        <div class="col-md-4 d-flex align-items-center justify-content-end gap-3 pt-3">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" id="activeOnlySwitch" @bind="activeOnly" @bind:after="ApplyFilters">
+                <label class="form-check-label text-success small fw-semibold" for="activeOnlySwitch">
+                    <i class="bi bi-check-circle me-1"></i>Sadece Aktif Kullanıcılar
+                </label>
+            </div>
+            <span class="text-muted small">Bulunan: <strong>@(filteredUsersList?.Count ?? 0)</strong></span>
+        </div>
+    </div>
+</div>
+
+<!-- User Cards List -->
+@if (isLoading)
+{
+    <div class="glass-card text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status"></div>
+        <div class="text-muted">Kullanıcılar ve tenant ilişkileri taranıyor...</div>
+    </div>
+}
+else if (filteredUsersList == null || filteredUsersList.Count == 0)
+{
+    <div class="glass-card text-center py-5">
+        <i class="bi bi-person-x text-muted" style="font-size: 3rem;"></i>
+        <h5 class="mt-3 text-muted">Arama kriterlerine uygun kullanıcı bulunamadı</h5>
+    </div>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var summary in filteredUsersList)
+        {
+            var u = summary.User;
+            <div class="col-lg-6">
+                <div class="glass-card h-100 border-secondary border-opacity-25 d-flex flex-column justify-content-between">
+                    <div>
+                        <!-- Header: Tenant Name, Status & Role Badge -->
+                        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2 pb-2 border-bottom border-secondary border-opacity-25">
+                            <span class="badge-status badge-info" title="Tenant Firması">
+                                <i class="bi bi-building me-1"></i>@(summary.TenantName ?? u.TenantId)
+                            </span>
+
+                            <div class="d-flex align-items-center gap-2">
+                                @if (u.IsTenantOwner)
+                                {
+                                    <span class="badge bg-warning text-dark fw-bold px-2 py-1" style="font-size: 0.75rem;">
+                                        <i class="bi bi-shield-lock-fill me-1"></i>Tenant Sahibi
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary opacity-75 px-2 py-1" style="font-size: 0.75rem;">
+                                        <i class="bi bi-person me-1"></i>Kullanıcı
+                                    </span>
+                                }
+
+                                @if (u.IsActive)
+                                {
+                                    <span class="badge-status badge-success"><i class="bi bi-check-circle me-1"></i>Aktif</span>
+                                }
+                                else
+                                {
+                                    <span class="badge-status badge-danger"><i class="bi bi-x-circle me-1"></i>Pasif</span>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- User Profile Row -->
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div class="user-avatar bg-primary text-white fs-4 fw-bold rounded-circle p-3 d-flex align-items-center justify-content-center"
+                                 style="width: 54px; height: 54px; background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important;">
+                                @(GetInitials(u.NameSurname ?? u.Email ?? "K"))
+                            </div>
+                            <div style="flex: 1; min-width: 0;">
+                                <div class="fs-6 fw-bold text-main text-truncate">
+                                    @(string.IsNullOrWhiteSpace(u.NameSurname) ? "İsimsiz Kullanıcı" : u.NameSurname)
+                                </div>
+                                <div class="text-muted small text-truncate">
+                                    <i class="bi bi-envelope me-1"></i>@(u.Email ?? "-")
+                                </div>
+                                @if (!string.IsNullOrEmpty(u.UserName) && u.UserName != u.Email)
+                                {
+                                    <div class="text-muted small text-truncate" style="font-size: 0.775rem;">
+                                        <i class="bi bi-person-badge me-1"></i>Kullanıcı Adı: @u.UserName
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Footprint Metrics -->
+                        <div class="row g-2 mb-3">
+                            <div class="col-4">
+                                <div class="p-2 rounded bg-black bg-opacity-30 border border-secondary border-opacity-20 text-center">
+                                    <div class="fs-6 fw-bold text-info">@summary.TotalChats</div>
+                                    <div class="text-muted" style="font-size: 0.7rem;">Sohbet</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-2 rounded bg-black bg-opacity-30 border border-secondary border-opacity-20 text-center">
+                                    <div class="fs-6 fw-bold text-success">@summary.TotalQueries</div>
+                                    <div class="text-muted" style="font-size: 0.7rem;">SQL Sorgusu</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-2 rounded bg-black bg-opacity-30 border border-secondary border-opacity-20 text-center">
+                                    <div class="fw-bold text-warning" style="font-size: 0.85rem;">@(summary.LastActivityDate?.ToString("dd.MM.yyyy") ?? "-")</div>
+                                    <div class="text-muted" style="font-size: 0.7rem;">Son Aktivite</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Footer -->
+                    <div class="d-flex align-items-center justify-content-between pt-2 border-top border-secondary border-opacity-25 gap-2 flex-wrap">
+                        <a href="tenant/@u.TenantId/chats" class="btn btn-sm btn-outline-info px-3">
+                            <i class="bi bi-building me-1"></i> Tenant Chatleri
+                        </a>
+
+                        <a href="tenant/@u.TenantId/chats?filterUserId=@u.Id" class="btn btn-sm btn-primary px-3">
+                            <i class="bi bi-search me-1"></i> Kullanıcı Sohbetleri
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<UserAuditSummary>? allUsersList;
+    private List<UserAuditSummary>? filteredUsersList;
+    private string searchQuery = string.Empty;
+    private string selectedRoleFilter = "all";
+    private bool activeOnly = false;
+    private bool isLoading = true;
+
+    private int TotalUniqueTenantsCount => allUsersList?.Select(u => u.User.TenantId).Where(tid => !string.IsNullOrEmpty(tid)).Distinct().Count() ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            allUsersList = await AuditService.GetUsersFootprintSummaryAsync(searchTerm: null, portalUserId: 0);
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error loading users search data: " + ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleSearch(KeyboardEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            ApplyFilters();
+            return;
+        }
+
+        isLoading = true;
+        try
+        {
+            allUsersList = await AuditService.GetUsersFootprintSummaryAsync(searchTerm: searchQuery, portalUserId: 0);
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error executing user search: " + ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        if (allUsersList == null)
+        {
+            filteredUsersList = new List<UserAuditSummary>();
+            return;
+        }
+
+        var query = allUsersList.AsEnumerable();
+
+        if (activeOnly)
+        {
+            query = query.Where(u => u.User.IsActive);
+        }
+
+        if (selectedRoleFilter == "owner")
+        {
+            query = query.Where(u => u.User.IsTenantOwner);
+        }
+        else if (selectedRoleFilter == "user")
+        {
+            query = query.Where(u => !u.User.IsTenantOwner);
+        }
+
+        filteredUsersList = query.ToList();
+    }
+
+    private string GetInitials(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "K";
+        var parts = text.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0].Substring(0, 1).ToUpper();
+        return (parts[0].Substring(0, 1) + parts[parts.Length - 1].Substring(0, 1)).ToUpper();
+    }
+}

@@ -47,10 +47,13 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
     options.UseSqlite(appConnStr);
 });
 
-// Register Business Services
+// Register Memory Cache & Multi-ERP Business Services
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IOzBiAuditService, OzBiAuditService>();
-builder.Services.AddSingleton<IMikroAuditEngine, MikroAuditEngine>();
+builder.Services.AddScoped<ITenantSchemaProvider, TenantSchemaProvider>();
+builder.Services.AddScoped<IErpAuditEngine, ErpAuditEngine>();
+builder.Services.AddScoped<IMikroAuditEngine, ErpAuditEngine>();
 
 var app = builder.Build();
 

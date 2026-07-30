@@ -41,7 +41,7 @@
       {"COLUMN_NAME": "cha_normal_Iade", "DATA_TYPE": "TINYINT", "MetaData": "0:Normal 1:İade"},
       {"COLUMN_NAME": "cha_tpoz", "DATA_TYPE": "TINYINT", "MetaData": "Ödeme pozisyonu. 0:Açık (ödenmemiş) 1:Kapalı (ödenmiş)"},
       {"COLUMN_NAME": "cha_meblag", "DATA_TYPE": "FLOAT", "MetaData": "Hareket tutarı (orijinal döviz cinsinden). [Hesaplama: TL_Karsiligi = cha_meblag * cha_d_kur, DovizTuru = CASE cha_d_cins WHEN 0 THEN 'TL' WHEN 1 THEN 'USD' WHEN 2 THEN 'EUR' ELSE 'Diğer' END]"},
-      {"COLUMN_NAME": "cha_vade", "DATA_TYPE": "INT", "MetaData": "Vade tarihi. [Koşul: AktifVadeİçin = cha_vade > 0], [Hesaplama: VadeTarihi = TRY_CONVERT(DATE, CONVERT(CHAR(8), cha_vade), 112), GecikmeGünSayısı = DATEDIFF(DAY, TRY_CONVERT(DATE, CONVERT(CHAR(8), cha_vade), 112), prompt_tarih)]"},
+      {"COLUMN_NAME": "cha_vade", "DATA_TYPE": "INT", "MetaData": "Vade tarihi (INT formatında YYYYMMDD). [Koşul: AktifVadeİçin = [cha].[cha_vade] > 0], [Hesaplama: VadeTarihi = TRY_CONVERT(DATE, CONVERT(CHAR(8), [cha].[cha_vade]), 112), GecikmeGünSayısı = DATEDIFF(DAY, TRY_CONVERT(DATE, CONVERT(CHAR(8), [cha].[cha_vade]), 112), prompt_tarih)]"},
       {"COLUMN_NAME": "cha_aciklama", "DATA_TYPE": "NVARCHAR(40)", "MetaData": "Arama alanı."},
       {"COLUMN_NAME": "cha_belge_no", "DATA_TYPE": "DBO.BELGENO_STR", "MetaData": null},
       {"COLUMN_NAME": "cha_belge_tarih", "DATA_TYPE": "DATETIME", "MetaData": null},
@@ -83,7 +83,7 @@
       {"COLUMN_NAME": "sto_perakende_vergi", "DATA_TYPE": "TINYINT", "MetaData": "Perakende KDV oranı (%)"},
       {"COLUMN_NAME": "sto_toptan_vergi", "DATA_TYPE": "TINYINT", "MetaData": "Toptan KDV oranı (%)"},
       {"COLUMN_NAME": "sto_karorani", "DATA_TYPE": "FLOAT", "MetaData": null},
-      {"COLUMN_NAME": "sto_pasif_fl", "DATA_TYPE": "BIT", "MetaData": "0:Pasif 1:Aktif"},
+      {"COLUMN_NAME": "sto_pasif_fl", "DATA_TYPE": "BIT", "MetaData": "Stok kartı pasiflik durumu. 0:Aktif (pasif değil), 1:Pasif. [Koşul: Aktif stok kartı için sto_pasif_fl = 0]"},
       {"COLUMN_NAME": "sto_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
       {"COLUMN_NAME": "sto_satis_dursun", "DATA_TYPE": "TINYINT", "MetaData": "0:Satılabilir 1:Satış Durmuş"},
       {"COLUMN_NAME": "sto_doviz_cinsi", "DATA_TYPE": "TINYINT", "MetaData": "Stoğun tanımlandığı döviz cinsi. 0:TL. Bkz. DOVIZ_KURLARI.dov_no"}
@@ -202,7 +202,8 @@
       {"COLUMN_NAME": "kas_isim", "DATA_TYPE": "NVARCHAR(40)", "MetaData": "Arama alanı."},
       {"COLUMN_NAME": "kas_tip", "DATA_TYPE": "TINYINT", "MetaData": "0:Nakit Kasası [Filtre: NakitKasası], 1:Çek Kasası [Filtre: ÇekKasası] 2:Karşılıksız Çek Kasası 3:Senet Kasası 4:Protestolu Senet Kasası 5:Verilen Senet Kasası 6:Verilen Ödeme Emirleri Kasası 7:Müşteri Ödeme Sözleri Kasası"},
       {"COLUMN_NAME": "kas_doviz_cinsi", "DATA_TYPE": "TINYINT", "MetaData": "0:TL. Bkz. DOVIZ_KURLARI"},
-      {"COLUMN_NAME": "kas_bankakodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Çek kasaları için bağlı banka kodu"}
+      {"COLUMN_NAME": "kas_bankakodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Çek kasaları için bağlı banka kodu"},
+      {"COLUMN_NAME": "kas_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"}
     ]
   },
   {

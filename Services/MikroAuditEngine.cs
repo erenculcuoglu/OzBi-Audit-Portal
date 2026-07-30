@@ -211,37 +211,12 @@ namespace OzBiPortalCRM.Services
             }
 
             // -------------------------------------------------------------
-            // RULE 5: DEFAULT TOP 10 LIMIT RULE - Penalty: -10 pts
+            // RULE 5: TOP LIMIT — KALDIRILDI
+            // TOP 10 sınırı artık uygulanmıyor. İş mantığı gereği,
+            // "faturasını ödememiş tüm carileri listele" gibi sorgularda
+            // TOP sınırı veri kaybına neden oluyordu.
+            // Kullanıcı açıkça "ilk 5" / "ilk 10" derse model zaten TOP ekliyor.
             // -------------------------------------------------------------
-            bool isListingQuery = upperSql.Contains("ORDER BY") || upperSql.Contains("SELECT ");
-            bool specifiesNumberInPrompt = userPrompt != null && Regex.IsMatch(userPrompt, @"\b(1|2|3|4|5|6|7|8|9|10|15|20|50|100)\b");
-
-            if (isListingQuery && !specifiesNumberInPrompt)
-            {
-                bool hasTopClause = Regex.IsMatch(sql, @"SELECT\s+TOP\s+\d+", RegexOptions.IgnoreCase);
-                if (hasTopClause)
-                {
-                    report.PassedChecks.Add(new MikroRuleCheck
-                    {
-                        RuleId = "M-05",
-                        Title = "Varsayılan TOP Limiti",
-                        Description = "Kullanıcı sayı belirtmediğinde performans için varsayılan TOP 10 sınırı uygulanmış."
-                    });
-                }
-                else
-                {
-                    score -= 10;
-                    report.Violations.Add(new MikroRuleViolation
-                    {
-                        RuleId = "M-05",
-                        Title = "Eksik TOP Sınırı (Sınırsız Sonuç Riski)",
-                        PenaltyPoints = 10,
-                        IssueDescription = "Listeleme sorgusunda TOP sınırı kullanılmamış. Devasa veri kümesi çekme ve performans kaybı riski.",
-                        V26RuleReference = "Madde 7: Listeleme sorgularında kullanıcı sayı belirtmemişse varsayılan TOP 10 kullanılmalıdır.",
-                        RecommendedFix = "Sorgu başına `SELECT TOP (10) ...` ifadesini ekleyin."
-                    });
-                }
-            }
 
             // -------------------------------------------------------------
             // RULE 6: MANAGEMENT VIEW BRACKET MAPPING - Penalty: -10 pts
@@ -255,7 +230,7 @@ namespace OzBiPortalCRM.Services
                     {
                         RuleId = "M-06",
                         Title = "Yönetim View Braket Eşlemesi",
-                        Description = "Yönetim view sorgularında [msg_S_....] alan isimleri v26 standardına uygun eşleşmiş."
+                        Description = "Yönetim view sorgularında [msg_S_....] alan isimleri v27 standardına uygun eşleşmiş."
                     });
                 }
                 else
@@ -311,31 +286,31 @@ namespace OzBiPortalCRM.Services
             {
                 report.Grade = "A+";
                 report.GradeLabel = "Kusursuz Uyum (A+)";
-                report.SummaryText = "T-SQL sorgusu Mikro v26 standartlarına ve veritabanı şemasına %100 kusursuz uyum sağlamaktadır.";
+                report.SummaryText = "T-SQL sorgusu Mikro v27 standartlarına ve veritabanı şemasına %100 kusursuz uyum sağlamaktadır.";
             }
             else if (score >= 85)
             {
                 report.Grade = "A";
                 report.GradeLabel = "Yüksek Uyum (A)";
-                report.SummaryText = "T-SQL sorgusu Mikro v26 kurallarına yüksek oranda uymaktadır. Küçük iyileştirmeler mümkündür.";
+                report.SummaryText = "T-SQL sorgusu Mikro v27 kurallarına yüksek oranda uymaktadır. Küçük iyileştirmeler mümkündür.";
             }
             else if (score >= 70)
             {
                 report.Grade = "B";
                 report.GradeLabel = "Orta Uyum (B)";
-                report.SummaryText = "Sorguda bazı kritik v26 kuralları (filtre veya kur koruması) eksiktir. Düzeltme önerilir.";
+                report.SummaryText = "Sorguda bazı kritik v27 kuralları (filtre veya kur koruması) eksiktir. Düzeltme önerilir.";
             }
             else if (score >= 50)
             {
                 report.Grade = "C";
                 report.GradeLabel = "Zayıf Uyum (C)";
-                report.SummaryText = "Sorguda önemli v26 standart ihlalleri tespit edilmiştir. İyileştirme yapılması şarttır.";
+                report.SummaryText = "Sorguda önemli v27 standart ihlalleri tespit edilmiştir. İyileştirme yapılması şarttır.";
             }
             else
             {
                 report.Grade = "F";
                 report.GradeLabel = "Uyumsuz / Riskli (F)";
-                report.SummaryText = "Sorgu Mikro v26 mimarisinden ciddi sapmalar göstermektedir ve performans/doğruluk riski taşımaktadır.";
+                report.SummaryText = "Sorgu Mikro v27 mimarisinden ciddi sapmalar göstermektedir ve performans/doğruluk riski taşımaktadır.";
             }
 
             return report;
