@@ -191,6 +191,7 @@ namespace OzBiPortalCRM.Models
         public bool IsTenantOwner { get; set; }
         public bool IsActive { get; set; }
         public bool IsDeleted { get; set; }
+        public int LoginCount { get; set; }
         public string TenantId { get; set; } = string.Empty;
         public string? UserName { get; set; }
         public string? Email { get; set; }

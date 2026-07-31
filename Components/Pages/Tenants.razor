@@ -149,6 +149,11 @@ else
                             <span>Son Aktivite</span> @GetSortIcon("LastActivityDate")
                         </div>
                     </th>
+                    <th style="cursor: pointer; white-space: nowrap;" @onclick='() => SortBy("TotalLogins")'>
+                        <div class="d-inline-flex align-items-center gap-1">
+                            <span>Login Sayısı</span> @GetSortIcon("TotalLogins")
+                        </div>
+                    </th>
                     <th style="white-space: nowrap;">İşlem</th>
                 </tr>
             </thead>
@@ -202,6 +207,11 @@ else
                             {
                                 <span class="text-muted small">-</span>
                             }
+                        </td>
+                        <td>
+                            <span class="badge-status badge-info">
+                                <i class="bi bi-box-arrow-in-right me-1"></i>@item.TotalLogins
+                            </span>
                         </td>
                         <td>
                             <button class="btn btn-sm btn-primary-custom px-3" @onclick="() => SelectTenant(item.Tenant.Id)">
@@ -276,6 +286,7 @@ else
             "TotalChats" => sortAscending ? list.OrderBy(t => t.TotalChats) : list.OrderByDescending(t => t.TotalChats),
             "TotalQueries" => sortAscending ? list.OrderBy(t => t.TotalQueries) : list.OrderByDescending(t => t.TotalQueries),
             "LastActivityDate" => sortAscending ? list.OrderBy(t => t.LastActivityDate ?? DateTime.MinValue) : list.OrderByDescending(t => t.LastActivityDate ?? DateTime.MinValue),
+            "TotalLogins" => sortAscending ? list.OrderBy(t => t.TotalLogins) : list.OrderByDescending(t => t.TotalLogins),
             _ => list.OrderByDescending(t => t.LastActivityDate ?? DateTime.MinValue)
         };
 

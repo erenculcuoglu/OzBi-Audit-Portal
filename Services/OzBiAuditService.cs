@@ -62,6 +62,11 @@ namespace OzBiPortalCRM.Services
                     .Select(m => new { m.ChatId, HasQuery = !string.IsNullOrEmpty(m.Query), m.DateCreated })
                     .ToListAsync();
 
+                var tenantUsers = await db.Users.AsNoTracking()
+                    .Where(u => !string.IsNullOrEmpty(u.TenantId) && tenantIds.Contains(u.TenantId))
+                    .Select(u => new { u.TenantId, u.LoginCount })
+                    .ToListAsync();
+
                 var favoriteTenantIds = portalUserId > 0 ? await GetFavoriteItemIdsAsync(portalUserId, "Tenant") : new HashSet<string>();
 
                 var result = new List<TenantAuditSummary>();
@@ -71,6 +76,7 @@ namespace OzBiPortalCRM.Services
                     var tenantChats = chats.Where(c => c.TenantId == t.Id).ToList();
                     var tenantChatIds = tenantChats.Select(c => c.Id).ToHashSet();
                     var tenantMessages = messages.Where(m => tenantChatIds.Contains(m.ChatId)).ToList();
+                    var tenantLogins = tenantUsers.Where(u => u.TenantId == t.Id).Sum(u => u.LoginCount);
 
                     var dateList = tenantChats.Where(c => c.DateCreated.HasValue).Select(c => c.DateCreated!.Value)
                         .Concat(tenantMessages.Where(m => m.DateCreated.HasValue).Select(m => m.DateCreated!.Value))
@@ -89,6 +95,7 @@ namespace OzBiPortalCRM.Services
                         TotalChats = tenantChats.Count,
                         TotalMessages = tenantMessages.Count,
                         TotalQueries = tenantMessages.Count(m => m.HasQuery),
+                        TotalLogins = tenantLogins,
                         LastActivityDate = lastAct,
                         IsFavorited = favoriteTenantIds.Contains(t.Id)
                     });
@@ -461,6 +468,7 @@ namespace OzBiPortalCRM.Services
                     TotalChats = 7,
                     TotalMessages = 45,
                     TotalQueries = 17,
+                    TotalLogins = 32,
                     LastActivityDate = DateTime.Now.AddHours(-2),
                     IsFavorited = true
                 },
@@ -470,6 +478,7 @@ namespace OzBiPortalCRM.Services
                     TotalChats = 1,
                     TotalMessages = 6,
                     TotalQueries = 2,
+                    TotalLogins = 5,
                     LastActivityDate = DateTime.Now.AddDays(-10),
                     IsFavorited = false
                 },
@@ -479,6 +488,7 @@ namespace OzBiPortalCRM.Services
                     TotalChats = 4,
                     TotalMessages = 28,
                     TotalQueries = 13,
+                    TotalLogins = 18,
                     LastActivityDate = DateTime.Now.AddDays(-15),
                     IsFavorited = true
                 }
