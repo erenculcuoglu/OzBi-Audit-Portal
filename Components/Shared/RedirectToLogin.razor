@@ -1,0 +1,16 @@
+@inject NavigationManager Navigation
+
+<div class="d-flex flex-column align-items-center justify-content-center min-vh-100 bg-main text-center p-3">
+    <div class="spinner-border text-primary mb-3" role="status"></div>
+    <div class="text-muted mb-3">Oturum kontrol ediliyor, yönlendiriliyorsunuz...</div>
+    <a href="login" class="btn btn-primary-custom btn-sm">
+        <i class="bi bi-box-arrow-in-right me-1"></i> Giriş Sayfasına Git
+    </a>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Navigation.NavigateTo("login");
+    }
+}
