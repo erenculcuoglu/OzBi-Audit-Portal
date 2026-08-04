@@ -4,10 +4,10 @@
 <div class="d-flex align-items-center justify-content-center min-vh-100 p-3" style="background: radial-gradient(circle at center, rgba(99, 102, 241, 0.15) 0%, transparent 60%), var(--bg-main);">
     <div class="glass-card" style="width: 100%; max-width: 440px; border-radius: var(--radius-lg); padding: 2.5rem;">
         <div class="text-center mb-4">
-            <div class="logo-badge mx-auto mb-3" style="width: 54px; height: 54px; font-size: 1.6rem;">
-                <i class="bi bi-shield-lock-fill"></i>
+            <div class="mx-auto mb-3 text-center d-flex align-items-center justify-content-center" style="width: 72px; height: 72px;">
+                <img src="logo.png" alt="OzBI Logo" style="width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 0 12px rgba(245, 124, 0, 0.4));" />
             </div>
-            <h3 class="fw-bold mb-1">OzBI Audit Portal</h3>
+            <h3 class="fw-bold mb-1">OzBI Portal</h3>
             <p class="text-muted small">Veritabanı ve AI Sorgu İzleme Paneli</p>
         </div>
 
@@ -24,7 +24,7 @@
                 <label class="form-label text-muted small fw-semibold">E-posta Adresi</label>
                 <div class="input-group">
                     <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-envelope"></i></span>
-                    <input type="email" name="email" class="form-control input-custom" placeholder="ornek@ozbiapp.com.tr" value="@emailInput" required />
+                    <input type="email" id="emailInput" name="email" class="form-control input-custom" placeholder="ornek@ozbiapp.com.tr" value="@emailInput" required />
                 </div>
             </div>
 
@@ -32,7 +32,7 @@
                 <label class="form-label text-muted small fw-semibold">Şifre</label>
                 <div class="input-group">
                     <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-key"></i></span>
-                    <input type="password" name="password" class="form-control input-custom" placeholder="••••••••" value="@passwordInput" required />
+                    <input type="password" id="passwordInput" name="password" class="form-control input-custom" placeholder="••••••••" value="@passwordInput" required />
                 </div>
             </div>
 
@@ -52,9 +52,12 @@
                 <span class="text-muted">Şifre:</span>
                 <code class="text-info">123456</code>
             </div>
-            <a href="/login?fill=seed" class="btn btn-sm btn-outline-secondary w-100 mt-1" style="font-size: 0.75rem;">
-                Seed Bilgileri Otomatik Doldur
-            </a>
+            <button type="button" 
+                    class="btn btn-sm btn-outline-primary w-100 mt-1" 
+                    style="font-size: 0.75rem;" 
+                    @onclick="FillSeed">
+                <i class="bi bi-magic me-1"></i> Seed Bilgileri Otomatik Doldur
+            </button>
         </div>
     </div>
 </div>
@@ -75,8 +78,13 @@
 
         if (uri.Query.Contains("fill=seed"))
         {
-            emailInput = "eren@ozbiapp.com.tr";
-            passwordInput = "123456";
+            FillSeed();
         }
+    }
+
+    private void FillSeed()
+    {
+        emailInput = "eren@ozbiapp.com.tr";
+        passwordInput = "123456";
     }
 }
