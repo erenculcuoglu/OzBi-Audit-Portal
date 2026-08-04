@@ -384,7 +384,7 @@ namespace OzBiPortalCRM.Services
             }
 
             if (failedOnly == true)
-                query = query.Where(m => !m.IsSucceeded || !string.IsNullOrEmpty(m.ErrorMessage));
+                query = query.Where(m => !string.IsNullOrEmpty(m.ErrorMessage));
 
             if (minDurationMs.HasValue && minDurationMs.Value > 0)
                 query = query.Where(m => m.TotalDurationMs >= minDurationMs.Value);

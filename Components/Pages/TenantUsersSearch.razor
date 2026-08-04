@@ -6,7 +6,7 @@
 
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
     <div>
-        <h2 class="fw-bold mb-1"><i class="bi bi-person-vcard text-primary me-2"></i>Tenant & Kullanıcı Sorgulama</h2>
+        <h2 class="fw-bold mb-1"><i class="bi bi-person-vcard text-primary me-2"></i>Kullanıcı Ara</h2>
         <div class="text-muted">Tüm tenant firmalarına ait aktif kullanıcıları, rollerini ve çalıştırdıkları sorgu aktivitelerini arayın ve denetleyin</div>
     </div>
     <button class="btn btn-outline-secondary btn-sm" @onclick="LoadData">
@@ -75,7 +75,7 @@
             <div class="form-check form-switch mb-0">
                 <input class="form-check-input" type="checkbox" role="switch" id="activeOnlySwitch" @bind="activeOnly" @bind:after="ApplyFilters">
                 <label class="form-check-label text-success small fw-semibold" for="activeOnlySwitch">
-                    <i class="bi bi-check-circle me-1"></i>Sadece Aktif Kullanıcılar
+                    Sadece Aktif Kullanıcılar
                 </label>
             </div>
             <span class="text-muted small">Bulunan: <strong>@(filteredUsersList?.Count ?? 0)</strong></span>

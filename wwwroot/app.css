@@ -174,8 +174,35 @@ a:hover {
     }
 
     .page-container.sidebar-collapsed .sidebar-header {
-        padding: 0 0.5rem;
+        padding: 0;
         justify-content: center;
+        position: relative;
+    }
+
+    .page-container.sidebar-collapsed .header-brand-container {
+        width: 100%;
+        justify-content: center !important;
+        gap: 0 !important;
+    }
+
+    .page-container.sidebar-collapsed .logo-badge {
+        margin: 0 auto;
+    }
+
+    .page-container.sidebar-collapsed .header-actions-container {
+        position: absolute;
+        right: 4px;
+        top: 50%;
+        transform: translateY(-50%);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        background: rgba(15, 23, 42, 0.95);
+        border-radius: 50%;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    .page-container.sidebar-collapsed .sidebar-header:hover .header-actions-container {
+        opacity: 1;
     }
 
     .page-container.sidebar-collapsed .nav-item-link {

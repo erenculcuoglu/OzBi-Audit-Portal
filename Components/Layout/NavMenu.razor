@@ -2,16 +2,15 @@
 
 <div class="app-sidebar">
     <div class="sidebar-header">
-        <div class="d-flex align-items-center gap-2">
+        <div class="header-brand-container d-flex align-items-center gap-2">
             <div class="logo-badge" style="width: 36px; height: 36px;">
                 <img src="logo.png" alt="OzBI Logo" style="width: 100%; height: 100%; object-fit: contain;" />
             </div>
-            <div class="logo-details">
-                <div class="logo-text">OzBI Portal</div>
-                <div class="logo-subtitle">AI & SQL Monitor</div>
+            <div class="logo-details d-flex align-items-center">
+                <div class="logo-text mb-0">OzBI Portal</div>
             </div>
         </div>
-        <div class="d-flex align-items-center gap-1">
+        <div class="header-actions-container d-flex align-items-center gap-1">
             <button class="btn-sidebar-toggle d-none d-lg-flex" @onclick="HandleToggleCollapse" title="@(IsCollapsed ? "Menüyü Genişlet" : "Menüyü Daralt")" aria-label="Menüyü Daralt/Genişlet">
                 <i class="bi @(IsCollapsed ? "bi-chevron-right" : "bi-chevron-left")"></i>
             </button>
@@ -37,9 +36,9 @@
             <span>Kullanıcı Yönetimi</span>
         </NavLink>
 
-        <NavLink class="nav-item-link" href="tenant-users" @onclick="HandleMenuClick" title="Tenant Kullanıcı Arama">
+        <NavLink class="nav-item-link" href="tenant-users" @onclick="HandleMenuClick" title="Kullanıcı Ara">
             <i class="bi bi-person-vcard"></i>
-            <span>Tenant Kullanıcı Arama</span>
+            <span>Kullanıcı Ara</span>
         </NavLink>
     </div>
 

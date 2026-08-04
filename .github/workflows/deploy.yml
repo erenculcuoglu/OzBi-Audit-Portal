@@ -1,28 +1,32 @@
-name: Build and Deploy OzBI Audit Portal
+name: Auto Deploy to MonsterASP
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
 
 jobs:
-  build:
+  web-deploy:
+    name: Build & Deploy
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 8.0.x
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    - name: Restore dependencies
-      run: dotnet restore "OzBI Portal CRM.csproj"
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
-    - name: Build
-      run: dotnet build "OzBI Portal CRM.csproj" --configuration Release --no-restore
+      - name: Build & Publish App
+        run: dotnet publish "OzBI Portal CRM.csproj" -c Release -o ./publish
 
-    - name: Build Docker Image
-      run: docker build -t ozbi-audit-portal:latest .
+      - name: FTP Deploy to MonsterASP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: site83172.siteasp.net
+          username: site83172
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./publish/
+          server-dir: /wwwroot/

@@ -181,18 +181,26 @@ else
         <div class="d-flex flex-column gap-4">
             @foreach (var (msg, index) in messagesList.Select((m, i) => (m, i + 1)))
             {
-                <div class="glass-card border-secondary border-opacity-25">
+                var isUser = msg.Role?.ToLower() == "user";
+                var cardBorderClass = isUser ? "border-start border-4 border-info" : "border-start border-4 border-primary";
+                var cardBgStyle = isUser ? "background: linear-gradient(135deg, rgba(6, 182, 212, 0.05) 0%, rgba(15, 23, 42, 0.6) 100%);" : "background: linear-gradient(135deg, rgba(139, 92, 246, 0.06) 0%, rgba(15, 23, 42, 0.6) 100%);";
+
+                <div class="glass-card @cardBorderClass" style="@cardBgStyle">
                     <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2 pb-2 border-bottom border-secondary border-opacity-25">
                         <div class="d-flex align-items-center gap-2">
-                            <span class="badge bg-secondary opacity-75 rounded-pill px-2 py-1" style="font-size: 0.75rem;">#@index Log Kaydı</span>
+                            <span class="badge @(isUser ? "bg-info text-dark" : "bg-primary text-white") rounded-pill px-2.5 py-1" style="font-size: 0.75rem; font-weight: 700;">#@index Log Kaydı</span>
                             <span class="fw-bold text-main" style="font-size: 0.95rem;">
-                                @if (msg.Role?.ToLower() == "user")
+                                @if (isUser)
                                 {
-                                    <i class="bi bi-person-fill text-info me-1"></i><span>Kullanıcı Sorusu</span>
+                                    <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-30 px-2.5 py-1 rounded-pill">
+                                        <i class="bi bi-person-fill me-1"></i>Kullanıcı Sorusu
+                                    </span>
                                 }
                                 else
                                 {
-                                    <i class="bi bi-robot text-primary me-1"></i><span>AI Yanıtı</span>
+                                    <span class="badge bg-primary bg-opacity-15 text-primary border border-primary border-opacity-30 px-2.5 py-1 rounded-pill">
+                                        <i class="bi bi-robot me-1"></i>AI Yanıtı
+                                    </span>
                                 }
                             </span>
                         </div>
@@ -215,24 +223,25 @@ else
                     </div>
 
                     <!-- Kullanıcı Sorusu (Prompt) -->
-                    @if (!string.IsNullOrEmpty(msg.Prompt) || (msg.Role?.ToLower() == "user" && !string.IsNullOrEmpty(msg.Message)))
+                    @if (!string.IsNullOrEmpty(msg.Prompt) || (isUser && !string.IsNullOrEmpty(msg.Message)))
                     {
-                        <div class="p-3 mb-3 rounded bg-black bg-opacity-40 border border-secondary border-opacity-25">
-                            <div class="text-muted small fw-bold mb-1 text-uppercase" style="letter-spacing: 0.5px; font-size: 0.7rem;">
-                                <i class="bi bi-question-circle text-info me-1"></i> Kullanıcı Sorusu
+                        <div class="p-3.5 mb-2 rounded border" style="background: rgba(6, 182, 212, 0.06); border-color: rgba(6, 182, 212, 0.25) !important;">
+                            <div class="text-info small fw-bold mb-2 text-uppercase d-flex align-items-center gap-2" style="letter-spacing: 0.5px; font-size: 0.725rem;">
+                                <i class="bi bi-chat-left-text-fill text-info fs-6"></i>
+                                <span>Kullanıcı Sorusu</span>
                             </div>
-                            <div class="text-main fw-semibold" style="white-space: pre-wrap; font-size: 0.95rem;">
+                            <div class="text-main fw-semibold" style="white-space: pre-wrap; font-size: 0.95rem; line-height: 1.5;">
                                 @(string.IsNullOrEmpty(msg.Prompt) ? msg.Message : msg.Prompt)
                             </div>
                         </div>
                     }
 
                     <!-- AI Yanıtı -->
-                    @if (msg.Role?.ToLower() != "user")
+                    @if (!isUser)
                     {
-                        <div class="p-3 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25">
-                            <div class="text-muted small fw-bold mb-2 text-uppercase d-flex align-items-center justify-content-between" style="letter-spacing: 0.5px; font-size: 0.7rem;">
-                                <span><i class="bi bi-chat-quote text-primary me-1"></i> AI Yanıtı</span>
+                        <div class="p-3.5 rounded border" style="background: rgba(139, 92, 246, 0.08); border-color: rgba(139, 92, 246, 0.3) !important;">
+                            <div class="text-primary small fw-bold mb-2 text-uppercase d-flex align-items-center justify-content-between" style="letter-spacing: 0.5px; font-size: 0.725rem;">
+                                <span class="d-flex align-items-center gap-2"><i class="bi bi-stars text-primary fs-6"></i> AI Yanıtı</span>
                                 @if (msg.TotalDurationMs.HasValue && msg.TotalDurationMs > 0)
                                 {
                                     <span class="text-muted opacity-75 font-monospace"><i class="bi bi-stopwatch me-1"></i>@(msg.TotalDurationMs)ms</span>
@@ -241,13 +250,13 @@ else
 
                             @if (!string.IsNullOrWhiteSpace(msg.Message))
                             {
-                                <div class="text-main" style="white-space: pre-wrap; font-size: 0.925rem;">
+                                <div class="text-main" style="white-space: pre-wrap; font-size: 0.935rem; line-height: 1.6;">
                                     @msg.Message
                                 </div>
                             }
                             else if (!string.IsNullOrWhiteSpace(msg.Summary))
                             {
-                                <div class="text-main" style="white-space: pre-wrap; font-size: 0.925rem;">
+                                <div class="text-main" style="white-space: pre-wrap; font-size: 0.935rem; line-height: 1.6;">
                                     @msg.Summary
                                 </div>
                             }
