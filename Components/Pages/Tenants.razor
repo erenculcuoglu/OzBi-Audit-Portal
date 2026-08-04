@@ -154,7 +154,7 @@ else
                             <span>Login Sayısı</span> @GetSortIcon("TotalLogins")
                         </div>
                     </th>
-                    <th style="white-space: nowrap;">İşlem</th>
+                    <th class="col-sticky-action" style="white-space: nowrap; text-align: center;">İşlem</th>
                 </tr>
             </thead>
             <tbody>
@@ -168,12 +168,14 @@ else
                         </td>
                         <td>
                             <div class="fw-bold text-main">@item.Tenant.Name</div>
-                            <div class="text-muted" style="font-size: 0.75rem; font-family: monospace;">
+                            <div class="text-muted text-ellipsis" style="font-size: 0.725rem; font-family: monospace; max-width: 160px;" title="ID: @item.Tenant.Id">
                                 ID: @item.Tenant.Id
                             </div>
                         </td>
                         <td>
-                            @(string.IsNullOrEmpty(item.Tenant.Email) ? "-" : item.Tenant.Email)
+                            <div class="text-ellipsis" style="max-width: 160px;" title="@item.Tenant.Email">
+                                @(string.IsNullOrEmpty(item.Tenant.Email) ? "-" : item.Tenant.Email)
+                            </div>
                         </td>
                         <td>
                             @if (item.Tenant.IsActive)
@@ -213,8 +215,8 @@ else
                                 <i class="bi bi-box-arrow-in-right me-1"></i>@item.TotalLogins
                             </span>
                         </td>
-                        <td>
-                            <button class="btn btn-sm btn-primary-custom px-3" @onclick="() => SelectTenant(item.Tenant.Id)">
+                        <td class="col-sticky-action" style="text-align: center;">
+                            <button class="btn btn-sm btn-primary-custom px-3 py-1" @onclick="() => SelectTenant(item.Tenant.Id)">
                                 <i class="bi bi-eye"></i> İncele
                             </button>
                         </td>

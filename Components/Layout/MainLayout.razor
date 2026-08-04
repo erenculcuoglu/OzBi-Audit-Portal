@@ -4,17 +4,28 @@
 
 <AuthorizeView>
     <Authorized>
-        <div class="page-container">
-            <NavMenu />
+        <div class="page-container @(isMobileMenuOpen ? "sidebar-open" : "")">
+            <div class="sidebar-backdrop" @onclick="CloseMobileMenu"></div>
+            <NavMenu OnMenuItemClicked="CloseMobileMenu" />
             <div class="main-wrapper">
                 <header class="main-header">
-                    <div></div>
-                    <div class="d-flex align-items-center gap-3">
-                        <span class="text-muted" style="font-size: 0.85rem;">
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="btn-mobile-toggle" @onclick="ToggleMobileMenu" aria-label="Menüyü Aç/Kapat">
+                            <i class="bi bi-list"></i>
+                        </button>
+                        <div class="mobile-brand">
+                            <div class="logo-badge" style="width: 30px; height: 30px; font-size: 0.95rem;">
+                                <i class="bi bi-shield-check"></i>
+                            </div>
+                            <span class="logo-text" style="font-size: 1rem;">OzBI Audit</span>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 gap-sm-3">
+                        <span class="text-muted text-ellipsis d-none d-sm-inline" style="font-size: 0.85rem; max-width: 180px;" title="@context.User.Identity?.Name">
                             <i class="bi bi-person-circle text-primary me-1"></i> @context.User.Identity?.Name
                         </span>
-                        <a href="/api/auth/logout" class="btn btn-sm btn-outline-danger d-flex align-items-center gap-1">
-                            <i class="bi bi-box-arrow-right"></i> Çıkış Yap
+                        <a href="/api/auth/logout" class="btn btn-sm btn-outline-danger d-flex align-items-center gap-1 py-1 px-2.5" style="font-size: 0.825rem;">
+                            <i class="bi bi-box-arrow-right"></i> <span class="d-none d-sm-inline">Çıkış Yap</span>
                         </a>
                     </div>
                 </header>
@@ -43,5 +54,27 @@
 </AuthorizeView>
 
 @code {
+    private bool isMobileMenuOpen = false;
     private bool IsLoginPage => Navigation.Uri.Contains("/login", StringComparison.OrdinalIgnoreCase);
+
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        CloseMobileMenu();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void ToggleMobileMenu()
+    {
+        isMobileMenuOpen = !isMobileMenuOpen;
+    }
+
+    private void CloseMobileMenu()
+    {
+        isMobileMenuOpen = false;
+    }
 }

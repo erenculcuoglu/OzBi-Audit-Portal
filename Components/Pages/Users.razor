@@ -51,7 +51,7 @@ else
                     <th>Durum</th>
                     <th>Kayıt Tarihi</th>
                     <th>Son Giriş</th>
-                    <th style="text-align: right;">İşlemler</th>
+                    <th class="col-sticky-action" style="text-align: right; white-space: nowrap;">İşlemler</th>
                 </tr>
             </thead>
             <tbody>
@@ -59,7 +59,7 @@ else
                 {
                     <tr>
                         <td>
-                            <div class="fw-bold text-main">@user.FullName</div>
+                            <div class="fw-bold text-main text-ellipsis" style="max-width: 180px;" title="@user.FullName">@user.FullName</div>
                             @if (user.Email.Equals("eren@ozbiapp.com.tr", StringComparison.OrdinalIgnoreCase))
                             {
                                 <span class="badge bg-primary bg-opacity-20 text-primary border border-primary border-opacity-30" style="font-size: 0.65rem;">
@@ -68,7 +68,7 @@ else
                             }
                         </td>
                         <td>
-                            <code>@user.Email</code>
+                            <code class="text-ellipsis d-inline-block" style="max-width: 180px;" title="@user.Email">@user.Email</code>
                         </td>
                         <td>
                             <span class="badge-status @(user.Role == "Admin" ? "badge-purple" : "badge-info")">
@@ -91,14 +91,14 @@ else
                         <td>
                             <span class="text-muted small">@(user.LastLoginAt?.ToString("dd.MM.yyyy HH:mm") ?? "Hiç girmediler")</span>
                         </td>
-                        <td style="text-align: right;">
-                            <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OpenEditModal(user)">
+                        <td class="col-sticky-action" style="text-align: right; white-space: nowrap;">
+                            <button class="btn btn-sm btn-outline-info me-1 py-1 px-2.5" @onclick="() => OpenEditModal(user)">
                                 <i class="bi bi-pencil-square"></i> Düzenle
                             </button>
 
                             @if (!user.Email.Equals("eren@ozbiapp.com.tr", StringComparison.OrdinalIgnoreCase))
                             {
-                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteUser(user)">
+                                <button class="btn btn-sm btn-outline-danger py-1 px-2.5" @onclick="() => DeleteUser(user)">
                                     <i class="bi bi-trash"></i> Sil
                                 </button>
                             }

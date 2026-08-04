@@ -108,14 +108,14 @@ else
         <table class="custom-table">
             <thead>
                 <tr>
-                    <th style="width: 40px;">Favori</th>
+                    <th style="width: 40px; text-align: center;">Favori</th>
                     <th>Kullanıcı Ad Soyad</th>
                     <th>E-posta Adresi</th>
                     <th>Bağlı Tenant / Firma</th>
                     <th>Chat Sayısı</th>
                     <th>SQL Sorguları</th>
                     <th>Son Aktivite</th>
-                    <th>İşlem</th>
+                    <th class="col-sticky-action" style="text-align: center;">İşlem</th>
                 </tr>
             </thead>
             <tbody>
@@ -128,7 +128,9 @@ else
                             </button>
                         </td>
                         <td>
-                            <div class="fw-bold text-main">@(string.IsNullOrEmpty(item.User.NameSurname) ? (item.User.UserName ?? item.User.Email) : item.User.NameSurname)</div>
+                            <div class="fw-bold text-main text-ellipsis" style="max-width: 200px;" title="@(item.User.NameSurname)">
+                                @(string.IsNullOrEmpty(item.User.NameSurname) ? (item.User.UserName ?? item.User.Email) : item.User.NameSurname)
+                            </div>
                             @if (item.User.IsTenantOwner)
                             {
                                 <span class="badge bg-purple bg-opacity-20 text-purple border border-purple border-opacity-30" style="font-size: 0.65rem;">
@@ -137,10 +139,10 @@ else
                             }
                         </td>
                         <td>
-                            <code>@(string.IsNullOrEmpty(item.User.Email) ? "-" : item.User.Email)</code>
+                            <code class="text-ellipsis d-inline-block" style="max-width: 180px;" title="@item.User.Email">@(string.IsNullOrEmpty(item.User.Email) ? "-" : item.User.Email)</code>
                         </td>
                         <td>
-                            <span class="text-muted small"><i class="bi bi-building"></i> @item.TenantName</span>
+                            <span class="text-muted small text-ellipsis d-inline-block" style="max-width: 180px;" title="@item.TenantName"><i class="bi bi-building"></i> @item.TenantName</span>
                         </td>
                         <td>
                             <span class="badge-status badge-purple">
@@ -157,8 +159,8 @@ else
                                 @(item.LastActivityDate?.ToString("dd.MM.yyyy HH:mm") ?? "-")
                             </span>
                         </td>
-                        <td>
-                            <button class="btn btn-sm btn-primary-custom px-3" @onclick="() => InspectUserChats(item.User.Id)">
+                        <td class="col-sticky-action" style="text-align: center;">
+                            <button class="btn btn-sm btn-primary-custom px-3 py-1" @onclick="() => InspectUserChats(item.User.Id)">
                                 <i class="bi bi-eye"></i> İncele
                             </button>
                         </td>

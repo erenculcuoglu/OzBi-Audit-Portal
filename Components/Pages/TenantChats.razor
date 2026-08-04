@@ -97,7 +97,7 @@ else
                     <th style="white-space: nowrap;">AI Modeli</th>
                     <th style="white-space: nowrap;">Soru / SQL</th>
                     <th style="white-space: nowrap;">Tarih/Saat</th>
-                    <th style="white-space: nowrap;">İşlem</th>
+                    <th class="col-sticky-action" style="white-space: nowrap; text-align: center;">İşlem</th>
                 </tr>
             </thead>
             <tbody>
@@ -105,17 +105,17 @@ else
                 {
                     <tr>
                         <td>
-                            <div class="fw-bold text-main">
+                            <div class="fw-bold text-main text-ellipsis" style="max-width: 250px;" title="@item.Chat.Title">
                                 @(string.IsNullOrWhiteSpace(item.Chat.Title) ? "Başlıksız Sohbet" : item.Chat.Title)
                             </div>
-                            <div class="text-muted" style="font-size: 0.75rem; font-family: monospace;">
+                            <div class="text-muted text-ellipsis" style="font-size: 0.725rem; font-family: monospace; max-width: 180px;" title="Chat ID: @item.Chat.Id">
                                 Chat ID: @item.Chat.Id
                             </div>
                         </td>
                         <td>
-                            <span class="text-muted">
+                            <div class="text-muted text-ellipsis" style="max-width: 180px;">
                                 @(item.Chat.CreatedByUser?.NameSurname ?? item.Chat.CreatedByUser?.Email ?? "Sistem / Anonim")
-                            </span>
+                            </div>
                         </td>
                         <td>
                             @if (!string.IsNullOrEmpty(item.PrimaryAiModelName))
@@ -132,10 +132,10 @@ else
                         <td>
                             <div class="d-flex align-items-center gap-2">
                                 <span class="badge-status badge-info" title="Soru / Mesaj Sayısı">
-                                    @item.MessageCount
+                                    @item.MessageCount Soru
                                 </span>
                                 <span class="badge-status badge-success" title="SQL Sorgu Sayısı">
-                                    @item.QueryCount
+                                    @item.QueryCount SQL
                                 </span>
                             </div>
                         </td>
@@ -144,8 +144,8 @@ else
                                 @(item.Chat.DateCreated?.ToString("dd.MM.yyyy HH:mm") ?? "-")
                             </span>
                         </td>
-                        <td>
-                            <button class="btn btn-sm btn-primary-custom px-3" @onclick="() => InspectChat(item.Chat.Id)">
+                        <td class="col-sticky-action" style="text-align: center;">
+                            <button class="btn btn-sm btn-primary-custom px-3 py-1" @onclick="() => InspectChat(item.Chat.Id)">
                                 <i class="bi bi-eye"></i> İncele
                             </button>
                         </td>
