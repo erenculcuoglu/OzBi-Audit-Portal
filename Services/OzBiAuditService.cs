@@ -407,7 +407,10 @@ namespace OzBiPortalCRM.Services
             if (!string.IsNullOrWhiteSpace(querySearch))
             {
                 var term = querySearch.Trim().ToLower();
-                query = query.Where(m => m.Query!.ToLower().Contains(term) || (m.Prompt != null && m.Prompt.ToLower().Contains(term)));
+                query = query.Where(m => (m.Query != null && m.Query.ToLower().Contains(term)) ||
+                                         (m.Prompt != null && m.Prompt.ToLower().Contains(term)) ||
+                                         (m.Message != null && m.Message.ToLower().Contains(term)) ||
+                                         (m.Chat != null && m.Chat.Title != null && m.Chat.Title.ToLower().Contains(term)));
             }
 
             if (failedOnly == true)
