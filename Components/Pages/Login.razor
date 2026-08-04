@@ -41,24 +41,6 @@
                 <span>Giriş Yap</span>
             </button>
         </form>
-
-        <div class="p-3 border border-secondary border-opacity-25 rounded-3 bg-black bg-opacity-20 text-center">
-            <div class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i> Seed Kullanıcı Bilgileri:</div>
-            <div class="d-flex align-items-center justify-content-between text-start small mb-2">
-                <span class="text-muted">E-posta:</span>
-                <code class="text-info">eren@ozbiapp.com.tr</code>
-            </div>
-            <div class="d-flex align-items-center justify-content-between text-start small mb-2">
-                <span class="text-muted">Şifre:</span>
-                <code class="text-info">123456</code>
-            </div>
-            <button type="button" 
-                    class="btn btn-sm btn-outline-primary w-100 mt-1" 
-                    style="font-size: 0.75rem;" 
-                    @onclick="FillSeed">
-                <i class="bi bi-magic me-1"></i> Seed Bilgileri Otomatik Doldur
-            </button>
-        </div>
     </div>
 </div>
 
@@ -75,16 +57,5 @@
         {
             hasError = true;
         }
-
-        if (uri.Query.Contains("fill=seed"))
-        {
-            FillSeed();
-        }
-    }
-
-    private void FillSeed()
-    {
-        emailInput = "eren@ozbiapp.com.tr";
-        passwordInput = "123456";
     }
 }
