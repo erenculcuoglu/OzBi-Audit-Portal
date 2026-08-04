@@ -45,13 +45,19 @@
 <!-- Search & Filters -->
 <div class="glass-card mb-4">
     <div class="row g-3 align-items-center">
-        <div class="col-md-5">
+        <div class="col-md-6">
             <div class="input-group">
                 <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-search"></i></span>
-                <input type="text" class="form-control input-custom" placeholder="Sohbet başlığında ara..." @bind="searchTerm" @bind:event="oninput" @onkeyup="HandleSearch" />
+                <input type="text" class="form-control input-custom" placeholder="Sohbet başlığında veya sorularda ara (örn: bordro, cari, mesai)..." @bind="searchTerm" @bind:event="oninput" @onkeyup="HandleSearch" />
+                @if (!string.IsNullOrEmpty(searchTerm))
+                {
+                    <button class="btn btn-outline-secondary" type="button" @onclick="ClearSearch" title="Temizle">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                }
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <select class="form-select input-custom" @bind="selectedUserId" @bind:after="LoadChatsOnly">
                 <option value="">Tüm Kullanıcılar (@(tenantUsers?.Count ?? 0) Kullanıcı)</option>
                 @if (tenantUsers != null)
@@ -59,7 +65,7 @@
                     @foreach (var u in tenantUsers)
                     {
                         <option value="@u.Id">
-                            <i class="bi bi-person me-1"></i> @(string.IsNullOrEmpty(u.NameSurname) ? (u.UserName ?? u.Email) : u.NameSurname) (@u.Email)
+                            @(string.IsNullOrEmpty(u.NameSurname) ? (u.UserName ?? u.Email) : u.NameSurname) (@u.Email)
                         </option>
                     }
                 }
@@ -92,7 +98,7 @@ else
         <table class="custom-table">
             <thead>
                 <tr>
-                    <th style="white-space: nowrap;">Sohbet Başlığı</th>
+                    <th style="white-space: nowrap;">Sohbet Başlığı ve İçi (Sorular)</th>
                     <th style="white-space: nowrap;">Kullanıcı</th>
                     <th style="white-space: nowrap;">AI Modeli</th>
                     <th style="white-space: nowrap;">Soru / SQL</th>
@@ -105,11 +111,27 @@ else
                 {
                     <tr>
                         <td>
-                            <div class="fw-bold text-main text-ellipsis" style="max-width: 250px;" title="@item.Chat.Title">
+                            <div class="fw-bold text-main text-ellipsis mb-1" style="max-width: 380px;" title="@item.Chat.Title">
+                                <i class="bi bi-chat-text-fill text-primary me-1"></i>
                                 @(string.IsNullOrWhiteSpace(item.Chat.Title) ? "Başlıksız Sohbet" : item.Chat.Title)
                             </div>
-                            <div class="text-muted text-ellipsis" style="font-size: 0.725rem; font-family: monospace; max-width: 180px;" title="Chat ID: @item.Chat.Id">
-                                Chat ID: @item.Chat.Id
+
+                            @if (item.UserQuestions != null && item.UserQuestions.Count > 0)
+                            {
+                                <div class="mt-1 d-flex flex-column gap-1 p-2 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25" style="max-width: 420px;">
+                                    @foreach (var (q, qIdx) in item.UserQuestions.Select((val, idx) => (val, idx + 1)))
+                                    {
+                                        var isMatched = !string.IsNullOrWhiteSpace(searchTerm) && q.ToLower().Contains(searchTerm.Trim().ToLower());
+                                        <div class="small d-flex align-items-center gap-2 @(isMatched ? "text-warning fw-bold" : "text-light opacity-90")" style="font-size: 0.78rem;">
+                                            <span class="badge @(isMatched ? "bg-warning text-dark" : "bg-secondary text-white") px-1 py-0" style="font-size: 0.68rem; font-family: monospace;">Soru #@qIdx</span>
+                                            <span class="text-truncate" style="max-width: 330px;" title="@q">@q</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            <div class="text-muted text-ellipsis mt-1" style="font-size: 0.7rem; font-family: monospace; opacity: 0.6;" title="Chat ID: @item.Chat.Id">
+                                ID: @item.Chat.Id
                             </div>
                         </td>
                         <td>
@@ -208,6 +230,12 @@ else
 
     private async Task HandleSearch(KeyboardEventArgs e)
     {
+        await LoadChatsOnly();
+    }
+
+    private async Task ClearSearch()
+    {
+        searchTerm = string.Empty;
         await LoadChatsOnly();
     }
 

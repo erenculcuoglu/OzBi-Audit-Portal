@@ -41,6 +41,7 @@ namespace OzBiPortalCRM.Services
         public long TotalDurationMs { get; set; }
         public DateTime? LastMessageDate { get; set; }
         public string? PrimaryAiModelName { get; set; }
+        public List<string> UserQuestions { get; set; } = new();
     }
 
     public interface IOzBiAuditService

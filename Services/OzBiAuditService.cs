@@ -218,33 +218,45 @@ namespace OzBiPortalCRM.Services
                 query = query.Where(c => c.CreatedByUserId == filterUserId);
             }
 
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(c => c.Title != null && c.Title.ToLower().Contains(term));
-            }
-
             var chats = await query.OrderByDescending(c => c.DateCreated).ToListAsync();
             var chatIds = chats.Select(c => c.Id).ToList();
 
             var messages = await db.ChatMessages.AsNoTracking()
                 .Include(m => m.AIModel)
                 .Where(m => chatIds.Contains(m.ChatId))
+                .OrderBy(m => m.DateCreated)
                 .ToListAsync();
 
             var result = new List<ChatAuditSummary>();
+            var term = string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim().ToLower();
 
             foreach (var c in chats)
             {
                 var msgList = messages.Where(m => m.ChatId == c.Id).ToList();
                 var primaryModel = msgList.FirstOrDefault(m => m.AIModel != null)?.AIModel?.Name ?? "Standart AI";
 
-                var userQuestionCount = msgList.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt));
-                if (userQuestionCount == 0 && msgList.Count > 0)
+                var userQuestions = msgList
+                    .Where(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt) || (!string.IsNullOrEmpty(m.Message) && !m.Message.StartsWith("##") && !m.Message.StartsWith("SELECT") && !m.Message.StartsWith("|")))
+                    .Select(m => !string.IsNullOrWhiteSpace(m.Message) && m.Role?.ToLower() == "user" ? m.Message : m.Prompt)
+                    .Where(q => !string.IsNullOrWhiteSpace(q))
+                    .Select(q => q!.Trim())
+                    .Distinct()
+                    .ToList();
+
+                if (term != null)
                 {
-                    userQuestionCount = msgList.Count(m => m.Role?.ToLower() != "user");
+                    bool titleMatches = c.Title != null && c.Title.ToLower().Contains(term);
+                    bool questionMatches = userQuestions.Any(q => q.ToLower().Contains(term));
+                    bool messageMatches = msgList.Any(m => (m.Message != null && m.Message.ToLower().Contains(term)) || (m.Prompt != null && m.Prompt.ToLower().Contains(term)));
+
+                    if (!titleMatches && !questionMatches && !messageMatches)
+                    {
+                        continue;
+                    }
                 }
-                if (userQuestionCount == 0) userQuestionCount = msgList.Count;
+
+                var userQuestionCount = userQuestions.Count > 0 ? userQuestions.Count : msgList.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt));
+                if (userQuestionCount == 0 && msgList.Count > 0) userQuestionCount = msgList.Count;
 
                 result.Add(new ChatAuditSummary
                 {
@@ -253,7 +265,8 @@ namespace OzBiPortalCRM.Services
                     QueryCount = msgList.Count(m => !string.IsNullOrEmpty(m.Query)),
                     TotalDurationMs = msgList.Sum(m => m.TotalDurationMs ?? 0),
                     LastMessageDate = msgList.Count > 0 ? msgList.Max(m => m.DateCreated) : c.DateCreated,
-                    PrimaryAiModelName = primaryModel
+                    PrimaryAiModelName = primaryModel,
+                    UserQuestions = userQuestions
                 });
             }
 
@@ -266,7 +279,6 @@ namespace OzBiPortalCRM.Services
 
             using var db = await _dbFactory.CreateDbContextAsync();
 
-            // Get users connected to tenant directly or via tenant chats
             var tenantUserIds = await db.Chats.AsNoTracking()
                 .Where(c => c.TenantId == tenantId && !string.IsNullOrEmpty(c.CreatedByUserId))
                 .Select(c => c.CreatedByUserId!)
@@ -285,35 +297,49 @@ namespace OzBiPortalCRM.Services
 
             using var db = await _dbFactory.CreateDbContextAsync();
 
-            var query = db.Chats.AsNoTracking().Where(c => c.CreatedByUserId == userId);
+            var chats = await db.Chats.AsNoTracking()
+                .Where(c => c.CreatedByUserId == userId)
+                .OrderByDescending(c => c.DateCreated)
+                .ToListAsync();
 
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(c => c.Title != null && c.Title.ToLower().Contains(term));
-            }
-
-            var chats = await query.OrderByDescending(c => c.DateCreated).ToListAsync();
             var chatIds = chats.Select(c => c.Id).ToList();
 
             var messages = await db.ChatMessages.AsNoTracking()
                 .Include(m => m.AIModel)
                 .Where(m => chatIds.Contains(m.ChatId))
+                .OrderBy(m => m.DateCreated)
                 .ToListAsync();
 
             var result = new List<ChatAuditSummary>();
+            var term = string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim().ToLower();
 
             foreach (var c in chats)
             {
                 var msgList = messages.Where(m => m.ChatId == c.Id).ToList();
                 var primaryModel = msgList.FirstOrDefault(m => m.AIModel != null)?.AIModel?.Name ?? "Standart AI";
 
-                var userQuestionCount = msgList.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt));
-                if (userQuestionCount == 0 && msgList.Count > 0)
+                var userQuestions = msgList
+                    .Where(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt) || (!string.IsNullOrEmpty(m.Message) && !m.Message.StartsWith("##") && !m.Message.StartsWith("SELECT") && !m.Message.StartsWith("|")))
+                    .Select(m => !string.IsNullOrWhiteSpace(m.Message) && m.Role?.ToLower() == "user" ? m.Message : m.Prompt)
+                    .Where(q => !string.IsNullOrWhiteSpace(q))
+                    .Select(q => q!.Trim())
+                    .Distinct()
+                    .ToList();
+
+                if (term != null)
                 {
-                    userQuestionCount = msgList.Count(m => m.Role?.ToLower() != "user");
+                    bool titleMatches = c.Title != null && c.Title.ToLower().Contains(term);
+                    bool questionMatches = userQuestions.Any(q => q.ToLower().Contains(term));
+                    bool messageMatches = msgList.Any(m => (m.Message != null && m.Message.ToLower().Contains(term)) || (m.Prompt != null && m.Prompt.ToLower().Contains(term)));
+
+                    if (!titleMatches && !questionMatches && !messageMatches)
+                    {
+                        continue;
+                    }
                 }
-                if (userQuestionCount == 0) userQuestionCount = msgList.Count;
+
+                var userQuestionCount = userQuestions.Count > 0 ? userQuestions.Count : msgList.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt));
+                if (userQuestionCount == 0 && msgList.Count > 0) userQuestionCount = msgList.Count;
 
                 result.Add(new ChatAuditSummary
                 {
@@ -322,7 +348,8 @@ namespace OzBiPortalCRM.Services
                     QueryCount = msgList.Count(m => !string.IsNullOrEmpty(m.Query)),
                     TotalDurationMs = msgList.Sum(m => m.TotalDurationMs ?? 0),
                     LastMessageDate = msgList.Count > 0 ? msgList.Max(m => m.DateCreated) : c.DateCreated,
-                    PrimaryAiModelName = primaryModel
+                    PrimaryAiModelName = primaryModel,
+                    UserQuestions = userQuestions
                 });
             }
 
