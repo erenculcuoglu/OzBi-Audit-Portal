@@ -31,3 +31,4 @@ jobs:
           local-dir: ./publish/
           server-dir: /wwwroot/
           security: loose
+          log-level: verbose
