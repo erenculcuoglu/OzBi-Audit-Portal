@@ -67,10 +67,10 @@ else
     <!-- Tab Switcher Header (Sorgu | Veri) -->
     <div class="tab-container mb-4">
         <button class="btn-tab @(activeTab == "sorgu" ? "active" : "")" @onclick='() => SetActiveTab("sorgu")'>
-            <i class="bi bi-code-slash me-1"></i> Soruya Göre SQL Sorguları (@TotalSqlCount)
+            <i class="bi bi-code-slash me-1"></i> SQL Sorguları (@TotalSqlCount)
         </button>
         <button class="btn-tab @(activeTab == "veri" ? "active" : "")" @onclick='() => SetActiveTab("veri")'>
-            <i class="bi bi-file-earmark-text me-1"></i> Veri & AI Yanıtları
+            <i class="bi bi-file-earmark-text me-1"></i> AI Yanıtları
         </button>
     </div>
 
@@ -188,11 +188,11 @@ else
                             <span class="fw-bold text-main" style="font-size: 0.95rem;">
                                 @if (msg.Role?.ToLower() == "user")
                                 {
-                                    <i class="bi bi-person-fill text-info me-1"></i><span>Kullanıcı İletisi</span>
+                                    <i class="bi bi-person-fill text-info me-1"></i><span>Kullanıcı Sorusu</span>
                                 }
                                 else
                                 {
-                                    <i class="bi bi-robot text-primary me-1"></i><span>OzBI AI Analiz Yanıtı</span>
+                                    <i class="bi bi-robot text-primary me-1"></i><span>AI Yanıtı</span>
                                 }
                             </span>
                         </div>
@@ -227,16 +227,37 @@ else
                         </div>
                     }
 
-                    <!-- OzBI AI Analiz Yanıtı -->
-                    @if (msg.Role?.ToLower() != "user" && !string.IsNullOrEmpty(msg.Message))
+                    <!-- AI Yanıtı -->
+                    @if (msg.Role?.ToLower() != "user")
                     {
                         <div class="p-3 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25">
-                            <div class="text-muted small fw-bold mb-1 text-uppercase" style="letter-spacing: 0.5px; font-size: 0.7rem;">
-                                <i class="bi bi-chat-quote text-primary me-1"></i> OzBI AI Analiz Yanıtı
+                            <div class="text-muted small fw-bold mb-2 text-uppercase d-flex align-items-center justify-content-between" style="letter-spacing: 0.5px; font-size: 0.7rem;">
+                                <span><i class="bi bi-chat-quote text-primary me-1"></i> AI Yanıtı</span>
+                                @if (msg.TotalDurationMs.HasValue && msg.TotalDurationMs > 0)
+                                {
+                                    <span class="text-muted opacity-75 font-monospace"><i class="bi bi-stopwatch me-1"></i>@(msg.TotalDurationMs)ms</span>
+                                }
                             </div>
-                            <div class="text-main" style="white-space: pre-wrap; font-size: 0.925rem;">
-                                @msg.Message
-                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(msg.Message))
+                            {
+                                <div class="text-main" style="white-space: pre-wrap; font-size: 0.925rem;">
+                                    @msg.Message
+                                </div>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(msg.Summary))
+                            {
+                                <div class="text-main" style="white-space: pre-wrap; font-size: 0.925rem;">
+                                    @msg.Summary
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="text-muted small italic opacity-75 py-2">
+                                    <i class="bi bi-exclamation-circle text-warning me-1"></i> 
+                                    <span>AI doğal dil yanıt metni veritabanına boş kaydedilmiş (Ana OzBI uygulamasındaki akış/kayıt aşamasında `Message` alanı doldurulmamış).</span>
+                                </div>
+                            }
                         </div>
                     }
                 </div>
@@ -262,7 +283,7 @@ else
     private string selectedTestedSql = string.Empty;
 
     private int UserPromptCount => messagesList?.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt)) ?? 0;
-    private int AiResponseCount => messagesList?.Count(m => m.Role?.ToLower() != "user" && !string.IsNullOrEmpty(m.Message)) ?? 0;
+    private int AiResponseCount => messagesList?.Count(m => m.Role?.ToLower() != "user") ?? 0;
     private int TotalSqlCount => GetQuestionSqlGroups().Sum(g => g.SqlQueries.Count);
 
     public class QuestionSqlGroup

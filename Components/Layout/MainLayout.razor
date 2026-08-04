@@ -4,9 +4,9 @@
 
 <AuthorizeView>
     <Authorized>
-        <div class="page-container @(isMobileMenuOpen ? "sidebar-open" : "")">
+        <div class="page-container @(isMobileMenuOpen ? "sidebar-open" : "") @(isSidebarCollapsed ? "sidebar-collapsed" : "")">
             <div class="sidebar-backdrop" @onclick="CloseMobileMenu"></div>
-            <NavMenu OnMenuItemClicked="CloseMobileMenu" />
+            <NavMenu OnMenuItemClicked="CloseMobileMenu" IsCollapsed="isSidebarCollapsed" OnToggleCollapse="ToggleSidebarCollapse" />
             <div class="main-wrapper">
                 <header class="main-header">
                     <div class="d-flex align-items-center gap-2">
@@ -55,6 +55,7 @@
 
 @code {
     private bool isMobileMenuOpen = false;
+    private bool isSidebarCollapsed = false;
     private bool IsLoginPage => Navigation.Uri.Contains("/login", StringComparison.OrdinalIgnoreCase);
 
     protected override void OnInitialized()
@@ -76,5 +77,10 @@
     private void CloseMobileMenu()
     {
         isMobileMenuOpen = false;
+    }
+
+    private void ToggleSidebarCollapse()
+    {
+        isSidebarCollapsed = !isSidebarCollapsed;
     }
 }

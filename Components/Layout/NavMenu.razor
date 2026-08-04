@@ -6,34 +6,39 @@
             <div class="logo-badge">
                 <i class="bi bi-shield-check"></i>
             </div>
-            <div>
+            <div class="logo-details">
                 <div class="logo-text">OzBI Audit</div>
                 <div class="logo-subtitle">AI & SQL Monitor</div>
             </div>
         </div>
-        <button class="sidebar-close-btn" @onclick="HandleMenuClick" aria-label="Kapat">
-            <i class="bi bi-x-lg"></i>
-        </button>
+        <div class="d-flex align-items-center gap-1">
+            <button class="btn-sidebar-toggle d-none d-lg-flex" @onclick="HandleToggleCollapse" title="@(IsCollapsed ? "Menüyü Genişlet" : "Menüyü Daralt")" aria-label="Menüyü Daralt/Genişlet">
+                <i class="bi @(IsCollapsed ? "bi-chevron-right" : "bi-chevron-left")"></i>
+            </button>
+            <button class="sidebar-close-btn" @onclick="HandleMenuClick" aria-label="Kapat">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
     </div>
 
     <div class="sidebar-menu">
-        <NavLink class="nav-item-link" href="" Match="NavLinkMatch.All" @onclick="HandleMenuClick">
+        <NavLink class="nav-item-link" href="" Match="NavLinkMatch.All" @onclick="HandleMenuClick" title="Tenant Seçimi">
             <i class="bi bi-building"></i>
             <span>Tenant Seçimi</span>
         </NavLink>
 
-        <NavLink class="nav-item-link" href="queries" @onclick="HandleMenuClick">
+        <NavLink class="nav-item-link" href="queries" @onclick="HandleMenuClick" title="SQL Sorgu Denetimi">
             <i class="bi bi-database-fill-gear"></i>
             <span>SQL Sorgu Denetimi</span>
         </NavLink>
 
-        <NavLink class="nav-item-link" href="users" @onclick="HandleMenuClick">
-            <i class="bi bi-people"></i>
-            <span>Portal Yönetimi</span>
+        <NavLink class="nav-item-link" href="users" @onclick="HandleMenuClick" title="Kullanıcı Yönetimi">
+            <i class="bi bi-people-fill"></i>
+            <span>Kullanıcı Yönetimi</span>
         </NavLink>
 
-        <NavLink class="nav-item-link" href="tenant-users" @onclick="HandleMenuClick">
-            <i class="bi bi-person-search"></i>
+        <NavLink class="nav-item-link" href="tenant-users" @onclick="HandleMenuClick" title="Tenant Kullanıcı Arama">
+            <i class="bi bi-person-vcard"></i>
             <span>Tenant Kullanıcı Arama</span>
         </NavLink>
     </div>
@@ -41,11 +46,11 @@
     <div class="sidebar-footer">
         <AuthorizeView>
             <Authorized>
-                <div class="user-pill">
+                <div class="user-pill" title="@context.User.Identity?.Name">
                     <div class="user-avatar">
                         @context.User.Identity?.Name?.Substring(0, 1).ToUpper()
                     </div>
-                    <div style="flex: 1; min-width: 0;">
+                    <div class="user-details-text" style="flex: 1; min-width: 0;">
                         <div style="font-size: 0.85rem; font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
                             @context.User.Identity?.Name
                         </div>
@@ -56,7 +61,7 @@
                 </div>
             </Authorized>
             <NotAuthorized>
-                <div class="text-muted text-center" style="font-size: 0.8rem;">Giriş Yapılmadı</div>
+                <div class="text-muted text-center user-details-text" style="font-size: 0.8rem;">Giriş Yapılmadı</div>
             </NotAuthorized>
         </AuthorizeView>
     </div>
@@ -66,6 +71,12 @@
     [Parameter]
     public EventCallback OnMenuItemClicked { get; set; }
 
+    [Parameter]
+    public bool IsCollapsed { get; set; }
+
+    [Parameter]
+    public EventCallback OnToggleCollapse { get; set; }
+
     private async Task HandleMenuClick()
     {
         if (OnMenuItemClicked.HasDelegate)
@@ -73,4 +84,13 @@
             await OnMenuItemClicked.InvokeAsync();
         }
     }
+
+    private async Task HandleToggleCollapse()
+    {
+        if (OnToggleCollapse.HasDelegate)
+        {
+            await OnToggleCollapse.InvokeAsync();
+        }
+    }
 }
+

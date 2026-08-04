@@ -82,6 +82,7 @@ a:hover {
     left: 0;
     z-index: 100;
     backdrop-filter: blur(16px);
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-header {
@@ -106,6 +107,7 @@ a:hover {
     font-weight: 800;
     font-size: 1.2rem;
     box-shadow: 0 0 15px var(--primary-glow);
+    flex-shrink: 0;
 }
 
 .logo-text {
@@ -125,6 +127,26 @@ a:hover {
     letter-spacing: 1px;
 }
 
+.btn-sidebar-toggle {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-sidebar-toggle:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text-main);
+}
+
 .sidebar-close-btn {
     display: none;
     background: transparent;
@@ -137,6 +159,51 @@ a:hover {
 @media (max-width: 991.98px) {
     .sidebar-close-btn {
         display: inline-flex;
+    }
+}
+
+/* Desktop Collapsed Sidebar Styles */
+@media (min-width: 992px) {
+    .page-container.sidebar-collapsed {
+        --sidebar-width: 72px;
+    }
+
+    .page-container.sidebar-collapsed .app-sidebar {
+        width: 72px;
+    }
+
+    .page-container.sidebar-collapsed .logo-details,
+    .page-container.sidebar-collapsed .nav-item-link span,
+    .page-container.sidebar-collapsed .user-details-text {
+        display: none !important;
+    }
+
+    .page-container.sidebar-collapsed .sidebar-header {
+        padding: 0 0.5rem;
+        justify-content: center;
+    }
+
+    .page-container.sidebar-collapsed .nav-item-link {
+        justify-content: center;
+        padding: 0.75rem 0;
+        gap: 0;
+    }
+
+    .page-container.sidebar-collapsed .nav-item-link i {
+        margin: 0;
+        font-size: 1.3rem;
+    }
+
+    .page-container.sidebar-collapsed .sidebar-footer {
+        padding: 0.85rem 0.5rem;
+    }
+
+    .page-container.sidebar-collapsed .user-pill {
+        justify-content: center;
+    }
+
+    .page-container.sidebar-collapsed .main-wrapper {
+        margin-left: 72px;
     }
 }
 
