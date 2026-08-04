@@ -29,6 +29,6 @@ jobs:
           username: site83172
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./publish/
-          server-dir: /wwwroot/
+          server-dir: ./
           security: loose
           log-level: verbose
