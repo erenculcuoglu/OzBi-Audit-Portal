@@ -30,5 +30,4 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./publish/
           server-dir: /wwwroot/
-          protocol: ftp
-          port: 21
+          security: loose
