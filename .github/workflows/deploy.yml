@@ -22,15 +22,6 @@ jobs:
       - name: Build & Publish App
         run: dotnet publish "OzBI Portal CRM.csproj" -c Release -o ./publish
 
-      - name: Debug FTP Connection
-        env:
-          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-        run: |
-          set +H
-          echo "=== Testing FTP connection ==="
-          curl -v --connect-timeout 15 --user "site83172:${FTP_PASSWORD}" "ftp://site83172.siteasp.net/" 2>&1 || true
-          echo "=== FTP test complete ==="
-
       - name: Install ncftp
         run: sudo apt-get update && sudo apt-get install -y ncftp
 
@@ -39,6 +30,6 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
           set +H
-          echo "Starting FTP upload via ncftpput..."
-          ncftpput -R -v -u "site83172" -p "${FTP_PASSWORD}" site83172.siteasp.net / ./publish/*
+          echo "Starting FTP upload to /wwwroot/ ..."
+          ncftpput -R -v -u "site83172" -p "${FTP_PASSWORD}" site83172.siteasp.net /wwwroot/ ./publish/*
           echo "FTP upload completed!"
