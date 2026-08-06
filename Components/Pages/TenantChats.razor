@@ -100,9 +100,11 @@ else
                 <tr>
                     <th style="white-space: nowrap;">Sohbet Başlığı ve İçi (Sorular)</th>
                     <th style="white-space: nowrap;">Kullanıcı</th>
-                    <th style="white-space: nowrap;">AI Modeli</th>
-                    <th style="white-space: nowrap;">Soru / SQL</th>
-                    <th style="white-space: nowrap;">Tarih/Saat</th>
+                    <th style="white-space: nowrap; text-align: center;">AI Modeli</th>
+                    <th style="white-space: nowrap; text-align: center;">Asistan İsmi</th>
+                    <th style="white-space: nowrap; text-align: center;">Mod</th>
+                    <th style="white-space: nowrap; text-align: center;">Soru / SQL</th>
+                    <th style="white-space: nowrap; text-align: center;">Tarih/Saat</th>
                     <th class="col-sticky-action" style="white-space: nowrap; text-align: center;">İşlem</th>
                 </tr>
             </thead>
@@ -139,11 +141,11 @@ else
                                 @(item.Chat.CreatedByUser?.NameSurname ?? item.Chat.CreatedByUser?.Email ?? "Sistem / Anonim")
                             </div>
                         </td>
-                        <td>
+                        <td style="text-align: center;">
                             @if (!string.IsNullOrEmpty(item.PrimaryAiModelName))
                             {
-                                <span class="badge-status badge-purple">
-                                    <i class="bi bi-cpu"></i> @item.PrimaryAiModelName
+                                <span class="badge-status" style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(129, 140, 248, 0.4); color: #818cf8;">
+                                    @item.PrimaryAiModelName
                                 </span>
                             }
                             else
@@ -151,8 +153,34 @@ else
                                 <span class="text-muted small">-</span>
                             }
                         </td>
-                        <td>
-                            <div class="d-flex align-items-center gap-2">
+                        <td style="text-align: center;">
+                            @if (!string.IsNullOrEmpty(item.AssistantName))
+                            {
+                                <span class="badge-status" style="background: rgba(20, 184, 166, 0.15); border: 1px solid rgba(45, 212, 191, 0.4); color: #2dd4bf;" title="Çalıştırılan Asistan">
+                                    @item.AssistantName
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="text-muted small">-</span>
+                            }
+                        </td>
+                        <td style="text-align: center;">
+                            @if (item.IsAsistantMode)
+                            {
+                                <span class="badge-status" style="background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(192, 132, 252, 0.4); color: #c084fc;" title="AI Asistan / Agent Modu">
+                                    Asistan Modu
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge-status" style="background: rgba(14, 165, 233, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;" title="Sorgu Modu (SQL Raporu)">
+                                    Sorgu Modu
+                                </span>
+                            }
+                        </td>
+                        <td style="text-align: center;">
+                            <div class="d-inline-flex align-items-center gap-2">
                                 <span class="badge-status badge-info" title="Soru / Mesaj Sayısı">
                                     @item.MessageCount Soru
                                 </span>
@@ -161,7 +189,7 @@ else
                                 </span>
                             </div>
                         </td>
-                        <td>
+                        <td style="text-align: center;">
                             <span class="text-muted" style="font-size: 0.85rem;">
                                 @(item.Chat.DateCreated?.ToString("dd.MM.yyyy HH:mm") ?? "-")
                             </span>

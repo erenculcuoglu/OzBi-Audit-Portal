@@ -30,6 +30,7 @@ namespace OzBiPortalCRM.Services
         public string IssueDescription { get; set; } = string.Empty;
         public string V26RuleReference { get; set; } = string.Empty;
         public string RecommendedFix { get; set; } = string.Empty;
+        public string Severity { get; set; } = "Error"; // "Error", "Warning", "Info"
     }
 
     public interface IMikroAuditEngine

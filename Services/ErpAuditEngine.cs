@@ -51,7 +51,7 @@ namespace OzBiPortalCRM.Services
             }
             else if (erpType == ErpSystemType.Mikro)
             {
-                report.SystemTypeName = "Mikro ERP (v27)";
+                report.SystemTypeName = "Mikro ERP (v28)";
                 var baseReport = _mikroEvaluator.EvaluateQuery(tsqlQuery, userPrompt, tenantName);
 
                 report.Score = baseReport.Score;
@@ -64,7 +64,7 @@ namespace OzBiPortalCRM.Services
                 report.ProposedTsqlFix = baseReport.ProposedTsqlFix;
 
                 // Perform Cross-Check Sync Analysis for Mikro Tenant
-                PerformCrossCheckSync(report, erpConfig, "Mikro ERP v27", "v27", "Mikro ERP Ek Talimatı — v27");
+                PerformCrossCheckSync(report, erpConfig, "Mikro ERP v28", "v28", "Mikro ERP Ek Talimatı — v28");
             }
             else
             {
@@ -135,7 +135,7 @@ namespace OzBiPortalCRM.Services
             return new ErpComplianceReport
             {
                 SystemType = ErpSystemType.Mikro,
-                SystemTypeName = "Mikro ERP (v27)",
+                SystemTypeName = "Mikro ERP (v28)",
                 Score = mikroRep.Score,
                 Grade = mikroRep.Grade,
                 GradeLabel = mikroRep.GradeLabel,
@@ -145,8 +145,8 @@ namespace OzBiPortalCRM.Services
                 Violations = mikroRep.Violations,
                 ProposedTsqlFix = mikroRep.ProposedTsqlFix,
                 IsPromptSynced = true,
-                PromptVersionLabel = "Mikro ERP v27 Güncel",
-                PromptSyncDetails = "Tenant asistan promptu ve veritabanı şeması OzBi Mikro ERP v27 güncel standartlarıyla %100 senkronize."
+                PromptVersionLabel = "Mikro ERP v28 Güncel",
+                PromptSyncDetails = "Tenant asistan promptu ve veritabanı şeması OzBi Mikro ERP v28 güncel standartlarıyla %100 senkronize."
             };
         }
     }

@@ -223,6 +223,7 @@ namespace OzBiPortalCRM.Services
 
             var messages = await db.ChatMessages.AsNoTracking()
                 .Include(m => m.AIModel)
+                .Include(m => m.Assistant)
                 .Where(m => chatIds.Contains(m.ChatId))
                 .OrderBy(m => m.DateCreated)
                 .ToListAsync();
@@ -234,6 +235,7 @@ namespace OzBiPortalCRM.Services
             {
                 var msgList = messages.Where(m => m.ChatId == c.Id).ToList();
                 var primaryModel = msgList.FirstOrDefault(m => m.AIModel != null)?.AIModel?.Name ?? "Standart AI";
+                var assistantName = msgList.FirstOrDefault(m => m.Assistant != null)?.Assistant?.Name;
 
                 var userQuestions = msgList
                     .Where(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt) || (!string.IsNullOrEmpty(m.Message) && !m.Message.StartsWith("##") && !m.Message.StartsWith("SELECT") && !m.Message.StartsWith("|")))
@@ -258,6 +260,8 @@ namespace OzBiPortalCRM.Services
                 var userQuestionCount = userQuestions.Count > 0 ? userQuestions.Count : msgList.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt));
                 if (userQuestionCount == 0 && msgList.Count > 0) userQuestionCount = msgList.Count;
 
+                bool isAssistantMode = msgList.Any(m => m.IsAsistantMode);
+
                 result.Add(new ChatAuditSummary
                 {
                     Chat = c,
@@ -266,6 +270,8 @@ namespace OzBiPortalCRM.Services
                     TotalDurationMs = msgList.Sum(m => m.TotalDurationMs ?? 0),
                     LastMessageDate = msgList.Count > 0 ? msgList.Max(m => m.DateCreated) : c.DateCreated,
                     PrimaryAiModelName = primaryModel,
+                    AssistantName = assistantName,
+                    IsAsistantMode = isAssistantMode,
                     UserQuestions = userQuestions
                 });
             }
@@ -306,6 +312,7 @@ namespace OzBiPortalCRM.Services
 
             var messages = await db.ChatMessages.AsNoTracking()
                 .Include(m => m.AIModel)
+                .Include(m => m.Assistant)
                 .Where(m => chatIds.Contains(m.ChatId))
                 .OrderBy(m => m.DateCreated)
                 .ToListAsync();
@@ -317,6 +324,7 @@ namespace OzBiPortalCRM.Services
             {
                 var msgList = messages.Where(m => m.ChatId == c.Id).ToList();
                 var primaryModel = msgList.FirstOrDefault(m => m.AIModel != null)?.AIModel?.Name ?? "Standart AI";
+                var assistantName = msgList.FirstOrDefault(m => m.Assistant != null)?.Assistant?.Name;
 
                 var userQuestions = msgList
                     .Where(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt) || (!string.IsNullOrEmpty(m.Message) && !m.Message.StartsWith("##") && !m.Message.StartsWith("SELECT") && !m.Message.StartsWith("|")))
@@ -341,6 +349,8 @@ namespace OzBiPortalCRM.Services
                 var userQuestionCount = userQuestions.Count > 0 ? userQuestions.Count : msgList.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt));
                 if (userQuestionCount == 0 && msgList.Count > 0) userQuestionCount = msgList.Count;
 
+                bool isAssistantMode = msgList.Any(m => m.IsAsistantMode);
+
                 result.Add(new ChatAuditSummary
                 {
                     Chat = c,
@@ -349,6 +359,8 @@ namespace OzBiPortalCRM.Services
                     TotalDurationMs = msgList.Sum(m => m.TotalDurationMs ?? 0),
                     LastMessageDate = msgList.Count > 0 ? msgList.Max(m => m.DateCreated) : c.DateCreated,
                     PrimaryAiModelName = primaryModel,
+                    AssistantName = assistantName,
+                    IsAsistantMode = isAssistantMode,
                     UserQuestions = userQuestions
                 });
             }
@@ -399,6 +411,7 @@ namespace OzBiPortalCRM.Services
                 .Include(m => m.Chat)
                     .ThenInclude(c => c!.CreatedByUser)
                 .Include(m => m.AIModel)
+                .Include(m => m.Assistant)
                 .Where(m => !string.IsNullOrEmpty(m.Query));
 
             if (!string.IsNullOrWhiteSpace(tenantId))

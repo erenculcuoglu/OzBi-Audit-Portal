@@ -41,6 +41,8 @@ namespace OzBiPortalCRM.Services
         public long TotalDurationMs { get; set; }
         public DateTime? LastMessageDate { get; set; }
         public string? PrimaryAiModelName { get; set; }
+        public string? AssistantName { get; set; }
+        public bool IsAsistantMode { get; set; }
         public List<string> UserQuestions { get; set; } = new();
     }
 

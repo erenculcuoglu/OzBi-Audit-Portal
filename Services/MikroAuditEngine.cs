@@ -20,15 +20,32 @@ namespace OzBiPortalCRM.Services
         {
             try
             {
-                var schemaPath = Path.Combine(AppContext.BaseDirectory, "Mikro", "mikro_assistant_schema_20260722.json");
-                if (!File.Exists(schemaPath))
+                var searchDirs = new[]
                 {
-                    schemaPath = Path.Combine(Directory.GetCurrentDirectory(), "Mikro", "mikro_assistant_schema_20260722.json");
+                    Path.Combine(AppContext.BaseDirectory, "Mikro"),
+                    Path.Combine(Directory.GetCurrentDirectory(), "Mikro")
+                };
+
+                string? foundSchemaFile = null;
+                foreach (var dir in searchDirs)
+                {
+                    if (Directory.Exists(dir))
+                    {
+                        var schemaFiles = Directory.GetFiles(dir, "mikro_assistant_schema_*.json")
+                            .OrderByDescending(f => f)
+                            .ToList();
+
+                        if (schemaFiles.Any())
+                        {
+                            foundSchemaFile = schemaFiles.First();
+                            break;
+                        }
+                    }
                 }
 
-                if (File.Exists(schemaPath))
+                if (foundSchemaFile != null && File.Exists(foundSchemaFile))
                 {
-                    var jsonContent = File.ReadAllText(schemaPath);
+                    var jsonContent = File.ReadAllText(foundSchemaFile);
                     using var doc = JsonDocument.Parse(jsonContent);
                     if (doc.RootElement.ValueKind == JsonValueKind.Array)
                     {
@@ -57,10 +74,26 @@ namespace OzBiPortalCRM.Services
                     "SIPARISLER", "STOK_DEPO_DETAYLARI", "DEPOLAR", "PERSONELLER", "PROJELER",
                     "SORUMLULUK_MERKEZLERI", "CARI_HESAPLAR_YONETIM", "CARIDETAY", "STOKDETAY",
                     "BANKALAR_YONETIM", "KASALAR_YONETIM", "ODEME_EMIRLERI_YONETIM",
-                    "STOK_SATIS_FIYAT_LISTELERI_YONETIM", "SIPARISLER_OZET", "vw_Cari_Hareket_Evrak_Isimleri"
+                    "STOK_SATIS_FIYAT_LISTELERI_YONETIM", "SIPARISLER_OZET", "vw_Cari_Hareket_Evrak_Isimleri",
+                    "ODEME_EMIRLERI", "STOK_HAREKETLERI_GIRIS_CIKIS"
                 };
                 foreach (var t in defaultTables) _knownMikroTables.Add(t);
             }
+        }
+
+        private bool IsTableInSql(string sqlUpper, string tableName)
+        {
+            var pattern = $@"(?<![A-Z0-9_]){Regex.Escape(tableName.ToUpperInvariant())}(?![A-Z0-9_])";
+            return Regex.IsMatch(sqlUpper, pattern);
+        }
+
+        /// <summary>
+        /// SQL Server braket notasyonunu ([kolon_adi]) sıyırarak normalize eder.
+        /// Bu sayede hem [cha_iptal] = 0 hem cha_iptal = 0 aynı regex ile yakalanır.
+        /// </summary>
+        private string NormalizeSql(string sql)
+        {
+            return sql.Replace("[", "").Replace("]", "");
         }
 
         public MikroComplianceReport EvaluateQuery(string tsqlQuery, string? userPrompt = null, string? tenantName = null)
@@ -68,12 +101,13 @@ namespace OzBiPortalCRM.Services
             var report = new MikroComplianceReport();
             if (string.IsNullOrWhiteSpace(tsqlQuery)) return report;
 
-            var sql = tsqlQuery.Trim();
+            var rawSql = tsqlQuery.Trim();
+            var sql = NormalizeSql(rawSql);
             var upperSql = sql.ToUpperInvariant();
 
             // 1. Is this a Mikro query?
             bool isMikroTenant = tenantName != null && tenantName.ToLowerInvariant().Contains("mikro");
-            bool containsMikroTables = _knownMikroTables.Any(t => upperSql.Contains(t.ToUpperInvariant()));
+            bool containsMikroTables = _knownMikroTables.Any(t => IsTableInSql(upperSql, t));
 
             if (!isMikroTenant && !containsMikroTables)
             {
@@ -88,7 +122,7 @@ namespace OzBiPortalCRM.Services
             // -------------------------------------------------------------
             // RULE 1: CARI CINS DISTINCTION (cha_cari_cins = 0/2/4) - Penalty: -15 pts
             // -------------------------------------------------------------
-            if (upperSql.Contains("CARI_HESAP_HAREKETLERI"))
+            if (IsTableInSql(upperSql, "CARI_HESAP_HAREKETLERI"))
             {
                 bool hasCariCinsFilter = Regex.IsMatch(sql, @"cha_cari_cins\s*=", RegexOptions.IgnoreCase) ||
                                          Regex.IsMatch(sql, @"cha_cari_cins\s+IN", RegexOptions.IgnoreCase);
@@ -111,7 +145,8 @@ namespace OzBiPortalCRM.Services
                         PenaltyPoints = 15,
                         IssueDescription = "CARI_HESAP_HAREKETLERI tablosuna cha_cari_cins filtresi eklenmemiş. Cari, banka ve kasa hareketleri birbirine karışabilir.",
                         V26RuleReference = "Madde 1: `cha_cari_cins = 0` (cari), `2` (banka), `4` (kasa) filtresi uygulanmalıdır.",
-                        RecommendedFix = "WHERE koşuluna `AND cha.cha_cari_cins = 0` (veya ilgili hesap türü) ekleyin."
+                        RecommendedFix = "WHERE koşuluna `AND cha.cha_cari_cins = 0` (veya ilgili hesap türü) ekleyin.",
+                        Severity = "Error"
                     });
                 }
             }
@@ -144,25 +179,42 @@ namespace OzBiPortalCRM.Services
                         PenaltyPoints = 15,
                         IssueDescription = "Tutar kur ile çarpılırken TL satırlarında kurun 0 veya NULL olabilme riski için CASE WHEN koruması kullanılmamış.",
                         V26RuleReference = "Madde 2: `cha.cha_meblag * CASE WHEN cha.cha_d_cins = 0 THEN 1.0 ELSE cha.cha_d_kur END` yapısı kullanılmalıdır.",
-                        RecommendedFix = "`cha_d_kur` çarpanını `CASE WHEN cha_d_cins = 0 THEN 1.0 ELSE cha_d_kur END` şeklinde güncelleyin."
+                        RecommendedFix = "`cha_d_kur` çarpanını `CASE WHEN cha_d_cins = 0 THEN 1.0 ELSE cha_d_kur END` şeklinde güncelleyin.",
+                        Severity = "Error"
                     });
                 }
             }
 
             // -------------------------------------------------------------
-            // RULE 3: CANCELED & HIDDEN RECORDS FILTER (cha_iptal=0, cari_iptal=0) - Penalty: -10 pts
+            // RULE 3: CANCELED & HIDDEN RECORDS FILTER - Penalty: -10 pts / -5 pts
             // -------------------------------------------------------------
-            bool queriesMovements = upperSql.Contains("CARI_HESAP_HAREKETLERI") || upperSql.Contains("STOK_HAREKETLERI");
+            bool queriesMovements = IsTableInSql(upperSql, "CARI_HESAP_HAREKETLERI") || IsTableInSql(upperSql, "STOK_HAREKETLERI");
             if (queriesMovements)
             {
-                bool hasIptalFilter = upperSql.Contains("CHA_IPTAL = 0") || upperSql.Contains("STH_IPTAL = 0") || upperSql.Contains("CHA_HIDDEN = 0");
-                if (hasIptalFilter)
+                bool hasIptalFilter = upperSql.Contains("CHA_IPTAL = 0") || upperSql.Contains("STH_IPTAL = 0");
+                bool hasHiddenFilter = upperSql.Contains("CHA_HIDDEN = 0") || upperSql.Contains("STH_HIDDEN = 0");
+
+                if (hasIptalFilter && hasHiddenFilter)
                 {
                     report.PassedChecks.Add(new MikroRuleCheck
                     {
                         RuleId = "M-03",
-                        Title = "İptal/Gizli Kayıt Filtresi",
-                        Description = "İptal edilmiş (iptal = 1) veya gizli kayıtlar filtrelenmiş."
+                        Title = "İptal ve Gizli Kayıt Filtresi",
+                        Description = "İptal edilmiş (iptal = 0) ve gizli kayıtlar (hidden = 0) tam olarak filtrelenmiş."
+                    });
+                }
+                else if (hasIptalFilter || hasHiddenFilter)
+                {
+                    score -= 5;
+                    report.Violations.Add(new MikroRuleViolation
+                    {
+                        RuleId = "M-03",
+                        Title = "Kısmi Gizli/İptal Kayıt Filtresi",
+                        PenaltyPoints = 5,
+                        IssueDescription = "Hareket tablosunda iptal veya gizli kayıtlardan biri filtrelenmiş ancak diğeri unutulmuş (Örn: cha_iptal = 0 var ama cha_hidden = 0 eksik).",
+                        V26RuleReference = "Mikro T-SQL Standartları: Hem iptal (iptal = 0) hem gizli (hidden = 0) kayıtlar birlikte filtrelenmelidir.",
+                        RecommendedFix = "WHERE koşuluna `AND cha.cha_iptal = 0 AND cha.cha_hidden = 0` filtrelerinin her ikisini de ekleyin.",
+                        Severity = "Warning"
                     });
                 }
                 else
@@ -173,9 +225,10 @@ namespace OzBiPortalCRM.Services
                         RuleId = "M-03",
                         Title = "Eksik İptal/Gizli Kayıt Filtresi",
                         PenaltyPoints = 10,
-                        IssueDescription = "Hareket tablosunda `cha_iptal = 0` veya `cha_hidden = 0` filtresi eksik. İptal edilmiş fişler toplama dahil edilebilir.",
-                        V26RuleReference = "Mikro T-SQL Standartları: İptal edilmiş kayıtlar sorgu sonuçlarına dahil edilmemelidir.",
-                        RecommendedFix = "WHERE koşuluna `AND cha.cha_iptal = 0 AND cha.cha_hidden = 0` ekleyin."
+                        IssueDescription = "Hareket tablosunda `cha_iptal = 0` ve `cha_hidden = 0` filtresi tamamen eksik. İptal edilmiş fişler toplama dahil edilebilir.",
+                        V26RuleReference = "Mikro T-SQL Standartları: İptal edilmiş ve gizli kayıtlar sorgu sonuçlarına dahil edilmemelidir.",
+                        RecommendedFix = "WHERE koşuluna `AND cha.cha_iptal = 0 AND cha.cha_hidden = 0` ekleyin.",
+                        Severity = "Error"
                     });
                 }
             }
@@ -183,7 +236,7 @@ namespace OzBiPortalCRM.Services
             // -------------------------------------------------------------
             // RULE 4: GUID JOIN ACCURACY - Penalty: -15 pts
             // -------------------------------------------------------------
-            if (upperSql.Contains("STOK_HAREKETLERI") && upperSql.Contains("SIPARIS"))
+            if (IsTableInSql(upperSql, "STOK_HAREKETLERI") && IsTableInSql(upperSql, "SIPARISLER"))
             {
                 bool hasGuidJoin = upperSql.Contains("SIP_GUID = STH_SIP_UID") || upperSql.Contains("STH_SIP_UID = SIP_GUID");
                 if (hasGuidJoin)
@@ -205,18 +258,11 @@ namespace OzBiPortalCRM.Services
                         PenaltyPoints = 15,
                         IssueDescription = "Sipariş ile stok hareketi arasındaki GUID eşleşmesi sth_sip_uid yerine hatalı alanla yapılmış veya eksik.",
                         V26RuleReference = "Madde 4: `sip.sip_Guid = sh.sth_sip_uid` eşleşmesi kullanılmalıdır.",
-                        RecommendedFix = "JOIN koşulunu `ON sip.sip_Guid = sh.sth_sip_uid` olarak güncelleyin."
+                        RecommendedFix = "JOIN koşulunu `ON sip.sip_Guid = sh.sth_sip_uid` olarak güncelleyin.",
+                        Severity = "Error"
                     });
                 }
             }
-
-            // -------------------------------------------------------------
-            // RULE 5: TOP LIMIT — KALDIRILDI
-            // TOP 10 sınırı artık uygulanmıyor. İş mantığı gereği,
-            // "faturasını ödememiş tüm carileri listele" gibi sorgularda
-            // TOP sınırı veri kaybına neden oluyordu.
-            // Kullanıcı açıkça "ilk 5" / "ilk 10" derse model zaten TOP ekliyor.
-            // -------------------------------------------------------------
 
             // -------------------------------------------------------------
             // RULE 6: MANAGEMENT VIEW BRACKET MAPPING - Penalty: -10 pts
@@ -241,9 +287,10 @@ namespace OzBiPortalCRM.Services
                         RuleId = "M-06",
                         Title = "Eksik Yönetim View Braket Eşlemesi",
                         PenaltyPoints = 10,
-                        IssueDescription = "Yönetim view sorgusunda [msg_S_....] kolon isimleri kullanılmamış.",
+                        IssueDescription = "Yönetim view sorgusunda [msg_S_....] kolon isimleri kullanılnamış.",
                         V26RuleReference = "Madde 5: Yönetim view'larında `[msg_S_0078]`, `[msg_S_0957\\T]` braket alan isimleri kullanılmalıdır.",
-                        RecommendedFix = "View kolon isimlerini şemadaki `[msg_S_....]` eşlemeleriyle değiştirin."
+                        RecommendedFix = "View kolon isimlerini şemadaki `[msg_S_....]` eşlemeleriyle değiştirin.",
+                        Severity = "Error"
                     });
                 }
             }
@@ -273,7 +320,68 @@ namespace OzBiPortalCRM.Services
                         PenaltyPoints = 5,
                         IssueDescription = "Arama sorgusunda `UPPER(kolon) LIKE UPPER(N'%...%')` pattern'ı kullanılmadığından Türkçe karakter arama kaçırma riski.",
                         V26RuleReference = "Madde 7: Sözel isim aramalarında `UPPER(kolon) LIKE UPPER(N'%...%')` kullanılmalıdır.",
-                        RecommendedFix = "Arama filtresini `UPPER(car.cari_unvan1) LIKE UPPER(N'%' + @search + '%')` yapın."
+                        RecommendedFix = "Arama filtresini `UPPER(car.cari_unvan1) LIKE UPPER(N'%' + @search + '%')` yapın.",
+                        Severity = "Warning"
+                    });
+                }
+            }
+
+            // -------------------------------------------------------------
+            // RULE 8: DEEP PARSER - T-SQL GROUP BY / ORDER BY COMPATIBILITY - Penalty: -10 pts
+            // -------------------------------------------------------------
+            var groupByViolation = EvaluateGroupByOrderByCompatibility(sql);
+            if (groupByViolation != null)
+            {
+                score -= groupByViolation.PenaltyPoints;
+                report.Violations.Add(groupByViolation);
+            }
+            else if (upperSql.Contains("GROUP BY") && upperSql.Contains("ORDER BY"))
+            {
+                report.PassedChecks.Add(new MikroRuleCheck
+                {
+                    RuleId = "M-08",
+                    Title = "T-SQL GROUP BY ve ORDER BY Uyumluluğu",
+                    Description = "GROUP BY ve ORDER BY fıkraları T-SQL sentaks kurallarına ve kolon bağımlılıklarına tam uygun."
+                });
+            }
+
+            // -------------------------------------------------------------
+            // RULE 9: UNKNOWN / CHOOSE-VIEW TABLE DETECTION - Penalty: -8 pts
+            // -------------------------------------------------------------
+            var tableCheckViolation = EvaluateTableReferences(sql);
+            if (tableCheckViolation != null)
+            {
+                score -= tableCheckViolation.PenaltyPoints;
+                report.Violations.Add(tableCheckViolation);
+            }
+            else
+            {
+                report.PassedChecks.Add(new MikroRuleCheck
+                {
+                    RuleId = "M-09",
+                    Title = "Veritabanı Tablo Doğrulaması",
+                    Description = "Sorgudaki tüm tablolar Mikro ERP referans şemasında tanımlıdır."
+                });
+            }
+
+            // -------------------------------------------------------------
+            // RULE 10: DATE RANGE PATTERN (BETWEEN vs Open-End Date) - Penalty: -5 pts
+            // -------------------------------------------------------------
+            if (upperSql.Contains("BETWEEN") && (upperSql.Contains("TAHI") || upperSql.Contains("TARIH") || upperSql.Contains("VADE") || upperSql.Contains("_TARIH") || upperSql.Contains("MSG_S_")))
+            {
+                bool usesUnsafeBetween = Regex.IsMatch(sql, @"BETWEEN\s+'\d{4}-\d{2}-\d{2}'\s+AND\s+'\d{4}-\d{2}-(28|29|30|31)'", RegexOptions.IgnoreCase);
+                if (usesUnsafeBetween)
+                {
+                    score -= 5;
+                    report.Violations.Add(new MikroRuleViolation
+                    {
+                        RuleId = "M-10",
+                        Title = "Riskli Tarih Aralığı Filtresi (BETWEEN)",
+                        PenaltyPoints = 5,
+                        IssueDescription = "Tarih filtrelerinde ayın son günü BETWEEN ile kısıtlandığında saat/zaman bileşeni nedeniyle son gün verileri kaçabilir.",
+                        V26RuleReference = "Madde 7: Ay ve çeyrek tarih aralıklarında `>= 'YYYY-MM-01' AND < 'YYYY-MM+1-01'` açık aralık deseni kullanılmalıdır.",
+                        RecommendedFix = "`BETWEEN '2026-08-01' AND '2026-08-31'` yerine `>= '2026-08-01' AND < '2026-09-01'` yazın.",
+                        Severity = "Warning"
                     });
                 }
             }
@@ -286,34 +394,253 @@ namespace OzBiPortalCRM.Services
             {
                 report.Grade = "A+";
                 report.GradeLabel = "Kusursuz Uyum (A+)";
-                report.SummaryText = "T-SQL sorgusu Mikro v27 standartlarına ve veritabanı şemasına %100 kusursuz uyum sağlamaktadır.";
+                report.SummaryText = "T-SQL sorgusu Mikro v28 standartlarına ve veritabanı şemasına %100 kusursuz uyum sağlamaktadır.";
             }
             else if (score >= 85)
             {
                 report.Grade = "A";
                 report.GradeLabel = "Yüksek Uyum (A)";
-                report.SummaryText = "T-SQL sorgusu Mikro v27 kurallarına yüksek oranda uymaktadır. Küçük iyileştirmeler mümkündür.";
+                report.SummaryText = "T-SQL sorgusu Mikro v28 kurallarına yüksek oranda uymaktadır. Küçük iyileştirmeler mümkündür.";
             }
             else if (score >= 70)
             {
                 report.Grade = "B";
                 report.GradeLabel = "Orta Uyum (B)";
-                report.SummaryText = "Sorguda bazı kritik v27 kuralları (filtre veya kur koruması) eksiktir. Düzeltme önerilir.";
+                report.SummaryText = "Sorguda bazı kritik v28 kuralları (filtre veya kur koruması) eksiktir. Düzeltme önerilir.";
             }
             else if (score >= 50)
             {
                 report.Grade = "C";
                 report.GradeLabel = "Zayıf Uyum (C)";
-                report.SummaryText = "Sorguda önemli v27 standart ihlalleri tespit edilmiştir. İyileştirme yapılması şarttır.";
+                report.SummaryText = "Sorguda önemli v28 standart ihlalleri tespit edilmiştir. İyileştirme yapılması şarttır.";
             }
             else
             {
                 report.Grade = "F";
                 report.GradeLabel = "Uyumsuz / Riskli (F)";
-                report.SummaryText = "Sorgu Mikro v27 mimarisinden ciddi sapmalar göstermektedir ve performans/doğruluk riski taşımaktadır.";
+                report.SummaryText = "Sorgu Mikro v28 mimarisinden ciddi sapmalar göstermektedir ve performans/doğruluk riski taşımaktadır.";
             }
 
             return report;
+        }
+
+        /// <summary>
+        /// Derin T-SQL Parser: GROUP BY fıkrası olan sorgularda ORDER BY içinde geçen kolonların
+        /// aggregate veya GROUP BY içerisinde olup olmadığını kontrol eder.
+        /// </summary>
+        private MikroRuleViolation? EvaluateGroupByOrderByCompatibility(string sql)
+        {
+            try
+            {
+                var upperSql = sql.ToUpperInvariant();
+                int groupByIdx = upperSql.IndexOf("GROUP BY", StringComparison.Ordinal);
+                int orderByIdx = upperSql.IndexOf("ORDER BY", StringComparison.Ordinal);
+
+                if (groupByIdx == -1 || orderByIdx == -1 || orderByIdx < groupByIdx)
+                    return null;
+
+                // Extract GROUP BY clause
+                string groupByClause = sql.Substring(groupByIdx + 8, orderByIdx - (groupByIdx + 8)).Trim();
+                
+                // Extract ORDER BY clause (up to end or HAVING / FOR OFFSET if any)
+                int endOrderIdx = sql.Length;
+                var nextKeywords = new[] { "HAVING", "OPTION", "OFFSET" };
+                foreach (var kw in nextKeywords)
+                {
+                    int kIdx = upperSql.IndexOf(kw, orderByIdx, StringComparison.Ordinal);
+                    if (kIdx != -1 && kIdx < endOrderIdx) endOrderIdx = kIdx;
+                }
+                string orderByClause = sql.Substring(orderByIdx + 8, endOrderIdx - (orderByIdx + 8)).Trim();
+
+                // Tokenize GROUP BY expressions
+                var groupByTokens = TokenizeExpressions(groupByClause);
+
+                // Tokenize ORDER BY expressions
+                var orderByTokens = TokenizeExpressions(orderByClause);
+
+                // Extract column identifiers from ORDER BY that are NOT inside aggregate functions
+                foreach (var orderExpr in orderByTokens)
+                {
+                    var nonAggColumns = ExtractNonAggregateColumns(orderExpr);
+                    foreach (var col in nonAggColumns)
+                    {
+                        // Check if numeric column reference (e.g. ORDER BY 1, 2)
+                        if (int.TryParse(col, out _)) continue;
+
+                        // Check if column or exact expression exists in GROUP BY tokens
+                        bool isGrouped = groupByTokens.Any(g => 
+                            g.Equals(col, StringComparison.OrdinalIgnoreCase) || 
+                            g.Contains(col, StringComparison.OrdinalIgnoreCase) ||
+                            col.Contains(g, StringComparison.OrdinalIgnoreCase));
+
+                        // Check if col is a SELECT alias
+                        // Normalized SQL has no brackets, so check for AS alias pattern
+                        bool isAlias = Regex.IsMatch(sql, $@"\bAS\s+{Regex.Escape(col)}\b", RegexOptions.IgnoreCase);
+
+                        if (!isGrouped && !isAlias)
+                        {
+                            return new MikroRuleViolation
+                            {
+                                RuleId = "M-08",
+                                Title = "Geçersiz T-SQL ORDER BY / GROUP BY Kolon Bağımlılığı",
+                                PenaltyPoints = 10,
+                                IssueDescription = $"ORDER BY fıkrasındaki '{col}' kolonu ne bir aggregate (SUM/COUNT vb.) fonksiyon içinde ne de GROUP BY fıkrasında yer almaktadır. SQL Server sorguyu çalıştırmayacaktır.",
+                                V26RuleReference = "T-SQL Standartları: GROUP BY içeren sorgularda ORDER BY kolonu GROUP BY listesinde veya aggregate fonksiyon içinde olmak zorundadır.",
+                                RecommendedFix = $"ORDER BY '{col}' yerine sütun indeksi (Örn: `ORDER BY 1, 2`) veya GROUP BY'daki CASE ifadesinin alias'ını kullanın.",
+                                Severity = "Error"
+                            };
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Parser fallback
+            }
+
+            return null;
+        }
+
+        private List<string> TokenizeExpressions(string clause)
+        {
+            var result = new List<string>();
+            int depth = 0;
+            int start = 0;
+
+            for (int i = 0; i < clause.Length; i++)
+            {
+                char c = clause[i];
+                if (c == '(') depth++;
+                else if (c == ')') depth--;
+                else if (c == ',' && depth == 0)
+                {
+                    result.Add(clause.Substring(start, i - start).Trim());
+                    start = i + 1;
+                }
+            }
+            if (start < clause.Length)
+            {
+                result.Add(clause.Substring(start).Trim());
+            }
+
+            return result.Where(r => !string.IsNullOrWhiteSpace(r)).ToList();
+        }
+
+        private List<string> ExtractNonAggregateColumns(string expression)
+        {
+            var cols = new List<string>();
+            var upperExpr = expression.ToUpperInvariant();
+
+            // If the expression starts with an aggregate function, ignore column checks inside it
+            var aggFunctions = new[] { "SUM(", "COUNT(", "MAX(", "MIN(", "AVG(", "STDEV(" };
+            if (aggFunctions.Any(f => upperExpr.StartsWith(f)))
+            {
+                return cols;
+            }
+
+            // Extract table.column or column identifiers
+            var matches = Regex.Matches(expression, @"(?:\[?([A-Za-z0-9_]+)\]?\.)?\[?([A-Za-z0-9_]+)\]?");
+            var sqlKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "SELECT", "FROM", "WHERE", "AND", "OR", "CASE", "WHEN", "THEN", "ELSE", "END",
+                "ASC", "DESC", "NULL", "NOT", "IN", "IS", "LIKE", "YEAR", "MONTH", "DAY", "DATEFROMPARTS"
+            };
+
+            foreach (Match m in matches)
+            {
+                var colName = m.Groups[2].Value;
+                if (!sqlKeywords.Contains(colName) && !int.TryParse(colName, out _))
+                {
+                    cols.Add(m.Value.Trim());
+                }
+            }
+
+            return cols.Distinct().ToList();
+        }
+
+        /// <summary>
+        /// SQL içerisindeki FROM ve JOIN tablolarını ayıklayıp şema ile karşılaştırır.
+        /// </summary>
+        private MikroRuleViolation? EvaluateTableReferences(string sql)
+        {
+            try
+            {
+                // Find all defined CTE names in the query (WITH cte_name AS ... or , cte_name AS ...)
+                var definedCtes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var cteMatches = Regex.Matches(sql, @"(?:WITH|,)\s*\[?([A-Za-z0-9_]+)\]?\s+AS\s*\(", RegexOptions.IgnoreCase);
+                foreach (Match cm in cteMatches)
+                {
+                    if (cm.Groups[1].Success)
+                    {
+                        definedCtes.Add(cm.Groups[1].Value);
+                    }
+                }
+
+                var matches = Regex.Matches(sql, @"\b(?:FROM|JOIN)\s+\[?([A-Za-z0-9_]+)\]?", RegexOptions.IgnoreCase);
+                var unknownTables = new List<string>();
+                var variantTables = new List<string>();
+
+                foreach (Match m in matches)
+                {
+                    string tbl = m.Groups[1].Value;
+                    if (string.IsNullOrWhiteSpace(tbl)) continue;
+
+                    // If it's a defined CTE, skip
+                    if (definedCtes.Contains(tbl)) continue;
+
+                    bool isKnown = _knownMikroTables.Any(t => t.Equals(tbl, StringComparison.OrdinalIgnoreCase));
+                    if (!isKnown)
+                    {
+                        // Check if it is a known variant/choose-view (e.g. _CHOOSE_30, _GIRIS_CIKIS, _YONETIM)
+                        bool isVariant = tbl.Contains("_CHOOSE_", StringComparison.OrdinalIgnoreCase) ||
+                                         tbl.Contains("_GIRIS_CIKIS", StringComparison.OrdinalIgnoreCase) ||
+                                         tbl.Contains("vw_", StringComparison.OrdinalIgnoreCase);
+
+                        if (isVariant)
+                        {
+                            variantTables.Add(tbl);
+                        }
+                        else
+                        {
+                            unknownTables.Add(tbl);
+                        }
+                    }
+                }
+
+                if (unknownTables.Count > 0)
+                {
+                    return new MikroRuleViolation
+                    {
+                        RuleId = "M-09",
+                        Title = "Şemada Bulunmayan Tablo Referansı",
+                        PenaltyPoints = 8,
+                        IssueDescription = $"Sorguda kullanılan '{string.Join(", ", unknownTables.Distinct())}' tablosu/tabloları Mikro ERP şemasında bulunmamaktadır.",
+                        V26RuleReference = "Mikro T-SQL Şema Kuralları: Yalnızca şemada tanımlı olan yetkili veritabanı nesneleri kullanılmalıdır.",
+                        RecommendedFix = "Şemadaki geçerli tablo veya view adlarını kullanın.",
+                        Severity = "Error"
+                    };
+                }
+
+                if (variantTables.Count > 0)
+                {
+                    return new MikroRuleViolation
+                    {
+                        RuleId = "M-09",
+                        Title = "Şema Harici Mikro View / Choose-View Kullanımı",
+                        PenaltyPoints = 0, // No score penalty for known Mikro view variants
+                        IssueDescription = $"Sorguda Mikro ERP'ye özel '{string.Join(", ", variantTables.Distinct())}' view yapısı kullanılmıştır. Şemada doğrudan olmasa da Mikro veritabanında mevcut bilinen bir varyanttır.",
+                        V26RuleReference = "Mikro ERP Özel Nesneleri: Ek özelleştirilmiş view referansları.",
+                        RecommendedFix = "Gerekirse şema tanımını güncelleyin.",
+                        Severity = "Warning"
+                    };
+                }
+            }
+            catch
+            {
+                // Fallback
+            }
+
+            return null;
         }
     }
 }

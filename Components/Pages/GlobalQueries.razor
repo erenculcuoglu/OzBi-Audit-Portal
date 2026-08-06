@@ -71,21 +71,43 @@ else
                 <!-- Top Metadata Header: Tenant, User, Model, Status, Date -->
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2 pb-2 border-bottom border-secondary border-opacity-25">
                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <!-- Tenant Badge -->
-                        <span class="badge-status badge-info" title="Tenant Firması">
-                            <i class="bi bi-building me-1"></i>@(item.Chat?.Tenant?.Name ?? "Tenant")
+                        <!-- Tenant Badge (Dark Slate / Slate Cyan) -->
+                        <span class="badge-status" style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(148, 163, 184, 0.3); color: #cbd5e1;" title="Tenant Firması">
+                            @(item.Chat?.Tenant?.Name ?? "Tenant")
                         </span>
 
-                        <!-- User Badge -->
-                        <span class="badge-status badge-success" title="Sorguyu Çalıştıran Kullanıcı">
-                            <i class="bi bi-person-fill me-1"></i>@(item.Chat?.CreatedByUser?.NameSurname ?? item.Chat?.CreatedByUser?.Email ?? "Kullanıcı Belli Değil")
+                        <!-- User Badge (Dark Slate / Soft Emerald Icon) -->
+                        <span class="badge-status" style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(148, 163, 184, 0.3); color: #e2e8f0;" title="Sorguyu Çalıştıran Kullanıcı">
+                            @(item.Chat?.CreatedByUser?.NameSurname ?? item.Chat?.CreatedByUser?.Email ?? "Kullanıcı Belli Değil")
                         </span>
 
-                        <!-- AI Model Badge -->
+                        <!-- Mode Badge (Sorgu Modu vs Asistan Modu) -->
+                        @if (item.IsAsistantMode)
+                        {
+                            <span class="badge-status" style="background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(192, 132, 252, 0.4); color: #c084fc;" title="AI Asistan / Agent Modu">
+                                Asistan Modu
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge-status" style="background: rgba(14, 165, 233, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;" title="Sorgu Modu (SQL Raporu)">
+                                Sorgu Modu
+                            </span>
+                        }
+
+                        <!-- AI Model Badge (Indigo Glass) -->
                         @if (item.AIModel != null)
                         {
-                            <span class="badge-status badge-purple" title="AI Modeli">
-                                <i class="bi bi-cpu me-1"></i>@(item.AIModel.Name ?? item.AIModel.ProgrammaticName)
+                            <span class="badge-status" style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(129, 140, 248, 0.4); color: #818cf8;" title="AI Modeli">
+                                Model: @(item.AIModel.Name ?? item.AIModel.ProgrammaticName)
+                            </span>
+                        }
+
+                        <!-- Assistant Badge (Teal Glass) -->
+                        @if (item.Assistant != null)
+                        {
+                            <span class="badge-status" style="background: rgba(20, 184, 166, 0.15); border: 1px solid rgba(45, 212, 191, 0.4); color: #2dd4bf;" title="Çalıştırılan Asistan">
+                                Asistan: @item.Assistant.Name
                             </span>
                         }
 
@@ -94,20 +116,24 @@ else
                         {
                             var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro v27";
                             <button type="button" class="btn btn-sm p-0 border-0 bg-transparent text-decoration-none" @onclick="() => OpenComplianceModal(compliance, item.Query ?? string.Empty)">
-                                <span class="badge-status" style="background: rgba(15, 23, 42, 0.8); border: 1px solid @GetScoreColor(compliance.Score); color: @GetScoreColor(compliance.Score); cursor: pointer;" title="Detaylı ERP Uyum Raporu İçin Tıklayın">
-                                    <i class="bi bi-shield-check me-1"></i>@erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)
+                                <span class="badge-status" style="background: rgba(15, 23, 42, 0.85); border: 1px solid @GetScoreColor(compliance.Score); color: @GetScoreColor(compliance.Score); cursor: pointer;" title="Detaylı ERP Uyum Raporu İçin Tıklayın">
+                                    @erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)
                                 </span>
                             </button>
                         }
 
-                        <!-- Status Badge -->
+                        <!-- Status Badge (Son Sırada - Emerald Green / Bright Red) -->
                         @if (string.IsNullOrEmpty(item.ErrorMessage))
                         {
-                            <span class="badge-status badge-success"><i class="bi bi-check-circle me-1"></i>Başarılı</span>
+                            <span class="badge-status" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(52, 211, 153, 0.4); color: #34d399;" title="Sorgu Başarılı">
+                                Başarılı
+                            </span>
                         }
                         else
                         {
-                            <span class="badge-status badge-danger"><i class="bi bi-exclamation-triangle me-1"></i>Hatalı</span>
+                            <span class="badge-status" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(248, 113, 113, 0.4); color: #f87171;" title="Sorgu Hatalı">
+                                Hatalı
+                            </span>
                         }
                     </div>
 

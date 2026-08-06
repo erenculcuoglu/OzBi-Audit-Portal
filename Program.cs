@@ -9,6 +9,8 @@ using OzBiPortalCRM.Data;
 using OzBiPortalCRM.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -49,6 +51,8 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
 
 // Register Memory Cache & Multi-ERP Business Services
 builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<ISlackNotificationService, SlackNotificationService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IOzBiAuditService, OzBiAuditService>();
 builder.Services.AddScoped<ITenantSchemaProvider, TenantSchemaProvider>();
@@ -80,7 +84,7 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 // Native Cookie Auth Endpoints
-app.MapPost("/api/auth/login", async (HttpContext httpContext, IUserService userService, [FromForm] string email, [FromForm] string password) =>
+app.MapPost("/api/auth/login", async (HttpContext httpContext, IUserService userService, ISlackNotificationService slackService, [FromForm] string email, [FromForm] string password) =>
 {
     var user = await userService.AuthenticateAsync(email, password);
     if (user == null)
@@ -104,8 +108,19 @@ app.MapPost("/api/auth/login", async (HttpContext httpContext, IUserService user
     };
 
     await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity), authProperties);
+
+    // Slack push bildirimini tetikle
+    var ipAddress = httpContext.Connection.RemoteIpAddress?.ToString();
+    if (string.IsNullOrWhiteSpace(ipAddress) || ipAddress == "::1")
+    {
+        ipAddress = "127.0.0.1 (Yerel)";
+    }
+    var userAgent = httpContext.Request.Headers["User-Agent"].ToString();
+    _ = Task.Run(() => slackService.SendLoginNotificationAsync(user.FullName, user.Email, user.Role, ipAddress, userAgent));
+
     return Results.Redirect("/");
 }).DisableAntiforgery();
+
 
 app.MapGet("/api/auth/logout", async (HttpContext httpContext) =>
 {

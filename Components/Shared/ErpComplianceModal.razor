@@ -79,12 +79,23 @@
                     <div class="d-flex flex-column gap-3">
                         @foreach (var v in Report.Violations)
                         {
-                            <div class="p-3 rounded bg-danger bg-opacity-10 border border-danger border-opacity-30">
+                            var isWarning = v.Severity?.Equals("Warning", StringComparison.OrdinalIgnoreCase) == true;
+                            var isInfo = v.Severity?.Equals("Info", StringComparison.OrdinalIgnoreCase) == true;
+                            
+                            var cardBg = isWarning ? "bg-warning bg-opacity-10 border-warning border-opacity-30" :
+                                         isInfo ? "bg-info bg-opacity-10 border-info border-opacity-30" :
+                                         "bg-danger bg-opacity-10 border-danger border-opacity-30";
+
+                            var titleColor = isWarning ? "text-warning" : isInfo ? "text-info" : "text-danger";
+                            var iconClass = isWarning ? "bi bi-exclamation-triangle me-1" : isInfo ? "bi bi-info-circle me-1" : "bi bi-x-circle me-1";
+                            var badgeBg = isWarning ? "bg-warning text-dark" : isInfo ? "bg-info text-dark" : "bg-danger text-white";
+
+                            <div class="p-3 rounded border @cardBg">
                                 <div class="d-flex align-items-center justify-content-between mb-2">
-                                    <span class="fw-bold text-danger">
-                                        <i class="bi bi-x-circle me-1"></i> [@v.RuleId] @v.Title
+                                    <span class="fw-bold @titleColor">
+                                        <i class="@iconClass"></i> [@v.RuleId] @v.Title
                                     </span>
-                                    <span class="badge bg-danger text-white font-monospace">
+                                    <span class="badge @badgeBg font-monospace">
                                         -@v.PenaltyPoints Puan
                                     </span>
                                 </div>

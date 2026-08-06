@@ -25,3 +25,8 @@ publish/
 publish.zip
 *.nupkg
 *.snupkg
+
+## Local Settings / Secrets
+appsettings.Development.json
+appsettings.Local.json
+
