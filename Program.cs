@@ -9,8 +9,8 @@ using OzBiPortalCRM.Data;
 using OzBiPortalCRM.Services;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
-
+var localJsonPath = Path.Combine(builder.Environment.ContentRootPath, "appsettings.Local.json");
+builder.Configuration.AddJsonFile(localJsonPath, optional: true, reloadOnChange: true);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -116,7 +116,7 @@ app.MapPost("/api/auth/login", async (HttpContext httpContext, IUserService user
         ipAddress = "127.0.0.1 (Yerel)";
     }
     var userAgent = httpContext.Request.Headers["User-Agent"].ToString();
-    _ = Task.Run(() => slackService.SendLoginNotificationAsync(user.FullName, user.Email, user.Role, ipAddress, userAgent));
+    await slackService.SendLoginNotificationAsync(user.FullName, user.Email, user.Role, ipAddress, userAgent);
 
     return Results.Redirect("/");
 }).DisableAntiforgery();
