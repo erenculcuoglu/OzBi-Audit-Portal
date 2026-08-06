@@ -14,7 +14,6 @@ namespace OzBiPortalCRM.Services
     public class OzBiLoginMonitorService : BackgroundService
     {
         private readonly IServiceProvider _serviceProvider;
-        private readonly ISlackNotificationService _slackService;
         private readonly ILogger<OzBiLoginMonitorService> _logger;
 
         private readonly ConcurrentDictionary<string, int> _userLoginCounts = new();
@@ -22,11 +21,9 @@ namespace OzBiPortalCRM.Services
 
         public OzBiLoginMonitorService(
             IServiceProvider serviceProvider,
-            ISlackNotificationService slackService,
             ILogger<OzBiLoginMonitorService> logger)
         {
             _serviceProvider = serviceProvider;
-            _slackService = slackService;
             _logger = logger;
         }
 
@@ -35,7 +32,7 @@ namespace OzBiPortalCRM.Services
             _logger.LogInformation("OzBI MariaDB Kullanıcı Girişi Takip Servisi (Login Monitor) başlatıldı.");
 
             // Uygulama açılışında DB bağlantısının oturmasını bekle
-            await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -57,6 +54,8 @@ namespace OzBiPortalCRM.Services
         {
             using var scope = _serviceProvider.CreateScope();
             var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<OzBiDbContext>>();
+            var slackService = scope.ServiceProvider.GetRequiredService<ISlackNotificationService>();
+
             using var db = await dbFactory.CreateDbContextAsync();
 
             var users = await db.Users.AsNoTracking()
@@ -74,7 +73,6 @@ namespace OzBiPortalCRM.Services
 
             if (!_isInitialSnapshotDone)
             {
-                // İlk çalıştırmada mevcut kullanıcıların LoginCount sayılarını hafızaya al (eski loginler için mesaj yağmasını önler)
                 foreach (var user in users)
                 {
                     _userLoginCounts[user.Id] = user.LoginCount;
@@ -106,12 +104,11 @@ namespace OzBiPortalCRM.Services
                         _logger.LogInformation("OzBI Giriş Tetiklendi: Firma={Tenant}, Kullanıcı={User}, Yeni LoginCount={Count}", tenantName, displayName, user.LoginCount);
 
                         // Slack push bildirimini tetikle
-                        await _slackService.SendTenantUserLoginNotificationAsync(tenantName, displayName, emailStr, user.LoginCount);
+                        await slackService.SendTenantUserLoginNotificationAsync(tenantName, displayName, emailStr, user.LoginCount);
                     }
                 }
                 else
                 {
-                    // Yeni eklenen kullanıcı
                     _userLoginCounts[user.Id] = user.LoginCount;
                 }
             }
