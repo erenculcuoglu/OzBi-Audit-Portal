@@ -19,6 +19,20 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Inject Slack Webhook URL
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          cat > appsettings.Production.json << EOF
+          {
+            "Slack": {
+              "WebhookUrl": "${SLACK_WEBHOOK_URL}",
+              "Enabled": true
+            }
+          }
+          EOF
+          echo "appsettings.Production.json created with Slack webhook."
+
       - name: Build & Publish App
         run: dotnet publish "OzBI Portal CRM.csproj" -c Release -o ./publish
 

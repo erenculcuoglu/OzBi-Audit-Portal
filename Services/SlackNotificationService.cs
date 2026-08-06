@@ -14,8 +14,6 @@ namespace OzBiPortalCRM.Services
         private readonly IConfiguration _configuration;
         private readonly ILogger<SlackNotificationService> _logger;
 
-        private const string DefaultBase64Webhook = "aHR0cHM6Ly9ob29rcy5zbGFjay5jb20vc2VydmljZXMvVDM3R0xSSlRGL0IwQk5ESk5MMUxLL1JQTUYweVRTQnVvVG1kdGtSZmdtYk1QTw==";
-
         public SlackNotificationService(
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration,
@@ -28,22 +26,13 @@ namespace OzBiPortalCRM.Services
 
         private string GetEffectiveWebhookUrl()
         {
+            // 1. appsettings.json / appsettings.Production.json (deploy sırasında enjekte edilir)
             var webhookUrl = _configuration["Slack:WebhookUrl"];
-            if (string.IsNullOrWhiteSpace(webhookUrl) || webhookUrl.Contains("YOUR/SLACK/WEBHOOK_URL"))
+
+            // 2. Ortam değişkeni fallback
+            if (string.IsNullOrWhiteSpace(webhookUrl))
             {
                 webhookUrl = Environment.GetEnvironmentVariable("SLACK_WEBHOOK_URL");
-            }
-
-            if (string.IsNullOrWhiteSpace(webhookUrl) || webhookUrl.Contains("YOUR/SLACK/WEBHOOK_URL"))
-            {
-                try
-                {
-                    webhookUrl = Encoding.UTF8.GetString(Convert.FromBase64String(DefaultBase64Webhook));
-                }
-                catch
-                {
-                    webhookUrl = string.Empty;
-                }
             }
 
             return webhookUrl ?? string.Empty;
