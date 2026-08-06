@@ -128,5 +128,101 @@ namespace OzBiPortalCRM.Services
                 _logger.LogError(ex, "Slack bildirimi gönderilirken beklenmeyen bir hata oluştu.");
             }
         }
+
+        public async Task SendTenantUserLoginNotificationAsync(string tenantName, string fullName, string email, int totalLoginCount)
+        {
+            try
+            {
+                var enabled = _configuration.GetValue<bool>("Slack:Enabled", true);
+                if (!enabled)
+                {
+                    return;
+                }
+
+                var webhookUrl = _configuration["Slack:WebhookUrl"];
+                if (string.IsNullOrWhiteSpace(webhookUrl) || webhookUrl.Contains("YOUR/SLACK/WEBHOOK_URL"))
+                {
+                    webhookUrl = Environment.GetEnvironmentVariable("SLACK_WEBHOOK_URL");
+                }
+
+                if (string.IsNullOrWhiteSpace(webhookUrl) || webhookUrl.Contains("YOUR/SLACK/WEBHOOK_URL"))
+                {
+                    _logger.LogWarning("Slack Webhook URL yapılandırılmamış.");
+                    return;
+                }
+
+                DateTime localTime;
+                try
+                {
+                    var turkeyZone = TimeZoneInfo.FindSystemTimeZoneById("Turkey Standard Time");
+                    localTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, turkeyZone);
+                }
+                catch
+                {
+                    try
+                    {
+                        var europeIstanbul = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
+                        localTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, europeIstanbul);
+                    }
+                    catch
+                    {
+                        localTime = DateTime.UtcNow.AddHours(3);
+                    }
+                }
+
+                var formattedTime = localTime.ToString("dd.MM.yyyy HH:mm:ss");
+
+                var payload = new
+                {
+                    text = $"🟢 *OzBI App Kullanıcı Girişi:* {tenantName} / {fullName} ({email})",
+                    blocks = new object[]
+                    {
+                        new
+                        {
+                            type = "header",
+                            text = new
+                            {
+                                type = "plain_text",
+                                text = "🚀 OzBI Uygulaması - Kullanıcı Girişi",
+                                emoji = true
+                            }
+                        },
+                        new
+                        {
+                            type = "section",
+                            fields = new object[]
+                            {
+                                new { type = "mrkdwn", text = $"*Firma / Tenant:*\n*{tenantName}*" },
+                                new { type = "mrkdwn", text = $"*Kullanıcı:*\n{fullName}" },
+                                new { type = "mrkdwn", text = $"*E-Posta:*\n`{email}`" },
+                                new { type = "mrkdwn", text = $"*Toplam Giriş Sayısı:*\n`{totalLoginCount}`" },
+                                new { type = "mrkdwn", text = $"*Giriş Zamanı:*\n{formattedTime} (TSI)" }
+                            }
+                        }
+                    }
+                };
+
+                var jsonPayload = JsonSerializer.Serialize(payload);
+                var client = _httpClientFactory.CreateClient("SlackClient");
+
+                using var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                var response = await client.PostAsync(webhookUrl, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Slack tenant user login bildirimi başarıyla gönderildi: {Tenant} / {Email}", tenantName, email);
+                }
+                else
+                {
+                    var responseBody = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Slack tenant bildirim gönderimi başarısız oldu. Kod: {StatusCode}, Yanıt: {ResponseBody}", response.StatusCode, responseBody);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Slack tenant bildirimi gönderilirken beklenmeyen bir hata oluştu.");
+            }
+        }
     }
 }
+

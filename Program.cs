@@ -58,6 +58,7 @@ builder.Services.AddScoped<IOzBiAuditService, OzBiAuditService>();
 builder.Services.AddScoped<ITenantSchemaProvider, TenantSchemaProvider>();
 builder.Services.AddScoped<IErpAuditEngine, ErpAuditEngine>();
 builder.Services.AddScoped<IMikroAuditEngine, ErpAuditEngine>();
+builder.Services.AddHostedService<OzBiLoginMonitorService>();
 
 var app = builder.Build();
 
