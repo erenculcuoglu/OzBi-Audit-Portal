@@ -62,7 +62,7 @@ namespace OzBiPortalCRM.Services
             Dictionary<string, int> savedSnapshots;
             try
             {
-                savedSnapshots = await appDb.UserLoginSnapshots.ToDictionaryAsync(s => s.UserId, s => s.LastSeenLoginCount);
+                savedSnapshots = await appDb.UserLoginSnapshots.AsNoTracking().ToDictionaryAsync(s => s.UserId, s => s.LastSeenLoginCount);
             }
             catch (Exception ex)
             {
@@ -103,6 +103,16 @@ namespace OzBiPortalCRM.Services
                         {
                             existingSnapshot.LastSeenLoginCount = user.LoginCount;
                             existingSnapshot.LastUpdatedAt = DateTime.UtcNow;
+                            appDb.UserLoginSnapshots.Update(existingSnapshot);
+                        }
+                        else
+                        {
+                            appDb.UserLoginSnapshots.Add(new UserLoginSnapshot
+                            {
+                                UserId = user.Id,
+                                LastSeenLoginCount = user.LoginCount,
+                                LastUpdatedAt = DateTime.UtcNow
+                            });
                         }
 
                         tenantMap.TryGetValue(user.TenantId, out var tenantName);
