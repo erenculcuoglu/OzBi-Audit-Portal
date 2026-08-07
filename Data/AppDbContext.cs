@@ -36,7 +36,9 @@ namespace OzBiPortalCRM.Data
 
             try
             {
-                await Database.ExecuteSqlRawAsync(@"
+                await Database.OpenConnectionAsync();
+                using var cmd = Database.GetDbConnection().CreateCommand();
+                cmd.CommandText = @"
                     CREATE TABLE IF NOT EXISTS FavoriteItems (
                         Id INTEGER PRIMARY KEY AUTOINCREMENT,
                         PortalUserId INTEGER NOT NULL,
@@ -46,19 +48,14 @@ namespace OzBiPortalCRM.Data
                         ItemSubText TEXT,
                         AddedAt TEXT NOT NULL
                     );
-                ");
-            }
-            catch { }
 
-            try
-            {
-                await Database.ExecuteSqlRawAsync(@"
                     CREATE TABLE IF NOT EXISTS UserLoginSnapshots (
                         UserId TEXT PRIMARY KEY,
                         LastSeenLoginCount INTEGER NOT NULL,
                         LastUpdatedAt TEXT NOT NULL
                     );
-                ");
+                ";
+                await cmd.ExecuteNonQueryAsync();
             }
             catch { }
         }
