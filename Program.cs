@@ -47,6 +47,10 @@ builder.Services.AddDbContextFactory<OzBiDbContext>(options =>
 
 // Configure SQLite DbContext Factory for Local App Database
 var appConnStr = builder.Configuration.GetConnectionString("AppDatabase");
+var absoluteDbPath = Path.Combine(builder.Environment.ContentRootPath, "app", "ozbi_audit.db");
+Directory.CreateDirectory(Path.GetDirectoryName(absoluteDbPath)!);
+appConnStr = $"Data Source={absoluteDbPath}";
+
 builder.Services.AddDbContextFactory<AppDbContext>(options =>
 {
     options.UseSqlite(appConnStr);
