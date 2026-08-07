@@ -28,7 +28,12 @@ jobs:
           echo "appsettings.Production.json created."
 
       - name: Build & Publish App
-        run: dotnet publish "OzBI Portal CRM.csproj" -c Release -o ./publish
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          dotnet publish "OzBI Portal CRM.csproj" -c Release -o ./publish
+          echo "{\"Slack\":{\"WebhookUrl\":\"${SLACK_WEBHOOK_URL}\",\"Enabled\":true}}" > ./publish/appsettings.Production.json
+          echo "Verified appsettings.Production.json in ./publish."
 
       - name: Install ncftp
         run: sudo apt-get update && sudo apt-get install -y ncftp
