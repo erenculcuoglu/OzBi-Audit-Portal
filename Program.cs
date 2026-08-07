@@ -9,6 +9,9 @@ using OzBiPortalCRM.Data;
 using OzBiPortalCRM.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+var prodJsonPath = Path.Combine(builder.Environment.ContentRootPath, "appsettings.Production.json");
+builder.Configuration.AddJsonFile(prodJsonPath, optional: true, reloadOnChange: true);
+
 var localJsonPath = Path.Combine(builder.Environment.ContentRootPath, "appsettings.Local.json");
 builder.Configuration.AddJsonFile(localJsonPath, optional: true, reloadOnChange: true);
 
