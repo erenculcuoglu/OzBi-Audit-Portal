@@ -55,19 +55,20 @@ namespace OzBiPortalCRM.Services
             var appDbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
             var slackService = scope.ServiceProvider.GetRequiredService<ISlackNotificationService>();
 
-            // SQLite veritabanının ve tabloların oluşturulduğundan emin ol
             using var appDb = await appDbFactory.CreateDbContextAsync();
             await appDb.EnsureTablesCreatedAsync();
 
-            Dictionary<string, int> savedSnapshots;
+            // SQLite kalıcı veritabanındaki takip kayıtlarını EF Core Change Tracker ile yükle
+            Dictionary<string, UserLoginSnapshot> savedSnapshots;
             try
             {
-                savedSnapshots = await appDb.UserLoginSnapshots.AsNoTracking().ToDictionaryAsync(s => s.UserId, s => s.LastSeenLoginCount);
+                var snapshotList = await appDb.UserLoginSnapshots.ToListAsync();
+                savedSnapshots = snapshotList.ToDictionary(s => s.UserId, s => s);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "UserLoginSnapshots tablosu henüz okunamadı, yeni oluşturuluyor.");
-                savedSnapshots = new Dictionary<string, int>();
+                _logger.LogWarning(ex, "UserLoginSnapshots tablosu henüz okunamadı.");
+                savedSnapshots = new Dictionary<string, UserLoginSnapshot>();
             }
 
             using var ozBiDb = await ozBiDbFactory.CreateDbContextAsync();
@@ -93,35 +94,21 @@ namespace OzBiPortalCRM.Services
 
             foreach (var user in users)
             {
-                if (savedSnapshots.TryGetValue(user.Id, out var previousCount))
+                if (savedSnapshots.TryGetValue(user.Id, out var snapshot))
                 {
-                    if (user.LoginCount > previousCount)
+                    if (user.LoginCount > snapshot.LastSeenLoginCount)
                     {
-                        // SQLite kalıcı veritabanında son görülen sayıyı güncelle
-                        var existingSnapshot = await appDb.UserLoginSnapshots.FindAsync(user.Id);
-                        if (existingSnapshot != null)
-                        {
-                            existingSnapshot.LastSeenLoginCount = user.LoginCount;
-                            existingSnapshot.LastUpdatedAt = DateTime.UtcNow;
-                            appDb.UserLoginSnapshots.Update(existingSnapshot);
-                        }
-                        else
-                        {
-                            appDb.UserLoginSnapshots.Add(new UserLoginSnapshot
-                            {
-                                UserId = user.Id,
-                                LastSeenLoginCount = user.LoginCount,
-                                LastUpdatedAt = DateTime.UtcNow
-                            });
-                        }
-
                         tenantMap.TryGetValue(user.TenantId, out var tenantName);
                         tenantName ??= user.TenantId;
 
                         string displayName = !string.IsNullOrWhiteSpace(user.NameSurname) ? user.NameSurname : (user.UserName ?? user.Email ?? "Bilinmeyen Kullanıcı");
                         string emailStr = user.Email ?? user.UserName ?? "E-posta yok";
 
-                        _logger.LogInformation("OzBI Giriş Tetiklendi: Firma={Tenant}, Kullanıcı={User}, Eski LoginCount={PrevCount}, Yeni LoginCount={Count}", tenantName, displayName, previousCount, user.LoginCount);
+                        _logger.LogInformation("OzBI Giriş Tetiklendi: Firma={Tenant}, Kullanıcı={User}, Eski LoginCount={PrevCount}, Yeni LoginCount={Count}", tenantName, displayName, snapshot.LastSeenLoginCount, user.LoginCount);
+
+                        // EF Core tarafından takip edilen varlığı doğrudan güncelle
+                        snapshot.LastSeenLoginCount = user.LoginCount;
+                        snapshot.LastUpdatedAt = DateTime.UtcNow;
 
                         // Slack push bildirimini tetikle
                         await slackService.SendTenantUserLoginNotificationAsync(tenantName, displayName, emailStr, user.LoginCount);
@@ -129,16 +116,16 @@ namespace OzBiPortalCRM.Services
                 }
                 else
                 {
-                    // İlk defa görülen kullanıcı - SQLite'a kaydet
-                    appDb.UserLoginSnapshots.Add(new UserLoginSnapshot
+                    // SQLite veritabanında henüz bulunmayan yeni kullanıcı
+                    var newSnapshot = new UserLoginSnapshot
                     {
                         UserId = user.Id,
                         LastSeenLoginCount = user.LoginCount,
                         LastUpdatedAt = DateTime.UtcNow
-                    });
+                    };
+                    appDb.UserLoginSnapshots.Add(newSnapshot);
+                    savedSnapshots[user.Id] = newSnapshot;
 
-                    // Eğer sistemde daha önce kayıtlı hiç snapshot yoksa (ilk kurulum), mevcut kullanıcılar için bildirim gönderme, sadece kaydet
-                    // Ancak sistem çalışıyorken yeni bir kullanıcı eklendiyse ve LoginCount > 0 ise bildirim gönder
                     if (!isFirstSystemRun && user.LoginCount > 0)
                     {
                         tenantMap.TryGetValue(user.TenantId, out var tenantName);
