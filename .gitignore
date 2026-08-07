@@ -29,4 +29,7 @@ publish.zip
 ## Local Settings / Secrets
 appsettings.Development.json
 appsettings.Local.json
+manual_publish/
+ftp_deploy.py
+
 
