@@ -12,6 +12,7 @@ namespace OzBiPortalCRM.Data
 
         public DbSet<PortalUser> Users { get; set; } = null!;
         public DbSet<FavoriteItem> Favorites { get; set; } = null!;
+        public DbSet<UserLoginSnapshot> UserLoginSnapshots { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -24,6 +25,9 @@ namespace OzBiPortalCRM.Data
             modelBuilder.Entity<FavoriteItem>()
                 .HasIndex(f => new { f.PortalUserId, f.ItemType, f.ItemId })
                 .IsUnique();
+
+            modelBuilder.Entity<UserLoginSnapshot>()
+                .HasKey(s => s.UserId);
         }
 
         public async Task EnsureTablesCreatedAsync()
@@ -38,6 +42,12 @@ namespace OzBiPortalCRM.Data
                     ItemName TEXT,
                     ItemSubText TEXT,
                     AddedAt TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS UserLoginSnapshots (
+                    UserId TEXT PRIMARY KEY,
+                    LastSeenLoginCount INTEGER NOT NULL,
+                    LastUpdatedAt TEXT NOT NULL
                 );
             ");
         }

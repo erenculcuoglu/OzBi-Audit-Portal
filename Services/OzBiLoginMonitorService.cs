@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OzBiPortalCRM.Data;
+using OzBiPortalCRM.Models;
 
 namespace OzBiPortalCRM.Services
 {
@@ -15,9 +16,6 @@ namespace OzBiPortalCRM.Services
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<OzBiLoginMonitorService> _logger;
-
-        private readonly ConcurrentDictionary<string, int> _userLoginCounts = new();
-        private bool _isInitialSnapshotDone = false;
 
         public OzBiLoginMonitorService(
             IServiceProvider serviceProvider,
@@ -29,7 +27,7 @@ namespace OzBiPortalCRM.Services
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("OzBI MariaDB Kullanıcı Girişi Takip Servisi (Login Monitor) başlatıldı.");
+            _logger.LogInformation("OzBI MariaDB Kullanıcı Girişi Takip Servisi (Login Monitor - Persistent SQLite) başlatıldı.");
 
             // Uygulama açılışında DB bağlantısının oturmasını bekle
             await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
@@ -53,12 +51,18 @@ namespace OzBiPortalCRM.Services
         private async Task CheckForNewLoginsAsync()
         {
             using var scope = _serviceProvider.CreateScope();
-            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<OzBiDbContext>>();
+            var ozBiDbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<OzBiDbContext>>();
+            var appDbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
             var slackService = scope.ServiceProvider.GetRequiredService<ISlackNotificationService>();
 
-            using var db = await dbFactory.CreateDbContextAsync();
+            // SQLite veritabanının ve tabloların oluşturulduğundan emin ol
+            using var appDb = await appDbFactory.CreateDbContextAsync();
+            await appDb.EnsureTablesCreatedAsync();
 
-            var users = await db.Users.AsNoTracking()
+            var savedSnapshots = await appDb.UserLoginSnapshots.ToDictionaryAsync(s => s.UserId, s => s.LastSeenLoginCount);
+
+            using var ozBiDb = await ozBiDbFactory.CreateDbContextAsync();
+            var users = await ozBiDb.Users.AsNoTracking()
                 .Where(u => !u.IsDeleted)
                 .Select(u => new
                 {
@@ -71,29 +75,26 @@ namespace OzBiPortalCRM.Services
                 })
                 .ToListAsync();
 
-            if (!_isInitialSnapshotDone)
-            {
-                foreach (var user in users)
-                {
-                    _userLoginCounts[user.Id] = user.LoginCount;
-                }
-                _isInitialSnapshotDone = true;
-                _logger.LogInformation("OzBI MariaDB kullanıcı haritası {Count} kullanıcı için ilk durum kaydedildi.", users.Count);
-                return;
-            }
-
             var tenantIds = users.Select(u => u.TenantId).Where(tid => !string.IsNullOrEmpty(tid)).Distinct().ToList();
-            var tenantMap = await db.Tenants.AsNoTracking()
+            var tenantMap = await ozBiDb.Tenants.AsNoTracking()
                 .Where(t => tenantIds.Contains(t.Id))
                 .ToDictionaryAsync(t => t.Id, t => t.Name);
 
+            bool isFirstSystemRun = savedSnapshots.Count == 0;
+
             foreach (var user in users)
             {
-                if (_userLoginCounts.TryGetValue(user.Id, out var previousCount))
+                if (savedSnapshots.TryGetValue(user.Id, out var previousCount))
                 {
                     if (user.LoginCount > previousCount)
                     {
-                        _userLoginCounts[user.Id] = user.LoginCount;
+                        // SQLite kalıcı veritabanında son görülen sayıyı güncelle
+                        var existingSnapshot = await appDb.UserLoginSnapshots.FindAsync(user.Id);
+                        if (existingSnapshot != null)
+                        {
+                            existingSnapshot.LastSeenLoginCount = user.LoginCount;
+                            existingSnapshot.LastUpdatedAt = DateTime.UtcNow;
+                        }
 
                         tenantMap.TryGetValue(user.TenantId, out var tenantName);
                         tenantName ??= user.TenantId;
@@ -101,7 +102,7 @@ namespace OzBiPortalCRM.Services
                         string displayName = !string.IsNullOrWhiteSpace(user.NameSurname) ? user.NameSurname : (user.UserName ?? user.Email ?? "Bilinmeyen Kullanıcı");
                         string emailStr = user.Email ?? user.UserName ?? "E-posta yok";
 
-                        _logger.LogInformation("OzBI Giriş Tetiklendi: Firma={Tenant}, Kullanıcı={User}, Yeni LoginCount={Count}", tenantName, displayName, user.LoginCount);
+                        _logger.LogInformation("OzBI Giriş Tetiklendi: Firma={Tenant}, Kullanıcı={User}, Eski LoginCount={PrevCount}, Yeni LoginCount={Count}", tenantName, displayName, previousCount, user.LoginCount);
 
                         // Slack push bildirimini tetikle
                         await slackService.SendTenantUserLoginNotificationAsync(tenantName, displayName, emailStr, user.LoginCount);
@@ -109,9 +110,29 @@ namespace OzBiPortalCRM.Services
                 }
                 else
                 {
-                    _userLoginCounts[user.Id] = user.LoginCount;
+                    // İlk defa görülen kullanıcı - SQLite'a kaydet
+                    appDb.UserLoginSnapshots.Add(new UserLoginSnapshot
+                    {
+                        UserId = user.Id,
+                        LastSeenLoginCount = user.LoginCount,
+                        LastUpdatedAt = DateTime.UtcNow
+                    });
+
+                    // Eğer sistemde daha önce kayıtlı hiç snapshot yoksa (ilk kurulum), mevcut kullanıcılar için bildirim gönderme, sadece kaydet
+                    // Ancak sistem çalışıyorken yeni bir kullanıcı eklendiyse ve LoginCount > 0 ise bildirim gönder
+                    if (!isFirstSystemRun && user.LoginCount > 0)
+                    {
+                        tenantMap.TryGetValue(user.TenantId, out var tenantName);
+                        tenantName ??= user.TenantId;
+                        string displayName = !string.IsNullOrWhiteSpace(user.NameSurname) ? user.NameSurname : (user.UserName ?? user.Email ?? "Bilinmeyen Kullanıcı");
+                        string emailStr = user.Email ?? user.UserName ?? "E-posta yok";
+
+                        await slackService.SendTenantUserLoginNotificationAsync(tenantName, displayName, emailStr, user.LoginCount);
+                    }
                 }
             }
+
+            await appDb.SaveChangesAsync();
         }
     }
 }
