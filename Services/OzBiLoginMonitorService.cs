@@ -59,7 +59,16 @@ namespace OzBiPortalCRM.Services
             using var appDb = await appDbFactory.CreateDbContextAsync();
             await appDb.EnsureTablesCreatedAsync();
 
-            var savedSnapshots = await appDb.UserLoginSnapshots.ToDictionaryAsync(s => s.UserId, s => s.LastSeenLoginCount);
+            Dictionary<string, int> savedSnapshots;
+            try
+            {
+                savedSnapshots = await appDb.UserLoginSnapshots.ToDictionaryAsync(s => s.UserId, s => s.LastSeenLoginCount);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "UserLoginSnapshots tablosu henüz okunamadı, yeni oluşturuluyor.");
+                savedSnapshots = new Dictionary<string, int>();
+            }
 
             using var ozBiDb = await ozBiDbFactory.CreateDbContextAsync();
             var users = await ozBiDb.Users.AsNoTracking()

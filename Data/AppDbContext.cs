@@ -33,23 +33,34 @@ namespace OzBiPortalCRM.Data
         public async Task EnsureTablesCreatedAsync()
         {
             await Database.EnsureCreatedAsync();
-            await Database.ExecuteSqlRawAsync(@"
-                CREATE TABLE IF NOT EXISTS FavoriteItems (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    PortalUserId INTEGER NOT NULL,
-                    ItemType TEXT NOT NULL,
-                    ItemId TEXT NOT NULL,
-                    ItemName TEXT,
-                    ItemSubText TEXT,
-                    AddedAt TEXT NOT NULL
-                );
 
-                CREATE TABLE IF NOT EXISTS UserLoginSnapshots (
-                    UserId TEXT PRIMARY KEY,
-                    LastSeenLoginCount INTEGER NOT NULL,
-                    LastUpdatedAt TEXT NOT NULL
-                );
-            ");
+            try
+            {
+                await Database.ExecuteSqlRawAsync(@"
+                    CREATE TABLE IF NOT EXISTS FavoriteItems (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        PortalUserId INTEGER NOT NULL,
+                        ItemType TEXT NOT NULL,
+                        ItemId TEXT NOT NULL,
+                        ItemName TEXT,
+                        ItemSubText TEXT,
+                        AddedAt TEXT NOT NULL
+                    );
+                ");
+            }
+            catch { }
+
+            try
+            {
+                await Database.ExecuteSqlRawAsync(@"
+                    CREATE TABLE IF NOT EXISTS UserLoginSnapshots (
+                        UserId TEXT PRIMARY KEY,
+                        LastSeenLoginCount INTEGER NOT NULL,
+                        LastUpdatedAt TEXT NOT NULL
+                    );
+                ");
+            }
+            catch { }
         }
     }
 }
