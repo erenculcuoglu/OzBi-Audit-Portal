@@ -20,10 +20,16 @@ namespace OzBiPortalCRM.Services
             set => _useDemoMode = value;
         }
 
-        public OzBiAuditService(IDbContextFactory<OzBiDbContext> dbFactory, IDbContextFactory<AppDbContext> appDbFactory)
+        private readonly IServiceProvider _serviceProvider;
+
+        public OzBiAuditService(
+            IDbContextFactory<OzBiDbContext> dbFactory,
+            IDbContextFactory<AppDbContext> appDbFactory,
+            IServiceProvider serviceProvider)
         {
             _dbFactory = dbFactory;
             _appDbFactory = appDbFactory;
+            _serviceProvider = serviceProvider;
         }
 
         public async Task<List<TenantAuditSummary>> GetTenantsSummaryAsync(string? searchTerm = null, int portalUserId = 0)
@@ -32,6 +38,21 @@ namespace OzBiPortalCRM.Services
             {
                 return GetDemoTenantsSummary(searchTerm);
             }
+
+            // Anlık giriş takibini tetikle
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var scope = _serviceProvider.CreateScope();
+                    var monitor = scope.ServiceProvider.GetService<IOzBiLoginMonitorService>();
+                    if (monitor != null)
+                    {
+                        await monitor.CheckForNewLoginsAsync();
+                    }
+                }
+                catch { }
+            });
 
             try
             {

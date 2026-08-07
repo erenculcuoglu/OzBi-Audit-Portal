@@ -12,7 +12,7 @@ using OzBiPortalCRM.Models;
 
 namespace OzBiPortalCRM.Services
 {
-    public class OzBiLoginMonitorService : BackgroundService
+    public class OzBiLoginMonitorService : BackgroundService, IOzBiLoginMonitorService
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<OzBiLoginMonitorService> _logger;
@@ -48,7 +48,7 @@ namespace OzBiPortalCRM.Services
             }
         }
 
-        private async Task CheckForNewLoginsAsync()
+        public async Task CheckForNewLoginsAsync()
         {
             using var scope = _serviceProvider.CreateScope();
             var ozBiDbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<OzBiDbContext>>();

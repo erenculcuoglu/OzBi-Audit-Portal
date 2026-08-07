@@ -61,7 +61,9 @@ builder.Services.AddScoped<IOzBiAuditService, OzBiAuditService>();
 builder.Services.AddScoped<ITenantSchemaProvider, TenantSchemaProvider>();
 builder.Services.AddScoped<IErpAuditEngine, ErpAuditEngine>();
 builder.Services.AddScoped<IMikroAuditEngine, ErpAuditEngine>();
-builder.Services.AddHostedService<OzBiLoginMonitorService>();
+builder.Services.AddSingleton<OzBiLoginMonitorService>();
+builder.Services.AddSingleton<IOzBiLoginMonitorService>(sp => sp.GetRequiredService<OzBiLoginMonitorService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<OzBiLoginMonitorService>());
 
 var app = builder.Build();
 
@@ -130,6 +132,12 @@ app.MapGet("/api/auth/logout", async (HttpContext httpContext) =>
 {
     await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.Redirect("/login");
+});
+
+app.MapGet("/api/cron/check-logins", async (IOzBiLoginMonitorService monitor) =>
+{
+    await monitor.CheckForNewLoginsAsync();
+    return Results.Ok(new { status = "success", message = "MariaDB login check triggered successfully." });
 });
 
 app.MapRazorComponents<App>()
