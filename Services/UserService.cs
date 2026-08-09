@@ -38,7 +38,7 @@ namespace OzBiPortalCRM.Services
                 var seedUser = new PortalUser
                 {
                     Email = seedEmail,
-                    FullName = "Eren Çülcüoğlu",
+                    FullName = "Eren",
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456"),
                     Role = "Admin",
                     IsActive = true,
