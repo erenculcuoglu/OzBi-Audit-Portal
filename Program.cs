@@ -129,15 +129,6 @@ app.MapPost("/api/auth/login", async (HttpContext httpContext, IUserService user
 
     await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity), authProperties);
 
-    // Slack push bildirimini tetikle
-    var ipAddress = httpContext.Connection.RemoteIpAddress?.ToString();
-    if (string.IsNullOrWhiteSpace(ipAddress) || ipAddress == "::1")
-    {
-        ipAddress = "127.0.0.1 (Yerel)";
-    }
-    var userAgent = httpContext.Request.Headers["User-Agent"].ToString();
-    await slackService.SendLoginNotificationAsync(user.FullName, user.Email, user.Role, ipAddress, userAgent);
-
     return Results.Redirect("/");
 }).DisableAntiforgery();
 
