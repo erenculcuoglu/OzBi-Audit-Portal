@@ -30,6 +30,13 @@ publish.zip
 appsettings.Development.json
 appsettings.Local.json
 manual_publish/
+publish_temp/
 ftp_deploy.py
+deploy_clean.py
+diagnose_server.py
+*.db-shm
+*.db-wal
+*.pyc
+__pycache__/
 
 

@@ -144,6 +144,19 @@ app.MapGet("/api/cron/check-logins", async (IOzBiLoginMonitorService monitor) =>
     return Results.Ok(new { status = "success", message = "MariaDB login check triggered successfully." });
 }).AllowAnonymous();
 
+app.MapGet("/api/trigger-login-check", async (IOzBiLoginMonitorService monitor) =>
+{
+    try
+    {
+        await monitor.CheckForNewLoginsAsync();
+        return Results.Ok(new { success = true, message = "Check executed cleanly" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { success = false, error = ex.Message, stack = ex.StackTrace }, statusCode: 500);
+    }
+}).AllowAnonymous();
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

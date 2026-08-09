@@ -60,15 +60,17 @@ namespace OzBiPortalCRM.Services
 
             // SQLite kalıcı veritabanındaki takip kayıtlarını EF Core Change Tracker ile yükle
             Dictionary<string, UserLoginSnapshot> savedSnapshots;
+            bool isFirstSystemRun = false;
             try
             {
                 var snapshotList = await appDb.UserLoginSnapshots.ToListAsync();
-                savedSnapshots = snapshotList.ToDictionary(s => s.UserId, s => s);
+                savedSnapshots = snapshotList.ToDictionary(s => s.UserId, s => s, StringComparer.OrdinalIgnoreCase);
+                isFirstSystemRun = savedSnapshots.Count == 0;
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "UserLoginSnapshots tablosu henüz okunamadı.");
-                savedSnapshots = new Dictionary<string, UserLoginSnapshot>();
+                _logger.LogError(ex, "UserLoginSnapshots tablosu okunamadı, işlem geçici olarak erteleniyor.");
+                return;
             }
 
             using var ozBiDb = await ozBiDbFactory.CreateDbContextAsync();
@@ -88,9 +90,7 @@ namespace OzBiPortalCRM.Services
             var tenantIds = users.Select(u => u.TenantId).Where(tid => !string.IsNullOrEmpty(tid)).Distinct().ToList();
             var tenantMap = await ozBiDb.Tenants.AsNoTracking()
                 .Where(t => tenantIds.Contains(t.Id))
-                .ToDictionaryAsync(t => t.Id, t => t.Name);
-
-            bool isFirstSystemRun = savedSnapshots.Count == 0;
+                .ToDictionaryAsync(t => t.Id, t => t.Name, StringComparer.OrdinalIgnoreCase);
 
             foreach (var user in users)
             {
