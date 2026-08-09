@@ -56,7 +56,16 @@ namespace OzBiPortalCRM.Services
                 return null;
 
             using var db = await _dbFactory.CreateDbContextAsync();
+            await db.Database.EnsureCreatedAsync();
+
             var user = await db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.Trim().ToLower() && u.IsActive);
+
+            // Auto seed if database is empty or seed user missing
+            if (user == null && email.Trim().Equals("eren@ozbiapp.com.tr", StringComparison.OrdinalIgnoreCase))
+            {
+                await SeedDefaultUserAsync();
+                user = await db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.Trim().ToLower() && u.IsActive);
+            }
 
             if (user == null)
                 return null;
