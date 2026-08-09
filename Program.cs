@@ -9,6 +9,10 @@ using OzBiPortalCRM.Data;
 using OzBiPortalCRM.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
 var prodJsonPath = Path.Combine(builder.Environment.ContentRootPath, "appsettings.Production.json");
 builder.Configuration.AddJsonFile(prodJsonPath, optional: true, reloadOnChange: true);
 
