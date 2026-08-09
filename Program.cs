@@ -75,12 +75,17 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<OzBiLoginMonitorSe
 
 var app = builder.Build();
 
-// Seed Default User (eren@ozbiapp.com.tr / 123456)
-using (var scope = app.Services.CreateScope())
+// Seed Default User in background without blocking port binding startup
+_ = Task.Run(async () =>
 {
-    var userService = scope.ServiceProvider.GetRequiredService<IUserService>();
-    await userService.SeedDefaultUserAsync();
-}
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var userService = scope.ServiceProvider.GetRequiredService<IUserService>();
+        await userService.SeedDefaultUserAsync();
+    }
+    catch { }
+});
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
