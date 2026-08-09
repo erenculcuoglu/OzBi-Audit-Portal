@@ -88,6 +88,25 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
+// Automatic Login Monitor Trigger Middleware on every incoming HTTP request (ping/visit)
+app.Use(async (context, next) =>
+{
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            using var scope = app.Services.CreateScope();
+            var monitor = scope.ServiceProvider.GetService<IOzBiLoginMonitorService>();
+            if (monitor != null)
+            {
+                await monitor.CheckForNewLoginsAsync();
+            }
+        }
+        catch { }
+    });
+    await next();
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -137,6 +156,18 @@ app.MapGet("/api/auth/logout", async (HttpContext httpContext) =>
     await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.Redirect("/login");
 });
+
+app.MapGet("/cron-check", async (IOzBiLoginMonitorService monitor) =>
+{
+    await monitor.CheckForNewLoginsAsync();
+    return Results.Ok(new { status = "success", message = "MariaDB login check triggered successfully." });
+}).AllowAnonymous();
+
+app.MapGet("/cron", async (IOzBiLoginMonitorService monitor) =>
+{
+    await monitor.CheckForNewLoginsAsync();
+    return Results.Ok(new { status = "success", message = "MariaDB login check triggered successfully." });
+}).AllowAnonymous();
 
 app.MapGet("/api/cron/check-logins", async (IOzBiLoginMonitorService monitor) =>
 {
