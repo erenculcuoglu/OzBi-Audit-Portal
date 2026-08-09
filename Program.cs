@@ -69,9 +69,10 @@ builder.Services.AddScoped<IOzBiAuditService, OzBiAuditService>();
 builder.Services.AddScoped<ITenantSchemaProvider, TenantSchemaProvider>();
 builder.Services.AddScoped<IErpAuditEngine, ErpAuditEngine>();
 builder.Services.AddScoped<IMikroAuditEngine, ErpAuditEngine>();
-builder.Services.AddSingleton<OzBiLoginMonitorService>();
-builder.Services.AddSingleton<IOzBiLoginMonitorService>(sp => sp.GetRequiredService<OzBiLoginMonitorService>());
-builder.Services.AddHostedService(sp => sp.GetRequiredService<OzBiLoginMonitorService>());
+// OzBiLoginMonitorService is handled by GCP Cloud Function - disabled in Web App startup to keep container lightweight
+// builder.Services.AddSingleton<OzBiLoginMonitorService>();
+// builder.Services.AddSingleton<IOzBiLoginMonitorService>(sp => sp.GetRequiredService<OzBiLoginMonitorService>());
+// builder.Services.AddHostedService(sp => sp.GetRequiredService<OzBiLoginMonitorService>());
 
 var app = builder.Build();
 
