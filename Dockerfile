@@ -19,8 +19,8 @@ RUN mkdir -p /app/app && chmod -R 777 /app/app
 
 COPY --from=build /app/publish .
 
-ENV PORT=8080
-ENV ASPNETCORE_URLS=http://+:${PORT}
+ENV ASPNETCORE_HTTP_PORTS=8080
+ENV ASPNETCORE_URLS=http://0.0.0.0:8080
 EXPOSE 8080
 
 ENTRYPOINT ["dotnet", "OzBI Portal CRM.dll"]
