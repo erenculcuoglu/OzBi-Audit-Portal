@@ -1,0 +1,13 @@
+.git
+.gitignore
+.vs
+.vscode
+bin/
+obj/
+out/
+app/*.db
+app/*.db-shm
+app/*.db-wal
+*.log
+scratch/
+docs/
