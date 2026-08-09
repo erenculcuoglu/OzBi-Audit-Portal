@@ -10,6 +10,7 @@ out/
 app/*.db
 app/*.db-shm
 app/*.db-wal
+app/*.json
 *.log
 
 ## User-specific & OS files
