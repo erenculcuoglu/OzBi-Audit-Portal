@@ -3,12 +3,12 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 # Copy csproj and restore dependencies
-COPY ["OzBiPortalCRM.csproj", "./"]
-RUN dotnet restore "OzBiPortalCRM.csproj"
+COPY ["OzBI Portal CRM.csproj", "./"]
+RUN dotnet restore "OzBI Portal CRM.csproj"
 
 # Copy full source and publish
 COPY . .
-RUN dotnet publish "OzBiPortalCRM.csproj" -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "OzBI Portal CRM.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
@@ -23,4 +23,4 @@ ENV PORT=8080
 ENV ASPNETCORE_URLS=http://+:${PORT}
 EXPOSE 8080
 
-ENTRYPOINT ["dotnet", "OzBiPortalCRM.dll"]
+ENTRYPOINT ["dotnet", "OzBI Portal CRM.dll"]
