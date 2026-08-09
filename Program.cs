@@ -91,11 +91,12 @@ app.UseStaticFiles();
 // Automatic Login Monitor Trigger Middleware on every incoming HTTP request (ping/visit)
 app.Use(async (context, next) =>
 {
+    var scopeFactory = context.RequestServices.GetRequiredService<IServiceScopeFactory>();
     _ = Task.Run(async () =>
     {
         try
         {
-            using var scope = app.Services.CreateScope();
+            using var scope = scopeFactory.CreateScope();
             var monitor = scope.ServiceProvider.GetService<IOzBiLoginMonitorService>();
             if (monitor != null)
             {
