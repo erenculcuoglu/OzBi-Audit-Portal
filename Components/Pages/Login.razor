@@ -1,5 +1,7 @@
 @page "/login"
+@layout Components.Layout.EmptyLayout
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
 
 <div class="d-flex align-items-center justify-content-center min-vh-100 p-3" style="background: radial-gradient(circle at center, rgba(99, 102, 241, 0.15) 0%, transparent 60%), var(--bg-main);">
     <div class="glass-card" style="width: 100%; max-width: 440px; border-radius: var(--radius-lg); padding: 2.5rem;">
@@ -49,13 +51,19 @@
     private string emailInput = string.Empty;
     private string passwordInput = string.Empty;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
 
         if (uri.Query.Contains("error=1"))
         {
             hasError = true;
+        }
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true && !hasError)
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
         }
     }
 }

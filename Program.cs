@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OzBiPortalCRM.Components;
@@ -19,6 +20,14 @@ builder.Configuration.AddJsonFile(prodJsonPath, optional: true, reloadOnChange: 
 var localJsonPath = Path.Combine(builder.Environment.ContentRootPath, "appsettings.Local.json");
 builder.Configuration.AddJsonFile(localJsonPath, optional: true, reloadOnChange: true);
 
+// Configure Forwarded Headers for Cloud Run SSL Proxy
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -31,6 +40,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.LoginPath = "/login";
         options.LogoutPath = "/api/auth/logout";
         options.ExpireTimeSpan = TimeSpan.FromDays(30);
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     });
 
 builder.Services.AddAuthorization();
@@ -75,6 +86,8 @@ builder.Services.AddScoped<IMikroAuditEngine, ErpAuditEngine>();
 // builder.Services.AddHostedService(sp => sp.GetRequiredService<OzBiLoginMonitorService>());
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 // Seed Default User in background without blocking port binding startup
 _ = Task.Run(async () =>
