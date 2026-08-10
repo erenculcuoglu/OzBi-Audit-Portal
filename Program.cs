@@ -29,12 +29,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
-// Configure Data Protection Key Persistence for Cloud Run instances
-var keysFolder = Path.Combine(builder.Environment.ContentRootPath, "app", "keys");
-Directory.CreateDirectory(keysFolder);
-
+// Configure Static Data Protection Key Persistence for Cloud Run instances
 builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(keysFolder))
+    .AddKeyManagementOptions(options => options.XmlRepository = new StaticDataProtectionKeyRepository())
     .SetApplicationName("OzBiAuditPortal");
 
 // Add services to the container.
@@ -51,7 +48,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.ExpireTimeSpan = TimeSpan.FromDays(30);
         options.SlidingExpiration = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
     });
 
 builder.Services.AddAuthorization();
