@@ -17,7 +17,27 @@
                 <h3 class="fw-bold mb-1">@tenant.Name</h3>
                 <div class="text-muted small d-flex align-items-center gap-3 flex-wrap">
                     <span><i class="bi bi-envelope"></i> @(tenant.Email ?? "E-posta yok")</span>
-                    <span><i class="bi bi-calendar3"></i> Kayıt: @(tenant.DateCreated?.ToString("dd.MM.yyyy") ?? "-")</span>
+                    <span title="Kayıt / Başlangıç Tarihi"><i class="bi bi-calendar3"></i> <strong>Date Created:</strong> @(EffectiveStartDate?.ToString("dd.MM.yyyy") ?? "-")</span>
+                    <span class="d-inline-flex align-items-center gap-1">
+                        <i class="bi bi-calendar-check text-warning"></i> 
+                        <strong>Subscription End:</strong> 
+                        <span>@(EffectiveEndDate?.ToString("dd.MM.yyyy") ?? "-")</span>
+                        @if (DaysRemaining.HasValue)
+                        {
+                            if (DaysRemaining.Value < 0)
+                            {
+                                <span class="badge bg-danger text-white ms-1">Süresi Doldu</span>
+                            }
+                            else if (DaysRemaining.Value <= 15)
+                            {
+                                <span class="badge bg-warning text-dark ms-1">@DaysRemaining.Value Gün Kaldı</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-success text-white ms-1">@DaysRemaining.Value Gün Kaldı</span>
+                            }
+                        }
+                    </span>
                     <span style="font-family: monospace;">ID: @tenant.Id</span>
                 </div>
             </div>
@@ -213,12 +233,27 @@ else
     private OzBiTenant? tenant;
     private List<OzBiUser>? tenantUsers;
     private List<ChatAuditSummary>? chatsList;
+    private TenantSubscription? subscription;
+    private DateTime? mariaDbStartDate;
+    private DateTime? mariaDbEndDate;
     private string searchTerm = string.Empty;
     private string selectedUserId = string.Empty;
     private bool isLoading = true;
 
     private int TotalQueries => chatsList?.Sum(c => c.QueryCount) ?? 0;
     private int RemainingQueries => Math.Max(0, 50 - TotalQueries);
+
+    private DateTime? EffectiveStartDate => mariaDbStartDate ?? tenant?.DateCreated;
+    private DateTime? EffectiveEndDate => mariaDbEndDate ?? subscription?.SubscriptionEndDate;
+
+    private int? DaysRemaining
+    {
+        get
+        {
+            if (EffectiveEndDate == null) return null;
+            return (EffectiveEndDate.Value.Date - DateTime.Today).Days;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -233,6 +268,11 @@ else
             tenant = await AuditService.GetTenantByIdAsync(TenantId);
             tenantUsers = await AuditService.GetUsersForTenantAsync(TenantId);
             chatsList = await AuditService.GetChatsForTenantAsync(TenantId, searchTerm, selectedUserId);
+            subscription = await AuditService.GetTenantSubscriptionAsync(TenantId);
+
+            var (mStart, mEnd) = await AuditService.GetTenantSubscriptionFromMariaDbAsync(TenantId, tenant?.RemoteId);
+            mariaDbStartDate = mStart;
+            mariaDbEndDate = mEnd;
         }
         catch (Exception ex)
         {

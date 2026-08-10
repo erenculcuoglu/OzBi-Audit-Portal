@@ -13,6 +13,7 @@ namespace OzBiPortalCRM.Data
         public DbSet<PortalUser> Users { get; set; } = null!;
         public DbSet<FavoriteItem> Favorites { get; set; } = null!;
         public DbSet<UserLoginSnapshot> UserLoginSnapshots { get; set; } = null!;
+        public DbSet<TenantSubscription> TenantSubscriptions { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -28,6 +29,9 @@ namespace OzBiPortalCRM.Data
 
             modelBuilder.Entity<UserLoginSnapshot>()
                 .HasKey(s => s.UserId);
+
+            modelBuilder.Entity<TenantSubscription>()
+                .HasKey(ts => ts.TenantId);
         }
 
         public async Task EnsureTablesCreatedAsync()
@@ -63,6 +67,16 @@ namespace OzBiPortalCRM.Data
                         LastUpdatedAt TEXT NOT NULL
                     );";
                 await cmd2.ExecuteNonQueryAsync();
+
+                using var cmd3 = Database.GetDbConnection().CreateCommand();
+                cmd3.CommandText = @"
+                    CREATE TABLE IF NOT EXISTS TenantSubscriptions (
+                        TenantId TEXT PRIMARY KEY,
+                        SubscriptionEndDate TEXT,
+                        SourceCampaign TEXT,
+                        LastUpdatedAt TEXT NOT NULL
+                    );";
+                await cmd3.ExecuteNonQueryAsync();
             }
             catch { }
         }

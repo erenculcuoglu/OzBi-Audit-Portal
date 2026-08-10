@@ -68,5 +68,10 @@ namespace OzBiPortalCRM.Services
         Task<bool> ToggleFavoriteAsync(int portalUserId, string itemType, string itemId, string itemName, string? itemSubText);
         Task<List<FavoriteItem>> GetUserFavoritesAsync(int portalUserId);
         Task<HashSet<string>> GetFavoriteItemIdsAsync(int portalUserId, string itemType);
+
+        // Tenant Subscription (SQLite & MariaDB) Methods
+        Task<TenantSubscription?> GetTenantSubscriptionAsync(string tenantId);
+        Task<bool> SaveTenantSubscriptionAsync(string tenantId, DateTime? subscriptionEndDate, string? sourceCampaign = null);
+        Task<(DateTime? StartDate, DateTime? EndDate)> GetTenantSubscriptionFromMariaDbAsync(string tenantId, string? remoteId);
     }
 }

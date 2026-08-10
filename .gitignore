@@ -7,10 +7,7 @@ out/
 .idea/
 
 ## Local App SQLite DB & Logs
-app/*.db
-app/*.db-shm
-app/*.db-wal
-app/*.json
+app/
 *.log
 
 ## User-specific & OS files

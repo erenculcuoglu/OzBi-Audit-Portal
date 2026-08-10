@@ -516,6 +516,115 @@ namespace OzBiPortalCRM.Services
                 .ToListAsync();
             return ids.ToHashSet();
         }
+
+        public async Task<TenantSubscription?> GetTenantSubscriptionAsync(string tenantId)
+        {
+            if (string.IsNullOrWhiteSpace(tenantId)) return null;
+
+            try
+            {
+                using var db = await _appDbFactory.CreateDbContextAsync();
+                await db.EnsureTablesCreatedAsync();
+
+                return await db.TenantSubscriptions.AsNoTracking()
+                    .FirstOrDefaultAsync(ts => ts.TenantId == tenantId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting tenant subscription from SQLite: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<bool> SaveTenantSubscriptionAsync(string tenantId, DateTime? subscriptionEndDate, string? sourceCampaign = null)
+        {
+            if (string.IsNullOrWhiteSpace(tenantId)) return false;
+
+            try
+            {
+                using var db = await _appDbFactory.CreateDbContextAsync();
+                await db.EnsureTablesCreatedAsync();
+
+                var sub = await db.TenantSubscriptions.FirstOrDefaultAsync(ts => ts.TenantId == tenantId);
+                if (sub == null)
+                {
+                    sub = new TenantSubscription
+                    {
+                        TenantId = tenantId,
+                        SubscriptionEndDate = subscriptionEndDate,
+                        SourceCampaign = sourceCampaign,
+                        LastUpdatedAt = DateTime.UtcNow
+                    };
+                    db.TenantSubscriptions.Add(sub);
+                }
+                else
+                {
+                    sub.SubscriptionEndDate = subscriptionEndDate;
+                    if (sourceCampaign != null)
+                    {
+                        sub.SourceCampaign = sourceCampaign;
+                    }
+                    sub.LastUpdatedAt = DateTime.UtcNow;
+                    db.TenantSubscriptions.Update(sub);
+                }
+
+                await db.SaveChangesAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error saving tenant subscription to SQLite: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<(DateTime? StartDate, DateTime? EndDate)> GetTenantSubscriptionFromMariaDbAsync(string tenantId, string? remoteId)
+        {
+            if (string.IsNullOrWhiteSpace(tenantId) && string.IsNullOrWhiteSpace(remoteId))
+                return (null, null);
+
+            try
+            {
+                using var db = await _dbFactory.CreateDbContextAsync();
+                var conn = db.Database.GetDbConnection();
+                if (conn.State != System.Data.ConnectionState.Open)
+                {
+                    await conn.OpenAsync();
+                }
+
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+                    SELECT StartDate, EndDate 
+                    FROM ozbiappc_portal.subscription 
+                    WHERE TenantId = @id1 OR TenantId = @id2 
+                    ORDER BY DateCreated DESC 
+                    LIMIT 1;";
+
+                var p1 = cmd.CreateParameter();
+                p1.ParameterName = "@id1";
+                p1.Value = tenantId ?? (object)DBNull.Value;
+                cmd.Parameters.Add(p1);
+
+                var p2 = cmd.CreateParameter();
+                p2.ParameterName = "@id2";
+                p2.Value = remoteId ?? (object)DBNull.Value;
+                cmd.Parameters.Add(p2);
+
+                using var reader = await cmd.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    DateTime? startDate = reader.IsDBNull(0) ? null : reader.GetDateTime(0);
+                    DateTime? endDate = reader.IsDBNull(1) ? null : reader.GetDateTime(1);
+                    return (startDate, endDate);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error querying ozbiappc_portal.subscription from MariaDB: {ex.Message}");
+            }
+
+            return (null, null);
+        }
         #endregion
 
         #region Demo Data Generator
