@@ -7,7 +7,7 @@
                 <img src="logo.png" alt="OzBI Logo" style="width: 100%; height: 100%; object-fit: contain;" />
             </div>
             <div class="logo-details d-flex align-items-center">
-                <div class="logo-text mb-0">OzBI Portal</div>
+                <div class="logo-text mb-0">OzBI Control Tower</div>
             </div>
         </div>
         <div class="header-actions-container d-flex align-items-center gap-1">
@@ -21,22 +21,22 @@
     </div>
 
     <div class="sidebar-menu">
-        <NavLink class="nav-item-link" href="" Match="NavLinkMatch.All" @onclick="HandleMenuClick" title="Tenant Seçimi">
+        <NavLink class="nav-item-link" href="" Match="NavLinkMatch.All" @onclick="HandleMenuClick" title="Tenant Seçimi" data-tooltip="Tenant Seçimi">
             <i class="bi bi-building"></i>
             <span>Tenant Seçimi</span>
         </NavLink>
 
-        <NavLink class="nav-item-link" href="queries" @onclick="HandleMenuClick" title="Son İşlemler">
+        <NavLink class="nav-item-link" href="queries" @onclick="HandleMenuClick" title="Son İşlemler" data-tooltip="Son İşlemler">
             <i class="bi bi-database-fill-gear"></i>
             <span>Son İşlemler</span>
         </NavLink>
 
-        <NavLink class="nav-item-link" href="users" @onclick="HandleMenuClick" title="Kullanıcı Yönetimi">
+        <NavLink class="nav-item-link" href="users" @onclick="HandleMenuClick" title="Kullanıcı Yönetimi" data-tooltip="Kullanıcı Yönetimi">
             <i class="bi bi-people-fill"></i>
             <span>Kullanıcı Yönetimi</span>
         </NavLink>
 
-        <NavLink class="nav-item-link" href="tenant-users" @onclick="HandleMenuClick" title="Kullanıcı Ara">
+        <NavLink class="nav-item-link" href="tenant-users" @onclick="HandleMenuClick" title="Kullanıcı Ara" data-tooltip="Kullanıcı Ara">
             <i class="bi bi-person-vcard"></i>
             <span>Kullanıcı Ara</span>
         </NavLink>
@@ -45,7 +45,7 @@
     <div class="sidebar-footer">
         <AuthorizeView>
             <Authorized>
-                <div class="user-pill" title="@context.User.Identity?.Name">
+                <div class="user-pill" title="@context.User.Identity?.Name" data-tooltip="@context.User.Identity?.Name">
                     <div class="user-avatar">
                         @context.User.Identity?.Name?.Substring(0, 1).ToUpper()
                     </div>

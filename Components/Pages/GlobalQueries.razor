@@ -9,7 +9,7 @@
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
     <div>
         <h2 class="fw-bold mb-1"><i class="bi bi-database-fill-gear text-info me-2"></i>Son İşlemler</h2>
-        <div class="text-muted">Tüm tenant ve sohbetlerde çalıştırılan SQL sorgularını canlı akış halinde filtreleyin ve inceleyin</div>
+        <div class="text-muted">Tüm tenant ve sohbetlerde çalıştırılan SQL sorgularını ve sorularını canlı akış halinde inceleyin</div>
     </div>
     <button class="btn btn-outline-secondary btn-sm" @onclick="LoadData">
         <i class="bi bi-arrow-clockwise"></i> Yenile
@@ -20,10 +20,10 @@
 <div class="glass-card mb-4">
     <div class="row g-3 align-items-center">
         <div class="col-md-5">
-            <label class="form-label text-muted small mb-1">SQL veya Metin İle Ara</label>
+            <label class="form-label text-muted small mb-1">Soru veya SQL İle Ara</label>
             <div class="input-group">
                 <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-search"></i></span>
-                <input type="text" class="form-control input-custom" placeholder="Tablo adı, SQL anahtar kelimesi..." @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleSearch" />
+                <input type="text" class="form-control input-custom" placeholder="Soru metni, tablo adı, SQL anahtar kelimesi..." @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleSearch" />
             </div>
         </div>
 
@@ -39,7 +39,7 @@
                     Sadece Hatalı Sorgular
                 </label>
             </div>
-            <span class="text-muted small">Bulunan: <strong>@(queriesList?.Count ?? 0)</strong></span>
+            <span class="text-muted small">Bulunan: <strong>@(feedItems?.Count ?? 0)</strong></span>
         </div>
     </div>
 </div>
@@ -49,40 +49,40 @@
 {
     <div class="glass-card text-center py-5">
         <div class="spinner-border text-primary mb-3" role="status"></div>
-        <div class="text-muted">SQL sorguları veritabanından taranıyor...</div>
+        <div class="text-muted">Son soru ve SQL sorguları veritabanından taranıyor...</div>
     </div>
 }
-else if (queriesList == null || queriesList.Count == 0)
+else if (feedItems == null || feedItems.Count == 0)
 {
     <div class="glass-card text-center py-5">
         <i class="bi bi-database-x text-muted" style="font-size: 3rem;"></i>
-        <h5 class="mt-3 text-muted">Arama kriterlerine uygun SQL sorgusu bulunamadı</h5>
+        <h5 class="mt-3 text-muted">Arama kriterlerine uygun soru veya SQL sorgusu bulunamadı</h5>
     </div>
 }
 else
 {
     <div class="d-flex flex-column gap-4">
-        @foreach (var item in queriesList)
+        @foreach (var feedItem in feedItems)
         {
-            var sqlItems = ExtractSqlItemsFromQuery(item.Query, item.Prompt ?? item.Chat?.Title ?? "Sohbet Sorgusu");
-            var compliance = MikroAuditEngine.EvaluateQuery(item.Query ?? string.Empty, item.Prompt ?? item.Chat?.Title, item.Chat?.Tenant?.Name);
+            var item = feedItem.MessageItem;
+            var compliance = feedItem.Compliance;
 
             <div class="glass-card border-secondary border-opacity-25">
                 <!-- Top Metadata Header: Tenant, User, Model, Status, Date -->
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2 pb-2 border-bottom border-secondary border-opacity-25">
                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <!-- Tenant Badge (Dark Slate / Slate Cyan) -->
+                        <!-- Tenant Badge -->
                         <span class="badge-status" style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(148, 163, 184, 0.3); color: #cbd5e1;" title="Tenant Firması">
                             @(item.Chat?.Tenant?.Name ?? "Tenant")
                         </span>
 
-                        <!-- User Badge (Dark Slate / Soft Emerald Icon) -->
+                        <!-- User Badge -->
                         <span class="badge-status" style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(148, 163, 184, 0.3); color: #e2e8f0;" title="Sorguyu Çalıştıran Kullanıcı">
                             @(item.Chat?.CreatedByUser?.NameSurname ?? item.Chat?.CreatedByUser?.Email ?? "Kullanıcı Belli Değil")
                         </span>
 
-                        <!-- Mode Badge (Sorgu Modu vs Agent Modu) -->
-                        @if (item.IsAsistantMode)
+                        <!-- Mode Badge -->
+                        @if (item.IsAssistantModeEffective)
                         {
                             <span class="badge-status" style="background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(192, 132, 252, 0.4); color: #c084fc;" title="Agent Modu">
                                 Agent Modu
@@ -95,7 +95,7 @@ else
                             </span>
                         }
 
-                        <!-- AI Model Badge (Indigo Glass) -->
+                        <!-- AI Model Badge -->
                         @if (item.AIModel != null)
                         {
                             <span class="badge-status" style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(129, 140, 248, 0.4); color: #818cf8;" title="AI Modeli">
@@ -103,7 +103,7 @@ else
                             </span>
                         }
 
-                        <!-- Assistant Badge (Teal Glass) -->
+                        <!-- Assistant Badge -->
                         @if (item.Assistant != null)
                         {
                             <span class="badge-status" style="background: rgba(20, 184, 166, 0.15); border: 1px solid rgba(45, 212, 191, 0.4); color: #2dd4bf;" title="Çalıştırılan Asistan">
@@ -111,18 +111,18 @@ else
                             </span>
                         }
 
-                        <!-- Multi-ERP Compliance Score Badge (Mikro / Logo) -->
+                        <!-- Multi-ERP Compliance Score Badge -->
                         @if (compliance.IsMikroQuery)
                         {
                             var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro v27";
-                            <button type="button" class="btn btn-sm p-0 border-0 bg-transparent text-decoration-none" @onclick="() => OpenComplianceModal(compliance, item.Query ?? string.Empty)">
+                            <button type="button" class="btn btn-sm p-0 border-0 bg-transparent text-decoration-none" @onclick="() => OpenComplianceModal(compliance, feedItem.Sql)">
                                 <span class="badge-status" style="background: rgba(15, 23, 42, 0.85); border: 1px solid @GetScoreColor(compliance.Score); color: @GetScoreColor(compliance.Score); cursor: pointer;" title="Detaylı ERP Uyum Raporu İçin Tıklayın">
                                     @erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)
                                 </span>
                             </button>
                         }
 
-                        <!-- Status Badge (Son Sırada - Emerald Green / Bright Red) -->
+                        <!-- Status Badge -->
                         @if (string.IsNullOrEmpty(item.ErrorMessage))
                         {
                             <span class="badge-status" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(52, 211, 153, 0.4); color: #34d399;" title="Sorgu Başarılı">
@@ -143,36 +143,26 @@ else
                     </div>
                 </div>
 
-                <!-- User Question Title -->
-                @if (!string.IsNullOrEmpty(item.Prompt) || !string.IsNullOrEmpty(item.Chat?.Title))
-                {
-                    <div class="fw-bold text-main fs-6 mb-3">
-                        <i class="bi bi-chat-left-text text-primary me-2"></i>@(item.Prompt ?? item.Chat?.Title)
+                <!-- Specific Question Header (Son Soru) -->
+                <div class="fw-bold text-main fs-6 mb-3 d-flex align-items-start gap-2">
+                    <i class="bi bi-chat-left-text text-primary mt-1 flex-shrink-0"></i>
+                    <div class="flex-grow-1">
+                        <span>@feedItem.QuestionText</span>
                     </div>
-                }
+                </div>
 
-                <!-- Extracted SQL Code Blocks -->
-                @foreach (var sqlItem in sqlItems)
-                {
-                    <div class="mb-3">
-                        @if (!string.IsNullOrEmpty(sqlItem.Description))
-                        {
-                            <div class="text-muted small fw-semibold mb-1">
-                                @sqlItem.Description
-                            </div>
-                        }
-
-                        <div class="sql-header py-2 px-3">
-                            <span class="text-info small fw-bold"><i class="bi bi-code-slash me-1"></i>SQL Sorgusu</span>
-                            <button class="btn-copy" @onclick="() => CopySql(sqlItem.Sql)">
-                                <i class="bi bi-clipboard"></i> SQL Kopyala
-                            </button>
-                        </div>
-                        <div class="sql-code-block">
-                            <code>@sqlItem.Sql</code>
-                        </div>
+                <!-- Extracted SQL Code Block -->
+                <div class="mb-3">
+                    <div class="sql-header py-2 px-3">
+                        <span class="text-info small fw-bold"><i class="bi bi-code-slash me-1"></i>SQL Sorgusu</span>
+                        <button class="btn-copy" @onclick="() => CopySql(feedItem.Sql)">
+                            <i class="bi bi-clipboard"></i> SQL Kopyala
+                        </button>
                     </div>
-                }
+                    <div class="sql-code-block">
+                        <code>@feedItem.Sql</code>
+                    </div>
+                </div>
 
                 <!-- Error Message if present -->
                 @if (!string.IsNullOrEmpty(item.ErrorMessage))
@@ -200,7 +190,8 @@ else
 <ErpComplianceModal @bind-IsOpen="isComplianceModalOpen" Report="@selectedComplianceReport" TestedSql="@selectedTestedSql" />
 
 @code {
-    private List<OzBiChatMessage>? queriesList;
+    private List<OzBiChatMessage>? rawQueriesList;
+    private List<UnrolledQueryFeedItem>? feedItems;
     private string searchQuery = string.Empty;
     private bool failedOnly = false;
     private long? minDurationMs;
@@ -216,6 +207,15 @@ else
         public string Sql { get; set; } = string.Empty;
     }
 
+    public class UnrolledQueryFeedItem
+    {
+        public OzBiChatMessage MessageItem { get; set; } = default!;
+        public string QuestionText { get; set; } = string.Empty;
+        public string Sql { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public MikroComplianceReport Compliance { get; set; } = default!;
+    }
+
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
@@ -226,11 +226,13 @@ else
         isLoading = true;
         try
         {
-            queriesList = await AuditService.SearchGlobalQueriesAsync(
+            rawQueriesList = await AuditService.SearchGlobalQueriesAsync(
                 tenantId: null,
                 querySearch: searchQuery,
                 failedOnly: failedOnly,
                 minDurationMs: minDurationMs);
+
+            BuildFeedItems();
         }
         catch (Exception ex)
         {
@@ -239,6 +241,69 @@ else
         finally
         {
             isLoading = false;
+        }
+    }
+
+    private void BuildFeedItems()
+    {
+        feedItems = new List<UnrolledQueryFeedItem>();
+        if (rawQueriesList == null) return;
+
+        foreach (var item in rawQueriesList)
+        {
+            var sqlItems = ExtractSqlItemsFromQuery(item.Query);
+            if (sqlItems.Count == 0 && !string.IsNullOrWhiteSpace(item.Query))
+            {
+                sqlItems.Add(new FeedSqlItem { Sql = item.Query.Trim() });
+            }
+
+            foreach (var sqlItem in sqlItems)
+            {
+                // Determine question text
+                string qText;
+                if (!string.IsNullOrWhiteSpace(sqlItem.Description))
+                {
+                    qText = sqlItem.Description.Trim();
+                }
+                else if (!string.IsNullOrWhiteSpace(item.Prompt))
+                {
+                    qText = item.Prompt.Trim();
+                }
+                else if (!string.IsNullOrWhiteSpace(item.Chat?.Title))
+                {
+                    qText = item.Chat.Title.Trim();
+                }
+                else
+                {
+                    qText = "Sohbet Sorgusu";
+                }
+
+                // Filter by searchQuery if present
+                if (!string.IsNullOrWhiteSpace(searchQuery))
+                {
+                    var term = searchQuery.Trim().ToLower();
+                    bool matchesQuery = sqlItem.Sql.ToLower().Contains(term);
+                    bool matchesQText = qText.ToLower().Contains(term);
+                    bool matchesPrompt = item.Prompt?.ToLower().Contains(term) ?? false;
+                    bool matchesChatTitle = item.Chat?.Title?.ToLower().Contains(term) ?? false;
+
+                    if (!matchesQuery && !matchesQText && !matchesPrompt && !matchesChatTitle)
+                    {
+                        continue;
+                    }
+                }
+
+                var compliance = MikroAuditEngine.EvaluateQuery(sqlItem.Sql, qText, item.Chat?.Tenant?.Name);
+
+                feedItems.Add(new UnrolledQueryFeedItem
+                {
+                    MessageItem = item,
+                    QuestionText = qText,
+                    Sql = sqlItem.Sql,
+                    Description = sqlItem.Description,
+                    Compliance = compliance
+                });
+            }
         }
     }
 
@@ -262,7 +327,7 @@ else
         return "#ef4444"; // Red
     }
 
-    private List<FeedSqlItem> ExtractSqlItemsFromQuery(string? rawQuery, string fallbackDesc)
+    private List<FeedSqlItem> ExtractSqlItemsFromQuery(string? rawQuery)
     {
         var result = new List<FeedSqlItem>();
         if (string.IsNullOrWhiteSpace(rawQuery)) return result;
@@ -368,3 +433,4 @@ else
         await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
     }
 }
+

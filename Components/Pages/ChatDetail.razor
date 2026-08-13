@@ -247,7 +247,7 @@ else
                             }
 
                             <!-- Mode Badge (Sorgu Modu vs Agent Modu) -->
-                            @if (msg.IsAsistantMode)
+                            @if (msg.IsAssistantModeEffective)
                             {
                                 <span class="badge-status" style="background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(192, 132, 252, 0.4); color: #c084fc;" title="Agent Modu: Doğal dil ile açıklama ve yanıt metni üretilir">
                                     Agent Modu
@@ -320,7 +320,7 @@ else
                                     @msg.Summary
                                 </div>
                             }
-                            else if (!msg.IsAsistantMode)
+                            else if (!msg.IsAssistantModeEffective)
                             {
                                 <!-- Polished Sorgu Modu Info Box -->
                                 <div class="p-4 rounded-3" style="background: linear-gradient(135deg, rgba(14, 165, 233, 0.08) 0%, rgba(15, 23, 42, 0.7) 100%); border: 1px solid rgba(56, 189, 248, 0.25);">
@@ -387,8 +387,8 @@ else
 
     private int UserPromptCount => messagesList?.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt)) ?? 0;
     private int AiResponseCount => messagesList?.Count(m => m.Role?.ToLower() != "user") ?? 0;
-    private int QueryModeCount => messagesList?.Count(m => !m.IsAsistantMode && m.Role?.ToLower() != "user") ?? 0;
-    private int AssistantModeCount => messagesList?.Count(m => m.IsAsistantMode && m.Role?.ToLower() != "user") ?? 0;
+    private int QueryModeCount => messagesList?.Count(m => !m.IsAssistantModeEffective && m.Role?.ToLower() != "user") ?? 0;
+    private int AssistantModeCount => messagesList?.Count(m => m.IsAssistantModeEffective && m.Role?.ToLower() != "user") ?? 0;
     private int TotalSqlCount => GetQuestionSqlGroups().Sum(g => g.SqlQueries.Count);
 
     public class QuestionSqlGroup
@@ -465,6 +465,7 @@ else
         foreach (var msg in messagesList)
         {
             var promptText = !string.IsNullOrEmpty(msg.Prompt) ? msg.Prompt : (msg.Role?.ToLower() == "user" ? msg.Message : null);
+            bool isAssistant = msg.IsAssistantModeEffective;
 
             if (!string.IsNullOrEmpty(promptText))
             {
@@ -473,7 +474,7 @@ else
                 {
                     QuestionIndex = questionCounter,
                     QuestionText = promptText,
-                    IsAsistantMode = msg.IsAsistantMode,
+                    IsAsistantMode = isAssistant,
                     AssistantName = msg.Assistant?.Name,
                     AiModelName = msg.AIModel?.Name ?? msg.AIModel?.ProgrammaticName,
                     DateCreated = msg.DateCreated,
@@ -484,6 +485,10 @@ else
 
             if (currentGroup != null)
             {
+                if (isAssistant)
+                {
+                    currentGroup.IsAsistantMode = true;
+                }
                 if (string.IsNullOrEmpty(currentGroup.AssistantName) && msg.Assistant != null)
                 {
                     currentGroup.AssistantName = msg.Assistant.Name;
@@ -503,7 +508,7 @@ else
                     {
                         QuestionIndex = questionCounter,
                         QuestionText = chat?.Title ?? "Sohbet Sorusu",
-                        IsAsistantMode = msg.IsAsistantMode,
+                        IsAsistantMode = isAssistant,
                         AssistantName = msg.Assistant?.Name,
                         DateCreated = msg.DateCreated,
                         SqlQueries = new List<SqlLogItem>()

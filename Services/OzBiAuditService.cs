@@ -281,7 +281,8 @@ namespace OzBiPortalCRM.Services
                 var userQuestionCount = userQuestions.Count > 0 ? userQuestions.Count : msgList.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt));
                 if (userQuestionCount == 0 && msgList.Count > 0) userQuestionCount = msgList.Count;
 
-                bool isAssistantMode = msgList.Any(m => m.IsAsistantMode);
+                var firstTurnMsg = msgList.OrderBy(m => m.DateCreated).FirstOrDefault(m => m.Role?.ToLower() != "user");
+                bool isAssistantMode = firstTurnMsg != null ? firstTurnMsg.IsAssistantModeEffective : msgList.Any(m => m.IsAssistantModeEffective);
 
                 result.Add(new ChatAuditSummary
                 {
@@ -370,7 +371,8 @@ namespace OzBiPortalCRM.Services
                 var userQuestionCount = userQuestions.Count > 0 ? userQuestions.Count : msgList.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt));
                 if (userQuestionCount == 0 && msgList.Count > 0) userQuestionCount = msgList.Count;
 
-                bool isAssistantMode = msgList.Any(m => m.IsAsistantMode);
+                var firstTurnMsg = msgList.OrderBy(m => m.DateCreated).FirstOrDefault(m => m.Role?.ToLower() != "user");
+                bool isAssistantMode = firstTurnMsg != null ? firstTurnMsg.IsAssistantModeEffective : msgList.Any(m => m.IsAssistantModeEffective);
 
                 result.Add(new ChatAuditSummary
                 {
@@ -764,9 +766,71 @@ namespace OzBiPortalCRM.Services
 
         private List<OzBiChatMessage> GetDemoGlobalQueries(string? querySearch, bool? failedOnly, long? minDurationMs)
         {
-            var msgs = GetDemoMessagesForChat("demo-chat-101");
-            msgs[1].Chat = new OzBiChat { Id = "demo-chat-101", Title = "Son 30 Gün Ödeme Yapmayan Cariler", TenantId = "demo-tenant-1" };
-            return msgs;
+            var chat1 = new OzBiChat { Id = "demo-chat-101", Title = "Şirketin 30 Günlük Nakit Akış Projeksiyonu", TenantId = "demo-tenant-1", Tenant = new OzBiTenant { Name = "ozbidemo" }, CreatedByUser = new OzBiUser { NameSurname = "Eren Çülcüoğlu" } };
+
+            var list = new List<OzBiChatMessage>
+            {
+                new OzBiChatMessage
+                {
+                    Id = "demo-msg-101-1",
+                    ChatId = chat1.Id,
+                    Chat = chat1,
+                    IsAsistantMode = true,
+                    Prompt = "Şirketin 30 günlük nakit akış projeksiyonunu çıkarır mısın? Kasadaki ve bankadaki nakit, vadesi 30 gün içinde gelecek alacak çekleri, bekleyen açık cari alacaklar EKSİ vadesi gelecek cari borçlar ve kredi taksitleri şeklinde hesapla.",
+                    Query = @"[
+                        {
+                            ""description"": ""Son 12 ay için aylık satış geliri ve sipariş sayısı trendi"",
+                            ""sql"": ""SELECT DATE_FORMAT(`order_date`, '%Y-%m') AS `Ay`, SUM(`total_amount`) AS `SatisGeliriUSD`, COUNT(`id`) AS `SiparisSayisi` FROM `erp_orders` WHERE `order_date` >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) AND `order_date` < DATE_ADD(LAST_DAY(CURDATE()), INTERVAL 1 DAY) GROUP BY DATE_FORMAT(`order_date`, '%Y-%m') ORDER BY `Ay`;""
+                        }
+                    ]",
+                    TotalDurationMs = 47709,
+                    AIModel = new OzBiAiModel { Name = "GPT-5.6 Terra" },
+                    Assistant = new OzBiAssistant { Name = "ERP Assistant - New" },
+                    DateCreated = DateTime.Now.AddMinutes(-20)
+                },
+                new OzBiChatMessage
+                {
+                    Id = "demo-msg-101-2",
+                    ChatId = chat1.Id,
+                    Chat = chat1,
+                    IsAsistantMode = true,
+                    Prompt = "Şirketin 30 günlük nakit akış projeksiyonunu çıkarır mısın? Kasadaki ve bankadaki nakit, vadesi 30 gün içinde gelecek alacak çekleri, bekleyen açık cari alacaklar EKSİ vadesi gelecek cari borçlar ve kredi taksitleri şeklinde hesapla.",
+                    Query = @"[
+                        {
+                            ""description"": ""Vadesi geçmiş ödenmemiş faturaların toplam alacak tutarı (USD)."",
+                            ""sql"": ""SELECT SUM(`final_amount`) AS `total_overdue_receivables_usd` FROM `erp_invoices` WHERE `is_paid` = 0 AND `due_date` < CURRENT_DATE;""
+                        },
+                        {
+                            ""description"": ""Toplam vadesi geçmiş borca göre en borçlu 5 müşterinin gecikme yaşlandırma dilimlerine göre alacak tutarları (USD)."",
+                            ""sql"": ""SELECT `c`.`company_name` AS `customer`, CASE WHEN DATEDIFF(CURRENT_DATE, `i`.`due_date`) <= 30 THEN '0-30 gün' WHEN DATEDIFF(CURRENT_DATE, `i`.`due_date`) <= 60 THEN '30-60 gün' ELSE '60+ gün' END AS `overdue_days_bucket`, SUM(`i`.`final_amount`) AS `overdue_amount_usd` FROM `erp_invoices` AS `i` JOIN `erp_orders` AS `o` ON `i`.`order_id` = `o`.`id` JOIN `erp_customers` AS `c` ON `o`.`customer_id` = `c`.`id` WHERE `i`.`is_paid` = 0 GROUP BY `c`.`company_name`, `overdue_days_bucket` ORDER BY `overdue_amount_usd` DESC LIMIT 5;""
+                        }
+                    ]",
+                    TotalDurationMs = 34625,
+                    AIModel = new OzBiAiModel { Name = "GPT-5.6 Terra" },
+                    Assistant = new OzBiAssistant { Name = "ERP Assistant - New" },
+                    DateCreated = DateTime.Now.AddMinutes(-35)
+                },
+                new OzBiChatMessage
+                {
+                    Id = "demo-msg-101-3",
+                    ChatId = chat1.Id,
+                    Chat = chat1,
+                    IsAsistantMode = true,
+                    Prompt = "Şirketin 30 günlük nakit akış projeksiyonunu çıkarır mısın? Kasadaki ve bankadaki nakit, vadesi 30 gün içinde gelecek alacak çekleri, bekleyen açık cari alacaklar EKSİ vadesi gelecek cari borçlar ve kredi taksitleri şeklinde hesapla.",
+                    Query = @"[
+                        {
+                            ""description"": ""Vadesi geçmiş ve ödenmemiş tedarikçi faturalarının tedarikçi bazında adet ve tutar dağılımı"",
+                            ""sql"": ""SELECT `v`.`vendor_name`, `v`.`vendor_category`, COUNT(`e`.`expense_id`) AS `overdue_invoice_count`, SUM(`e`.`amount_usd`) AS `overdue_amount_usd` FROM `mitas_expenses` AS `e` INNER JOIN `mitas_vendors` AS `v` ON `v`.`vendor_id` = `e`.`vendor_id` WHERE `e`.`due_date` < CURDATE() GROUP BY `v`.`vendor_id`, `v`.`vendor_name`, `v`.`vendor_category`;""
+                        }
+                    ]",
+                    TotalDurationMs = 28140,
+                    AIModel = new OzBiAiModel { Name = "GPT-5.6 Terra" },
+                    Assistant = new OzBiAssistant { Name = "ERP Assistant - New" },
+                    DateCreated = DateTime.Now.AddMinutes(-50)
+                }
+            };
+
+            return list;
         }
         #endregion
     }

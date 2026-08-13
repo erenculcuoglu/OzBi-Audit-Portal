@@ -96,7 +96,7 @@ namespace OzBiPortalCRM.Services
 
                 var payload = new
                 {
-                    text = $"🔐 *OzBI Portal Login:* {fullName} ({email}) giriş yaptı.",
+                    text = $"🔐 *OzBI Control Tower Login:* {fullName} ({email}) giriş yaptı.",
                     blocks = new object[]
                     {
                         new
@@ -105,7 +105,7 @@ namespace OzBiPortalCRM.Services
                             text = new
                             {
                                 type = "plain_text",
-                                text = "🔐 OzBI Portal - Yeni Kullanıcı Girişi",
+                                text = "🔐 OzBI Control Tower - Yeni Kullanıcı Girişi",
                                 emoji = true
                             }
                         },
