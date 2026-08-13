@@ -39,24 +39,9 @@ namespace OzBiPortalCRM.Services
                 return GetDemoTenantsSummary(searchTerm);
             }
 
-            // Anlık giriş takibini tetikle
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    using var scope = _serviceProvider.CreateScope();
-                    var monitor = scope.ServiceProvider.GetService<IOzBiLoginMonitorService>();
-                    if (monitor != null)
-                    {
-                        await monitor.CheckForNewLoginsAsync();
-                    }
-                }
-                catch { }
-            });
-
             try
             {
-                using var db = await _dbFactory.CreateDbContextAsync();
+                await using var db = await _dbFactory.CreateDbContextAsync();
 
                 var query = db.Tenants.AsNoTracking().AsQueryable();
 
@@ -139,7 +124,7 @@ namespace OzBiPortalCRM.Services
 
             try
             {
-                using var db = await _dbFactory.CreateDbContextAsync();
+                await using var db = await _dbFactory.CreateDbContextAsync();
 
                 var query = db.Users.AsNoTracking().Where(u => !u.IsDeleted).AsQueryable();
 
@@ -220,7 +205,7 @@ namespace OzBiPortalCRM.Services
         {
             if (_useDemoMode) return GetDemoTenantsSummary().FirstOrDefault(t => t.Tenant.Id == tenantId)?.Tenant;
 
-            using var db = await _dbFactory.CreateDbContextAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync();
             return await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tenantId);
         }
 
@@ -228,7 +213,7 @@ namespace OzBiPortalCRM.Services
         {
             if (_useDemoMode) return GetDemoChatsForTenant(tenantId, searchTerm);
 
-            using var db = await _dbFactory.CreateDbContextAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync();
 
             var query = db.Chats.AsNoTracking()
                 .Include(c => c.CreatedByUser)
@@ -305,7 +290,7 @@ namespace OzBiPortalCRM.Services
         {
             if (_useDemoMode) return new List<OzBiUser>();
 
-            using var db = await _dbFactory.CreateDbContextAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync();
 
             var tenantUserIds = await db.Chats.AsNoTracking()
                 .Where(c => c.TenantId == tenantId && !string.IsNullOrEmpty(c.CreatedByUserId))
@@ -323,7 +308,7 @@ namespace OzBiPortalCRM.Services
         {
             if (_useDemoMode) return GetDemoChatsForTenant("demo-tenant-1", searchTerm);
 
-            using var db = await _dbFactory.CreateDbContextAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync();
 
             var chats = await db.Chats.AsNoTracking()
                 .Where(c => c.CreatedByUserId == userId)
@@ -395,7 +380,7 @@ namespace OzBiPortalCRM.Services
         {
             if (_useDemoMode) return new OzBiChat { Id = chatId, Title = "Demo Analiz Sohbeti", TenantId = "demo-tenant-1", DateCreated = DateTime.Now.AddDays(-1) };
 
-            using var db = await _dbFactory.CreateDbContextAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync();
             return await db.Chats.AsNoTracking()
                 .Include(c => c.Tenant)
                 .Include(c => c.CreatedByUser)
@@ -406,7 +391,7 @@ namespace OzBiPortalCRM.Services
         {
             if (_useDemoMode) return GetDemoMessagesForChat(chatId);
 
-            using var db = await _dbFactory.CreateDbContextAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync();
             return await db.ChatMessages.AsNoTracking()
                 .Include(m => m.AIModel)
                 .Include(m => m.Assistant)
@@ -426,7 +411,7 @@ namespace OzBiPortalCRM.Services
         {
             if (_useDemoMode) return GetDemoGlobalQueries(querySearch, failedOnly, minDurationMs);
 
-            using var db = await _dbFactory.CreateDbContextAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync();
 
             var query = db.ChatMessages.AsNoTracking()
                 .Include(m => m.Chat)
@@ -459,7 +444,7 @@ namespace OzBiPortalCRM.Services
         {
             if (_useDemoMode) return new Dictionary<string, int> { { "GPT-4o", 145 }, { "Claude 3.5 Sonnet", 98 }, { "DeepSeek V3", 42 } };
 
-            using var db = await _dbFactory.CreateDbContextAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync();
             return await db.ChatMessages.AsNoTracking()
                 .Where(m => m.AIModel != null && m.AIModel.Name != null)
                 .GroupBy(m => m.AIModel!.Name!)
@@ -470,7 +455,7 @@ namespace OzBiPortalCRM.Services
         #region Favorite & Footprint Persistence Methods
         public async Task<bool> ToggleFavoriteAsync(int portalUserId, string itemType, string itemId, string itemName, string? itemSubText)
         {
-            using var db = await _appDbFactory.CreateDbContextAsync();
+            await using var db = await _appDbFactory.CreateDbContextAsync();
             await db.EnsureTablesCreatedAsync();
 
             var existing = await db.Favorites.FirstOrDefaultAsync(f => f.PortalUserId == portalUserId && f.ItemType == itemType && f.ItemId == itemId);
@@ -500,7 +485,7 @@ namespace OzBiPortalCRM.Services
 
         public async Task<List<FavoriteItem>> GetUserFavoritesAsync(int portalUserId)
         {
-            using var db = await _appDbFactory.CreateDbContextAsync();
+            await using var db = await _appDbFactory.CreateDbContextAsync();
             await db.EnsureTablesCreatedAsync();
             return await db.Favorites.AsNoTracking()
                 .Where(f => f.PortalUserId == portalUserId)
@@ -510,7 +495,7 @@ namespace OzBiPortalCRM.Services
 
         public async Task<HashSet<string>> GetFavoriteItemIdsAsync(int portalUserId, string itemType)
         {
-            using var db = await _appDbFactory.CreateDbContextAsync();
+            await using var db = await _appDbFactory.CreateDbContextAsync();
             await db.EnsureTablesCreatedAsync();
             var ids = await db.Favorites.AsNoTracking()
                 .Where(f => f.PortalUserId == portalUserId && f.ItemType == itemType)
@@ -525,7 +510,7 @@ namespace OzBiPortalCRM.Services
 
             try
             {
-                using var db = await _appDbFactory.CreateDbContextAsync();
+                await using var db = await _appDbFactory.CreateDbContextAsync();
                 await db.EnsureTablesCreatedAsync();
 
                 return await db.TenantSubscriptions.AsNoTracking()
@@ -544,7 +529,7 @@ namespace OzBiPortalCRM.Services
 
             try
             {
-                using var db = await _appDbFactory.CreateDbContextAsync();
+                await using var db = await _appDbFactory.CreateDbContextAsync();
                 await db.EnsureTablesCreatedAsync();
 
                 var sub = await db.TenantSubscriptions.FirstOrDefaultAsync(ts => ts.TenantId == tenantId);
@@ -587,7 +572,7 @@ namespace OzBiPortalCRM.Services
 
             try
             {
-                using var db = await _dbFactory.CreateDbContextAsync();
+                await using var db = await _dbFactory.CreateDbContextAsync();
                 var conn = db.Database.GetDbConnection();
                 if (conn.State != System.Data.ConnectionState.Open)
                 {
