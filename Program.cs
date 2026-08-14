@@ -155,6 +155,32 @@ app.MapGet("/api/auth/logout", async (HttpContext httpContext) =>
     return Results.Redirect("/login");
 });
 
+app.MapGet("/api/inspect-chat/{chatId}", async (IOzBiAuditService auditService, string chatId) =>
+{
+    var chat = await auditService.GetChatByIdAsync(chatId);
+    var messages = await auditService.GetMessagesForChatAsync(chatId);
+    return Results.Ok(new {
+        chatId = chat?.Id,
+        title = chat?.Title,
+        tenantId = chat?.TenantId,
+        tenantName = chat?.Tenant?.Name,
+        user = chat?.CreatedByUser?.NameSurname ?? chat?.CreatedByUser?.Email,
+        dateCreated = chat?.DateCreated,
+        messageCount = messages.Count,
+        messages = messages.Select(m => new {
+            id = m.Id,
+            role = m.Role,
+            prompt = m.Prompt,
+            message = m.Message,
+            query = m.Query,
+            isSucceeded = m.IsSucceeded,
+            errorMessage = m.ErrorMessage,
+            summary = m.Summary,
+            dateCreated = m.DateCreated
+        })
+    });
+});
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

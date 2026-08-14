@@ -386,6 +386,63 @@ namespace OzBiPortalCRM.Services
                 }
             }
 
+            // -------------------------------------------------------------
+            // RULE 11: CHECK / PROMISSORY NOTE RULES (sck_borclu OR search & Tahsil / Kalan Filter) - Penalty: -10 pts
+            // -------------------------------------------------------------
+            if (IsTableInSql(upperSql, "ODEME_EMIRLERI") || upperSql.Contains("ODEME_EMIRLERI_YONETIM"))
+            {
+                bool isNameSearch = upperSql.Contains("CARI_UNVAN1") || upperSql.Contains("MSG_S_0201") || upperSql.Contains("CARI_KOD");
+                bool hasBorcluSearch = upperSql.Contains("SCK_BORCLU") || upperSql.Contains("MSG_S_1407");
+
+                if (isNameSearch && !hasBorcluSearch && upperSql.Contains("LIKE"))
+                {
+                    score -= 10;
+                    report.Violations.Add(new MikroRuleViolation
+                    {
+                        RuleId = "M-11",
+                        Title = "Eksik Borçlu / Keşideci Taraması (sck_borclu)",
+                        PenaltyPoints = 10,
+                        IssueDescription = "Çek/senet müşteri adı aramasında yalnızca sahip cari aranmış, asıl borçlu/keşideci (sck_borclu / [msg_S_1407]) OR ile taranmamış. Cirolu müşteri çekleri sonuçlarda kaçabilir.",
+                        V26RuleReference = "Madde 8: Çek aramalarında cari unvanı (CARI_HESAPLAR / [msg_S_0201]) ve asıl keşideci (sck_borclu / [msg_S_1407]) OR ile birlikte taranmalıdır.",
+                        RecommendedFix = "WHERE koşulunu `(UPPER(c.cari_unvan1) LIKE UPPER(N'%...%') OR UPPER(oe.sck_borclu) LIKE UPPER(N'%...%'))` şeklinde güncelleyin.",
+                        Severity = "Error"
+                    });
+                }
+                else if (isNameSearch && hasBorcluSearch)
+                {
+                    report.PassedChecks.Add(new MikroRuleCheck
+                    {
+                        RuleId = "M-11",
+                        Title = "Doğru Keşideci & Cari Arama Pattern'ı",
+                        Description = "Müşteri çeki aramasında sahip cari ve asıl keşideci (sck_borclu / [msg_S_1407]) OR ile birlikte taranmış."
+                    });
+                }
+
+                // Check for Tahsilat vs Kalan > 0 anti-pattern
+                bool isTahsilPrompt = !string.IsNullOrEmpty(userPrompt) && 
+                                     (userPrompt.ToLowerInvariant().Contains("tahsil") || 
+                                      userPrompt.ToLowerInvariant().Contains("ödenen") ||
+                                      userPrompt.ToLowerInvariant().Contains("ödenmiş"));
+
+                bool hasKalanFilter = Regex.IsMatch(sql, @"(sck_tutar\s*-\s*sck_odenen|msg_S_0301\\T)\s*>\s*0", RegexOptions.IgnoreCase) ||
+                                      upperSql.Contains("KALAN_TUTAR > 0");
+
+                if (isTahsilPrompt && hasKalanFilter)
+                {
+                    score -= 10;
+                    report.Violations.Add(new MikroRuleViolation
+                    {
+                        RuleId = "M-11",
+                        Title = "Tahsil Edilen Çeklerde Hatalı Açık Bakiye Filtresi",
+                        PenaltyPoints = 10,
+                        IssueDescription = "Tahsil olan/ödenen çek istendiğinde `kalan > 0` filtresi konulmuş. Tahsil edilmiş (kalanı 0 olan) çekler sorguda elenmektedir.",
+                        V26RuleReference = "Madde 8: Tahsil olan/ödenen çek istendiğinde `sck_odenen > 0 OR sck_sonpoz = 10` uygulanmalı; `kalan > 0` filtresi konulmamalıdır.",
+                        RecommendedFix = "`kalan > 0` filtresini kaldırıp `sck_odenen > 0 OR sck_sonpoz = 10` (view: `[msg_S_0238\\T] > 0 OR [msg_S_0297] = N'Ödendi'`) ekleyin.",
+                        Severity = "Error"
+                    });
+                }
+            }
+
             // Final Score Calculations & Grading
             score = Math.Max(0, Math.Min(100, score));
             report.Score = score;
@@ -394,31 +451,31 @@ namespace OzBiPortalCRM.Services
             {
                 report.Grade = "A+";
                 report.GradeLabel = "Kusursuz Uyum (A+)";
-                report.SummaryText = "T-SQL sorgusu Mikro v28 standartlarına ve veritabanı şemasına %100 kusursuz uyum sağlamaktadır.";
+                report.SummaryText = "T-SQL sorgusu Mikro v27 standartlarına ve veritabanı şemasına %100 kusursuz uyum sağlamaktadır.";
             }
             else if (score >= 85)
             {
                 report.Grade = "A";
                 report.GradeLabel = "Yüksek Uyum (A)";
-                report.SummaryText = "T-SQL sorgusu Mikro v28 kurallarına yüksek oranda uymaktadır. Küçük iyileştirmeler mümkündür.";
+                report.SummaryText = "T-SQL sorgusu Mikro v27 kurallarına yüksek oranda uymaktadır. Küçük iyileştirmeler mümkündür.";
             }
             else if (score >= 70)
             {
                 report.Grade = "B";
                 report.GradeLabel = "Orta Uyum (B)";
-                report.SummaryText = "Sorguda bazı kritik v28 kuralları (filtre veya kur koruması) eksiktir. Düzeltme önerilir.";
+                report.SummaryText = "Sorguda bazı kritik v27 kuralları (filtre veya kur koruması) eksiktir. Düzeltme önerilir.";
             }
             else if (score >= 50)
             {
                 report.Grade = "C";
                 report.GradeLabel = "Zayıf Uyum (C)";
-                report.SummaryText = "Sorguda önemli v28 standart ihlalleri tespit edilmiştir. İyileştirme yapılması şarttır.";
+                report.SummaryText = "Sorguda önemli v27 standart ihlalleri tespit edilmiştir. İyileştirme yapılması şarttır.";
             }
             else
             {
                 report.Grade = "F";
                 report.GradeLabel = "Uyumsuz / Riskli (F)";
-                report.SummaryText = "Sorgu Mikro v28 mimarisinden ciddi sapmalar göstermektedir ve performans/doğruluk riski taşımaktadır.";
+                report.SummaryText = "Sorgu Mikro v27 mimarisinden ciddi sapmalar göstermektedir ve performans/doğruluk riski taşımaktadır.";
             }
 
             return report;

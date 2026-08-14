@@ -51,7 +51,7 @@ namespace OzBiPortalCRM.Services
             }
             else if (erpType == ErpSystemType.Mikro)
             {
-                report.SystemTypeName = "Mikro ERP (v28)";
+                report.SystemTypeName = "Mikro ERP (v27)";
                 var baseReport = _mikroEvaluator.EvaluateQuery(tsqlQuery, userPrompt, tenantName);
 
                 report.Score = baseReport.Score;
@@ -64,7 +64,7 @@ namespace OzBiPortalCRM.Services
                 report.ProposedTsqlFix = baseReport.ProposedTsqlFix;
 
                 // Perform Cross-Check Sync Analysis for Mikro Tenant
-                PerformCrossCheckSync(report, erpConfig, "Mikro ERP v28", "v28", "Mikro ERP Ek Talimatı — v28");
+                PerformCrossCheckSync(report, erpConfig, "Mikro ERP v27", "v27", "Mikro ERP Ek Talimatı — v27");
             }
             else
             {
@@ -101,8 +101,8 @@ namespace OzBiPortalCRM.Services
             else
             {
                 report.IsPromptSynced = false;
-                report.PromptVersionLabel = $"{erpFullName} Versiyon Farkı";
-                report.PromptSyncDetails = $"Uyarı: Tenant veritabanındaki asistan promptu sistemdeki güncel {erpFullName} referans kurallarıyla farklılık gösterebilir. Güncelleme önerilir.";
+                report.PromptVersionLabel = $"{erpFullName} Sürüm Farkı";
+                report.PromptSyncDetails = $"Tenant özel promptunda '{promptHeaderSignature}' veya '{targetVersion}' sürüm imzası bulunamadı. Lütfen asistan promptunu güncelleyin.";
             }
         }
 

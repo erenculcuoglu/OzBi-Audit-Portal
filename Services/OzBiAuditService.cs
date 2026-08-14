@@ -761,7 +761,7 @@ namespace OzBiPortalCRM.Services
                     .ToList();
 
                 var erpTypeName = erpConfig.ErpType == ErpSystemType.Logo ? "Logo ERP (v7)" :
-                                  erpConfig.ErpType == ErpSystemType.Mikro ? "Mikro ERP (v28)" : "Genel ERP";
+                                  erpConfig.ErpType == ErpSystemType.Mikro ? "Mikro ERP (v27)" : "Genel ERP";
 
                 bool isPromptSynced = lastReport?.IsPromptSynced ?? true;
                 string promptVerLabel = lastReport?.PromptVersionLabel ?? "Güncel";
@@ -876,7 +876,7 @@ namespace OzBiPortalCRM.Services
                 TenantId = tenantId,
                 TenantName = "Demo Test Firması A.Ş.",
                 ErpType = "Mikro",
-                ErpTypeName = "Mikro ERP (v28)",
+                ErpTypeName = "Mikro ERP (v27)",
                 OverallScore = 86,
                 Grade = "A",
                 GradeLabel = "Çok İyi",
@@ -885,8 +885,8 @@ namespace OzBiPortalCRM.Services
                 WarningCount = 3,
                 CriticalCount = 1,
                 IsPromptSynced = true,
-                PromptVersionLabel = "Mikro v28 Senkronize",
-                PromptSyncDetails = "Tenant asistan promptu ve veritabanı şeması OzBi Mikro ERP v28 güncel standartlarıyla %100 senkronize.",
+                PromptVersionLabel = "Mikro v27 Senkronize",
+                PromptSyncDetails = "Tenant asistan promptu ve veritabanı şeması OzBi Mikro ERP v27 güncel standartlarıyla %100 senkronize.",
                 TopViolations = new List<TenantRuleViolationStat>
                 {
                     new TenantRuleViolationStat
