@@ -93,19 +93,22 @@
                 </div>
             </div>
 
-            <!-- Cross-Check Prompt & ERP Version Card -->
-            <div class="p-3 mb-4 rounded border d-flex align-items-center justify-content-between flex-wrap gap-2 @(Scorecard.IsPromptSynced ? "bg-success bg-opacity-10 border-success border-opacity-30 text-success" : "bg-warning bg-opacity-10 border-warning border-opacity-30 text-warning")">
-                <div class="d-flex align-items-center gap-2.5">
-                    <i class="bi @(Scorecard.IsPromptSynced ? "bi-arrow-repeat fs-4 text-success" : "bi-exclamation-triangle-fill fs-4 text-warning")"></i>
-                    <div>
-                        <div class="fw-bold small">ERP Şema & Prompt Versiyon Senkronizasyonu</div>
-                        <div class="small opacity-90" style="font-size: 0.825rem;">@Scorecard.PromptSyncDetails</div>
+            <!-- Cross-Check Prompt & ERP Version Card (Only for Mikro / Logo) -->
+            @if (Scorecard.ErpType != "Generic")
+            {
+                <div class="p-3 mb-4 rounded border d-flex align-items-center justify-content-between flex-wrap gap-2 @(Scorecard.IsPromptSynced ? "bg-success bg-opacity-10 border-success border-opacity-30 text-success" : "bg-warning bg-opacity-10 border-warning border-opacity-30 text-warning")">
+                    <div class="d-flex align-items-center gap-2.5">
+                        <i class="bi @(Scorecard.IsPromptSynced ? "bi-arrow-repeat fs-4 text-success" : "bi-exclamation-triangle-fill fs-4 text-warning")"></i>
+                        <div>
+                            <div class="fw-bold small">ERP Şema & Prompt Versiyon Senkronizasyonu</div>
+                            <div class="small opacity-90" style="font-size: 0.825rem;">@Scorecard.PromptSyncDetails</div>
+                        </div>
                     </div>
+                    <span class="badge @(Scorecard.IsPromptSynced ? "bg-success" : "bg-warning text-dark") px-2.5 py-1.5 fw-bold">
+                        @Scorecard.PromptVersionLabel
+                    </span>
                 </div>
-                <span class="badge @(Scorecard.IsPromptSynced ? "bg-success" : "bg-warning text-dark") px-2.5 py-1.5 fw-bold">
-                    @Scorecard.PromptVersionLabel
-                </span>
-            </div>
+            }
 
             <!-- Tabs: Top Violations vs Evaluated Queries -->
             <div class="tab-container mb-3">

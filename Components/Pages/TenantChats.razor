@@ -82,9 +82,12 @@
                                 <span class="badge-status badge-info" style="font-size: 0.75rem;">
                                     <i class="bi bi-cpu"></i> @scorecard.ErpTypeName
                                 </span>
-                                <span class="badge @(scorecard.IsPromptSynced ? "bg-success bg-opacity-20 text-success border border-success border-opacity-30" : "bg-warning bg-opacity-20 text-warning border border-warning border-opacity-30") px-2 py-0.5" style="font-size: 0.75rem;">
-                                    <i class="bi @(scorecard.IsPromptSynced ? "bi-check2-circle" : "bi-exclamation-triangle") me-1"></i>@scorecard.PromptVersionLabel
-                                </span>
+                                @if (!scorecard.IsPromptSynced && scorecard.ErpType != "Generic")
+                                {
+                                    <span class="badge-status badge-warning" style="font-size: 0.75rem;" title="@scorecard.PromptSyncDetails">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>@scorecard.PromptVersionLabel
+                                    </span>
+                                }
                             </div>
                             <div class="text-muted small">
                                 <i class="bi bi-clock-history me-1"></i> @scorecard.TotalQueriesEvaluated SQL sorgusu üzerinden hesaplandı &bull; Son Kontrol: @scorecard.LastEvaluatedAt.ToString("dd.MM.yyyy HH:mm")
