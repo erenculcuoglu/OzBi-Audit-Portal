@@ -95,36 +95,6 @@
                         </div>
                     </div>
 
-                    <!-- Center: Segmented Progress Distribution & Stats -->
-                    <div class="d-flex flex-column gap-1.5" style="min-width: 220px; flex: 1; max-width: 320px;">
-                        <div class="d-flex justify-content-between small text-muted" style="font-size: 0.75rem;">
-                            <span class="text-success fw-semibold"><i class="bi bi-check-circle me-0.5"></i>Uyumlu: @scorecard.CompliantCount</span>
-                            <span class="text-warning fw-semibold"><i class="bi bi-exclamation-circle me-0.5"></i>Uyarı: @scorecard.WarningCount</span>
-                            <span class="text-danger fw-semibold"><i class="bi bi-x-circle me-0.5"></i>Kritik: @scorecard.CriticalCount</span>
-                        </div>
-                        <div class="progress" style="height: 8px; background-color: rgba(255, 255, 255, 0.1); border-radius: 4px; overflow: hidden;">
-                            @if (scorecard.CompliantPercentage > 0)
-                            {
-                                <div class="progress-bar bg-success" style="width: @scorecard.CompliantPercentage%;"></div>
-                            }
-                            @if (scorecard.WarningPercentage > 0)
-                            {
-                                <div class="progress-bar bg-warning" style="width: @scorecard.WarningPercentage%;"></div>
-                            }
-                            @if (scorecard.CriticalPercentage > 0)
-                            {
-                                <div class="progress-bar bg-danger" style="width: @scorecard.CriticalPercentage%;"></div>
-                            }
-                        </div>
-                        @if (scorecard.TopViolations.Count > 0)
-                        {
-                            var topV = scorecard.TopViolations.First();
-                            <div class="text-danger text-truncate small" style="font-size: 0.725rem;" title="En Sık İhlal: [@topV.RuleId] @topV.Title">
-                                <i class="bi bi-exclamation-diamond me-1"></i>En Sık: <strong>@topV.Title</strong> (@topV.Count kez)
-                            </div>
-                        }
-                    </div>
-
                     <!-- Right: Action Buttons -->
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                         <button class="btn btn-sm btn-outline-info" @onclick="() => isComplianceModalOpen = true" title="Detaylı ERP Uyum Analizini Görüntüle">

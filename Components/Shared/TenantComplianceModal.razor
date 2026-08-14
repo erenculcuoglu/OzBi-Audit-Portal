@@ -9,17 +9,12 @@
             
             <!-- Modal Header -->
             <div class="d-flex align-items-center justify-content-between pb-3 border-bottom border-secondary border-opacity-25 mb-3">
-                <div class="d-flex align-items-center gap-2.5">
-                    <div class="p-2 rounded bg-primary bg-opacity-20 text-primary fs-5">
-                        <i class="bi bi-heart-pulse-fill"></i>
+                <div>
+                    <div class="d-flex align-items-center gap-2 mb-0.5">
+                        <h4 class="fw-bold mb-0 text-main">@Scorecard.TenantName</h4>
+                        <span class="badge-status badge-info" style="font-size: 0.72rem;">@Scorecard.ErpTypeName</span>
                     </div>
-                    <div>
-                        <div class="d-flex align-items-center gap-2">
-                            <h4 class="fw-bold mb-0 text-main">@Scorecard.TenantName</h4>
-                            <span class="badge-status badge-info" style="font-size: 0.72rem;">@Scorecard.ErpTypeName</span>
-                        </div>
-                        <div class="text-muted small">Sistem ve ERP Sağlık Özeti</div>
-                    </div>
+                    <div class="text-muted small">Sistem ve ERP Sağlık Özeti</div>
                 </div>
                 <button type="button" class="btn-close btn-close-white" @onclick="CloseModal"></button>
             </div>
