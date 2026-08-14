@@ -276,7 +276,7 @@ namespace OzBiPortalCRM.Services
                     {
                         RuleId = "M-06",
                         Title = "Yönetim View Braket Eşlemesi",
-                        Description = "Yönetim view sorgularında [msg_S_....] alan isimleri v27 standardına uygun eşleşmiş."
+                        Description = "Yönetim view sorgularında [msg_S_....] alan isimleri v1.0 standardına uygun eşleşmiş."
                     });
                 }
                 else

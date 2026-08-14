@@ -274,32 +274,32 @@ namespace OzBiPortalCRM.Services
             if (score >= 95)
             {
                 report.Grade = "A+";
-                report.GradeLabel = "Logo v7 Kusursuz Uyum (A+)";
-                report.SummaryText = "T-SQL sorgusu Logo ERP v7 standartlarına ve şemasına %100 kusursuz uyum sağlamaktadır.";
+                report.GradeLabel = "Kusursuz Uyum (A+)";
+                report.SummaryText = "T-SQL sorgusu Logo ERP v1.0 standartlarına ve şemasına %100 kusursuz uyum sağlamaktadır.";
             }
             else if (score >= 85)
             {
                 report.Grade = "A";
-                report.GradeLabel = "Logo v7 Yüksek Uyum (A)";
-                report.SummaryText = "T-SQL sorgusu Logo ERP v7 kurallarına yüksek oranda uymaktadır.";
+                report.GradeLabel = "Yüksek Uyum (A)";
+                report.SummaryText = "T-SQL sorgusu Logo ERP v1.0 kurallarına yüksek oranda uymaktadır.";
             }
             else if (score >= 70)
             {
                 report.Grade = "B";
-                report.GradeLabel = "Logo v7 Orta Uyum (B)";
-                report.SummaryText = "Logo sorgusunda bazı v7 standart filtreleri (CANCELLED, ACTIVE veya NOLOCK) eksiktir.";
+                report.GradeLabel = "Orta Uyum (B)";
+                report.SummaryText = "Logo sorgusunda bazı v1.0 standart filtreleri (CANCELLED, ACTIVE veya NOLOCK) eksiktir.";
             }
             else if (score >= 50)
             {
                 report.Grade = "C";
-                report.GradeLabel = "Logo v7 Zayıf Uyum (C)";
-                report.SummaryText = "Sorguda önemli Logo ERP v7 standart ihlalleri tespit edilmiştir.";
+                report.GradeLabel = "Zayıf Uyum (C)";
+                report.SummaryText = "Sorguda önemli Logo ERP v1.0 standart ihlalleri tespit edilmiştir.";
             }
             else
             {
                 report.Grade = "F";
-                report.GradeLabel = "Logo v7 Uyumsuz (F)";
-                report.SummaryText = "Sorgu Logo ERP v7 mimarisinden ciddi sapmalar göstermektedir.";
+                report.GradeLabel = "Uyumsuz / Riskli (F)";
+                report.SummaryText = "Sorgu Logo ERP v1.0 mimarisinden ciddi sapmalar göstermektedir.";
             }
 
             return report;

@@ -34,7 +34,7 @@ namespace OzBiPortalCRM.Services
 
             if (erpType == ErpSystemType.Logo)
             {
-                report.SystemTypeName = "Logo ERP (v7)";
+                report.SystemTypeName = "Logo ERP (v1.0)";
                 var baseReport = _logoEvaluator.Evaluate(tsqlQuery, userPrompt, tenantName);
 
                 report.Score = baseReport.Score;
@@ -47,11 +47,11 @@ namespace OzBiPortalCRM.Services
                 report.ProposedTsqlFix = baseReport.ProposedTsqlFix;
 
                 // Perform Cross-Check Sync Analysis for Logo Tenant
-                PerformCrossCheckSync(report, erpConfig, "Logo ERP v7", "v7", "Logo ERP Ek Talimatı — v7");
+                PerformCrossCheckSync(report, erpConfig, "Logo ERP v1.0", "v1.0", "Logo ERP Ek Talimatı — v1.0", new[] { "v7", "v1" });
             }
             else if (erpType == ErpSystemType.Mikro)
             {
-                report.SystemTypeName = "Mikro ERP (v27)";
+                report.SystemTypeName = "Mikro ERP (v1.0)";
                 var baseReport = _mikroEvaluator.EvaluateQuery(tsqlQuery, userPrompt, tenantName);
 
                 report.Score = baseReport.Score;
@@ -64,7 +64,7 @@ namespace OzBiPortalCRM.Services
                 report.ProposedTsqlFix = baseReport.ProposedTsqlFix;
 
                 // Perform Cross-Check Sync Analysis for Mikro Tenant
-                PerformCrossCheckSync(report, erpConfig, "Mikro ERP v27", "v27", "Mikro ERP Ek Talimatı — v27");
+                PerformCrossCheckSync(report, erpConfig, "Mikro ERP v1.0", "v1.0", "Mikro ERP Ek Talimatı — v1.0", new[] { "v27", "v28", "v1" });
             }
             else
             {
@@ -76,7 +76,7 @@ namespace OzBiPortalCRM.Services
             return report;
         }
 
-        private void PerformCrossCheckSync(ErpComplianceReport report, TenantErpConfig config, string erpFullName, string targetVersion, string promptHeaderSignature)
+        private void PerformCrossCheckSync(ErpComplianceReport report, TenantErpConfig config, string erpFullName, string targetVersion, string promptHeaderSignature, string[]? aliasVersions = null)
         {
             if (string.IsNullOrWhiteSpace(config.CustomPromptRules))
             {
@@ -91,6 +91,11 @@ namespace OzBiPortalCRM.Services
 
             bool containsVersion = dbPrompt.Contains(targetVerLower);
             bool containsHeader = dbPrompt.Contains(promptHeaderSignature.ToLowerInvariant());
+
+            if (!containsVersion && aliasVersions != null)
+            {
+                containsVersion = aliasVersions.Any(v => dbPrompt.Contains(v.ToLowerInvariant()));
+            }
 
             if (containsVersion || containsHeader)
             {
@@ -116,37 +121,63 @@ namespace OzBiPortalCRM.Services
                 return new ErpComplianceReport
                 {
                     SystemType = ErpSystemType.Logo,
-                    SystemTypeName = "Logo ERP (v7)",
+                    SystemTypeName = "Logo ERP (v1.0)",
                     Score = logoRep.Score,
                     Grade = logoRep.Grade,
                     GradeLabel = logoRep.GradeLabel,
                     SummaryText = logoRep.SummaryText,
-                    IsMikroQuery = logoRep.IsMikroQuery,
+                    IsMikroQuery = false,
                     PassedChecks = logoRep.PassedChecks,
                     Violations = logoRep.Violations,
-                    ProposedTsqlFix = logoRep.ProposedTsqlFix,
-                    IsPromptSynced = true,
-                    PromptVersionLabel = "Logo ERP v7 Güncel",
-                    PromptSyncDetails = "Tenant asistan promptu ve veritabanı şeması OzBi Logo ERP v7 güncel standartlarıyla %100 senkronize."
+                    ProposedTsqlFix = logoRep.ProposedTsqlFix
                 };
             }
+            else
+            {
+                var mikroRep = _mikroEvaluator.EvaluateQuery(tsqlQuery, userPrompt, tenantName);
+                return new ErpComplianceReport
+                {
+                    SystemType = ErpSystemType.Mikro,
+                    SystemTypeName = "Mikro ERP (v1.0)",
+                    Score = mikroRep.Score,
+                    Grade = mikroRep.Grade,
+                    GradeLabel = mikroRep.GradeLabel,
+                    SummaryText = mikroRep.SummaryText,
+                    IsMikroQuery = true,
+                    PassedChecks = mikroRep.PassedChecks,
+                    Violations = mikroRep.Violations,
+                    ProposedTsqlFix = mikroRep.ProposedTsqlFix,
+                    IsPromptSynced = true,
+                    PromptVersionLabel = "Mikro v1.0 Standart",
+                    PromptSyncDetails = "Sorgu Mikro ERP v1.0 standartları çerçevesinde denetlenmiştir."
+                };
+            }
+        }
 
-            var mikroRep = _mikroEvaluator.EvaluateQuery(tsqlQuery, userPrompt, tenantName);
+        public ErpComplianceReport GetDemoReport()
+        {
             return new ErpComplianceReport
             {
+                Score = 85,
+                Grade = "A",
+                GradeLabel = "Yüksek Uyum (A)",
                 SystemType = ErpSystemType.Mikro,
-                SystemTypeName = "Mikro ERP (v28)",
-                Score = mikroRep.Score,
-                Grade = mikroRep.Grade,
-                GradeLabel = mikroRep.GradeLabel,
-                SummaryText = mikroRep.SummaryText,
-                IsMikroQuery = mikroRep.IsMikroQuery,
-                PassedChecks = mikroRep.PassedChecks,
-                Violations = mikroRep.Violations,
-                ProposedTsqlFix = mikroRep.ProposedTsqlFix,
+                SystemTypeName = "Mikro ERP (v1.0)",
+                IsMikroQuery = true,
+                SummaryText = "T-SQL sorgusu Mikro ERP standartlarına büyük oranda uygundur. 1 adet kural ihlali tespit edildi.",
+                PassedChecks = new()
+                {
+                    new MikroRuleCheck { RuleId = "M-01", Title = "Ana Hesap Türü Ayrımı", Description = "cha_cari_cins = 0 filtresi doğru uygulanmış." },
+                    new MikroRuleCheck { RuleId = "M-02", Title = "TL Döviz Kuru Koruması", Description = "CASE WHEN cha_d_cins = 0 THEN 1.0 ELSE cha_d_kur END koruması mevcut." },
+                    new MikroRuleCheck { RuleId = "M-03", Title = "İptal ve Gizli Kayıt Filtresi", Description = "cha_iptal = 0 ve cha_hidden = 0 filtreleri mevcut." }
+                },
+                Violations = new()
+                {
+                    new MikroRuleViolation { RuleId = "M-07", Title = "Hassas Olmayan Metin Araması", PenaltyPoints = 15, Severity = "Warning", RecommendedFix = "UPPER(kolon) LIKE UPPER(N'%...%') pattern'ını kullanın." }
+                },
                 IsPromptSynced = true,
-                PromptVersionLabel = "Mikro ERP v28 Güncel",
-                PromptSyncDetails = "Tenant asistan promptu ve veritabanı şeması OzBi Mikro ERP v28 güncel standartlarıyla %100 senkronize."
+                PromptVersionLabel = "Mikro ERP v1.0 Güncel",
+                PromptSyncDetails = "Tenant asistan promptu ve veritabanı şeması OzBi Mikro ERP v1.0 güncel standartlarıyla %100 senkronize."
             };
         }
     }
