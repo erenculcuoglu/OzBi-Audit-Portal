@@ -5,263 +5,185 @@
 @if (IsOpen && Scorecard != null)
 {
     <div class="modal-backdrop-custom" @onclick="CloseModal">
-        <div class="modal-dialog-custom glass-card border-secondary border-opacity-50 text-main" style="max-width: 820px; width: 92%; max-height: 90vh; overflow-y: auto;" @onclick:stopPropagation>
+        <div class="modal-dialog-custom glass-card border-secondary border-opacity-50 text-main" style="max-width: 740px; width: 92%; max-height: 90vh; overflow-y: auto;" @onclick:stopPropagation>
+            
             <!-- Modal Header -->
-            <div class="d-flex align-items-center justify-content-between pb-3 border-bottom border-secondary border-opacity-25 mb-4">
+            <div class="d-flex align-items-center justify-content-between pb-3 border-bottom border-secondary border-opacity-25 mb-3">
                 <div class="d-flex align-items-center gap-2.5">
-                    <div class="p-2.5 rounded bg-primary bg-opacity-20 text-primary fs-4">
-                        <i class="bi bi-patch-check-fill"></i>
+                    <div class="p-2 rounded bg-primary bg-opacity-20 text-primary fs-5">
+                        <i class="bi bi-heart-pulse-fill"></i>
                     </div>
                     <div>
-                        <div class="d-flex align-items-center gap-2 mb-0.5">
+                        <div class="d-flex align-items-center gap-2">
                             <h4 class="fw-bold mb-0 text-main">@Scorecard.TenantName</h4>
-                            <span class="badge-status badge-info" style="font-size: 0.75rem;">@Scorecard.ErpTypeName</span>
+                            <span class="badge-status badge-info" style="font-size: 0.72rem;">@Scorecard.ErpTypeName</span>
                         </div>
-                        <div class="text-muted small">Tenant Düzeyinde Toplu ERP Standartları ve SQL Uyumluluk Puan Kartı</div>
+                        <div class="text-muted small">Sistem ve ERP Sağlık Özeti</div>
                     </div>
                 </div>
                 <button type="button" class="btn-close btn-close-white" @onclick="CloseModal"></button>
             </div>
 
-            <!-- Score Summary Hero -->
-            <div class="p-4 rounded-3 mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3"
-                 style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.9)); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);">
+            <!-- Executive Summary Card -->
+            <div class="p-3.5 rounded-3 mb-3 d-flex align-items-center justify-content-between flex-wrap gap-3"
+                 style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.85)); border: 1px solid rgba(255, 255, 255, 0.1);">
                 
+                <!-- Left: Score Badge -->
                 <div class="d-flex align-items-center gap-3">
-                    <div class="text-center p-3 rounded-circle border"
-                         style="width: 86px; height: 86px; display: flex; align-items: center; justify-content: center; flex-direction: column; background: rgba(0,0,0,0.5); border-color: @GetScoreColor(Scorecard.OverallScore) !important; box-shadow: 0 0 20px @GetScoreGlowColor(Scorecard.OverallScore);">
+                    <div class="text-center p-2.5 rounded-circle border"
+                         style="width: 76px; height: 76px; display: flex; align-items: center; justify-content: center; flex-direction: column; background: rgba(0,0,0,0.5); border-color: @GetScoreColor(Scorecard.OverallScore) !important; box-shadow: 0 0 15px @GetScoreGlowColor(Scorecard.OverallScore);">
                         <span class="fs-2 fw-bold" style="color: @GetScoreColor(Scorecard.OverallScore); line-height: 1;">@Scorecard.OverallScore</span>
                         <span class="text-muted" style="font-size: 0.65rem;">/ 100</span>
                     </div>
                     <div>
                         <div class="d-flex align-items-center gap-2 mb-1">
-                            <span class="badge px-3 py-1 fw-bold fs-6" style="background: @GetScoreColor(Scorecard.OverallScore); color: #000;">
-                                Harf Notu: @Scorecard.Grade
+                            <span class="badge px-2.5 py-1 fw-bold" style="background: @GetScoreColor(Scorecard.OverallScore); color: #000; font-size: 0.85rem;">
+                                @Scorecard.GradeLabel
                             </span>
-                            <span class="text-light fw-semibold">@Scorecard.GradeLabel</span>
+                            <span class="text-muted small">(Derece: @Scorecard.Grade)</span>
                         </div>
-                        <div class="text-muted small">
-                            <i class="bi bi-clock-history me-1"></i> Son Değerlendirme: @Scorecard.LastEvaluatedAt.ToString("dd.MM.yyyy HH:mm") (TSI)
-                        </div>
-                        <div class="text-info small mt-0.5">
-                            <i class="bi bi-database-check me-1"></i> Toplam <strong>@Scorecard.TotalQueriesEvaluated</strong> adet T-SQL sorgusu taranarak analiz edildi.
+                        <div class="text-light small" style="max-width: 320px; line-height: 1.35;">
+                            @GetHumanSummary(Scorecard)
                         </div>
                     </div>
                 </div>
 
-                <!-- Metric Stat Boxes -->
+                <!-- Right: Clean Metric Badges -->
                 <div class="d-flex gap-2 flex-wrap">
-                    <div class="text-center p-2.5 rounded bg-black bg-opacity-40 border border-success border-opacity-30 px-3">
+                    <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-success border-opacity-30 px-3">
                         <div class="fs-5 fw-bold text-success">@Scorecard.CompliantCount</div>
-                        <div class="text-muted small" style="font-size: 0.75rem;">Tam Uyumlu (%@Scorecard.CompliantPercentage)</div>
+                        <div class="text-muted" style="font-size: 0.72rem;">Kusursuz Sorgu</div>
                     </div>
-                    <div class="text-center p-2.5 rounded bg-black bg-opacity-40 border border-warning border-opacity-30 px-3">
+                    <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-warning border-opacity-30 px-3">
                         <div class="fs-5 fw-bold text-warning">@Scorecard.WarningCount</div>
-                        <div class="text-muted small" style="font-size: 0.75rem;">Kısmi Uyarı (%@Scorecard.WarningPercentage)</div>
+                        <div class="text-muted" style="font-size: 0.72rem;">İyileştirilebilir</div>
                     </div>
-                    <div class="text-center p-2.5 rounded bg-black bg-opacity-40 border border-danger border-opacity-30 px-3">
+                    <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-danger border-opacity-30 px-3">
                         <div class="fs-5 fw-bold @(Scorecard.CriticalCount > 0 ? "text-danger" : "text-muted")">@Scorecard.CriticalCount</div>
-                        <div class="text-muted small" style="font-size: 0.75rem;">Kritik İhlal (%@Scorecard.CriticalPercentage)</div>
+                        <div class="text-muted" style="font-size: 0.72rem;">Kritik Hata</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Segmented Distribution Progress Bar -->
-            <div class="mb-4 p-3 rounded bg-black bg-opacity-25 border border-secondary border-opacity-20">
-                <div class="d-flex align-items-center justify-content-between text-muted small mb-2">
-                    <span class="fw-semibold text-light"><i class="bi bi-bar-chart-fill text-primary me-1"></i>Sorgu Kalitesi & Uyum Dağılımı</span>
-                    <span>%100 üzerinden dağılım</span>
+            <!-- Single Distribution Bar -->
+            <div class="mb-3 px-1">
+                <div class="d-flex justify-content-between text-muted small mb-1" style="font-size: 0.75rem;">
+                    <span><i class="bi bi-bar-chart me-1"></i>Sorgu Başarı Dağılımı (%@Scorecard.CompliantPercentage Başarılı)</span>
+                    <span>Toplam <strong>@Scorecard.TotalQueriesEvaluated</strong> Sorgu</span>
                 </div>
-                <div class="progress" style="height: 12px; background-color: rgba(255, 255, 255, 0.08); border-radius: 6px; overflow: hidden;">
+                <div class="progress" style="height: 8px; background-color: rgba(255, 255, 255, 0.08); border-radius: 4px; overflow: hidden;">
                     @if (Scorecard.CompliantPercentage > 0)
                     {
-                        <div class="progress-bar bg-success" style="width: @Scorecard.CompliantPercentage%;" title="Tam Uyumlu: %@Scorecard.CompliantPercentage"></div>
+                        <div class="progress-bar bg-success" style="width: @Scorecard.CompliantPercentage%;"></div>
                     }
                     @if (Scorecard.WarningPercentage > 0)
                     {
-                        <div class="progress-bar bg-warning" style="width: @Scorecard.WarningPercentage%;" title="Kısmi Uyarı: %@Scorecard.WarningPercentage"></div>
+                        <div class="progress-bar bg-warning" style="width: @Scorecard.WarningPercentage%;"></div>
                     }
                     @if (Scorecard.CriticalPercentage > 0)
                     {
-                        <div class="progress-bar bg-danger" style="width: @Scorecard.CriticalPercentage%;" title="Kritik: %@Scorecard.CriticalPercentage"></div>
+                        <div class="progress-bar bg-danger" style="width: @Scorecard.CriticalPercentage%;"></div>
                     }
                 </div>
-                <div class="d-flex justify-content-between text-muted small mt-2" style="font-size: 0.75rem;">
-                    <span class="text-success"><i class="bi bi-circle-fill" style="font-size: 0.55rem;"></i> Tam Uyum (90-100 Puan)</span>
-                    <span class="text-warning"><i class="bi bi-circle-fill" style="font-size: 0.55rem;"></i> Kısmi İhlal (60-89 Puan)</span>
-                    <span class="text-danger"><i class="bi bi-circle-fill" style="font-size: 0.55rem;"></i> Yüksek Risk (&lt; 60 Puan)</span>
-                </div>
             </div>
 
-            <!-- Cross-Check Prompt & ERP Version Card (Only for Mikro / Logo) -->
-            @if (Scorecard.ErpType != "Generic")
-            {
-                <div class="p-3 mb-4 rounded border d-flex align-items-center justify-content-between flex-wrap gap-2 @(Scorecard.IsPromptSynced ? "bg-success bg-opacity-10 border-success border-opacity-30 text-success" : "bg-warning bg-opacity-10 border-warning border-opacity-30 text-warning")">
-                    <div class="d-flex align-items-center gap-2.5">
-                        <i class="bi @(Scorecard.IsPromptSynced ? "bi-arrow-repeat fs-4 text-success" : "bi-exclamation-triangle-fill fs-4 text-warning")"></i>
-                        <div>
-                            <div class="fw-bold small">ERP Şema & Prompt Versiyon Senkronizasyonu</div>
-                            <div class="small opacity-90" style="font-size: 0.825rem;">@Scorecard.PromptSyncDetails</div>
-                        </div>
-                    </div>
-                    <span class="badge @(Scorecard.IsPromptSynced ? "bg-success" : "bg-warning text-dark") px-2.5 py-1.5 fw-bold">
-                        @Scorecard.PromptVersionLabel
-                    </span>
+            <!-- Actionable Recommendations (Human Language) -->
+            <div class="mb-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <h6 class="fw-bold text-light mb-0" style="font-size: 0.9rem;">
+                        <i class="bi bi-lightbulb-fill text-warning me-1.5"></i>
+                        @(Scorecard.TopViolations.Count > 0 ? "İyileştirme Tavsiyeleri ve İpuçları" : "Sistem Durumu")
+                    </h6>
+                    @if (Scorecard.TopViolations.Count > 0)
+                    {
+                        <span class="text-muted small" style="font-size: 0.75rem;">
+                            @Scorecard.TopViolations.Count tavsiye bulundu
+                        </span>
+                    }
                 </div>
-            }
 
-            <!-- Tabs: Top Violations vs Evaluated Queries -->
-            <div class="tab-container mb-3">
-                <button class="btn-tab @(activeTab == "violations" ? "active" : "")" @onclick='() => activeTab = "violations"'>
-                    <i class="bi bi-exclamation-diamond me-1"></i> En Sık İhlal Edilen Kurallar (@Scorecard.TopViolations.Count)
-                </button>
-                <button class="btn-tab @(activeTab == "queries" ? "active" : "")" @onclick='() => activeTab = "queries"'>
-                    <i class="bi bi-list-check me-1"></i> Taranan Son Sorgular (@Scorecard.EvaluatedQueries.Count)
-                </button>
-            </div>
-
-            @if (activeTab == "violations")
-            {
-                <!-- Top Violations List -->
                 @if (Scorecard.TopViolations.Count == 0)
                 {
-                    <div class="p-4 text-center rounded bg-success bg-opacity-10 border border-success border-opacity-25 text-success">
-                        <i class="bi bi-check-circle-fill fs-3 mb-2 d-block"></i>
-                        <h6 class="fw-bold mb-1">Mükemmel! Hiçbir ERP Kural İhlali Bulunmuyor</h6>
-                        <p class="small mb-0 text-muted">Bu tenant tarafından üretilen tüm SQL sorguları kurallara tam uyumlu görünmektedir.</p>
+                    <div class="p-3 text-center rounded bg-success bg-opacity-10 border border-success border-opacity-25 text-success">
+                        <i class="bi bi-check-circle-fill fs-4 mb-1 d-block"></i>
+                        <div class="fw-semibold small">Harika! Bu firmada hiçbir kural ihlali veya aksama bulunmuyor.</div>
+                        <div class="text-muted small mt-0.5" style="font-size: 0.75rem;">Tüm yapay zeka sorguları standartlara tam uyumlu çalışmaktadır.</div>
                     </div>
                 }
                 else
                 {
-                    <div class="d-flex flex-column gap-3 mb-4">
+                    <div class="d-flex flex-column gap-2">
                         @foreach (var (v, idx) in Scorecard.TopViolations.Select((item, index) => (item, index + 1)))
                         {
+                            var isExpanded = expandedViolations.Contains(v.RuleId);
                             var isWarning = v.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase);
-                            var cardBg = isWarning ? "bg-warning bg-opacity-10 border-warning border-opacity-30" : "bg-danger bg-opacity-10 border-danger border-opacity-30";
-                            var titleColor = isWarning ? "text-warning" : "text-danger";
-                            var badgeBg = isWarning ? "bg-warning text-dark" : "bg-danger text-white";
+                            var cardBg = isWarning ? "bg-warning bg-opacity-10 border-warning border-opacity-25" : "bg-danger bg-opacity-10 border-danger border-opacity-25";
+                            var iconColor = isWarning ? "text-warning" : "text-danger";
 
-                            <div class="p-3.5 rounded border @cardBg">
-                                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="badge @badgeBg px-2 py-0.5" style="font-size: 0.75rem;">#@idx</span>
-                                        <span class="fw-bold @titleColor" style="font-size: 0.95rem;">
-                                            [@v.RuleId] @v.Title
-                                        </span>
+                            <div class="p-3 rounded border @cardBg" style="transition: all 0.2s ease;">
+                                <div class="d-flex align-items-start justify-content-between gap-2">
+                                    <div class="d-flex align-items-start gap-2.5">
+                                        <i class="bi @(isWarning ? "bi-exclamation-circle-fill" : "bi-x-circle-fill") @iconColor mt-0.5" style="font-size: 1.1rem;"></i>
+                                        <div>
+                                            <div class="fw-bold text-light mb-0.5" style="font-size: 0.88rem;">
+                                                @GetSimplifiedTitle(v.Title)
+                                            </div>
+                                            <div class="text-muted small" style="font-size: 0.78rem;">
+                                                Bu durum son sorgularda <strong class="text-light">@v.Count kez</strong> (%@v.Percentage) karşılaşıldı.
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="badge bg-black bg-opacity-50 text-light border border-secondary border-opacity-30 px-2 py-1" style="font-size: 0.75rem;">
-                                            @v.Count Kez İhlal Edildi (%@v.Percentage)
-                                        </span>
-                                        <span class="badge @badgeBg font-monospace px-2 py-1">
-                                            Toplam -@v.TotalPenaltyPoints Ceza
-                                        </span>
-                                    </div>
+
+                                    @if (!string.IsNullOrEmpty(v.RecommendedFix))
+                                    {
+                                        <button class="btn btn-sm btn-link text-info p-0 text-decoration-none small" style="font-size: 0.75rem; white-space: nowrap;" @onclick="() => ToggleViolationDetail(v.RuleId)">
+                                            <i class="bi @(isExpanded ? "bi-chevron-up" : "bi-chevron-down") me-0.5"></i>
+                                            @(isExpanded ? "Gizle" : "Detay")
+                                        </button>
+                                    }
                                 </div>
 
-                                @if (!string.IsNullOrEmpty(v.RecommendedFix))
+                                @if (isExpanded && !string.IsNullOrEmpty(v.RecommendedFix))
                                 {
-                                    <div class="p-2.5 rounded bg-black bg-opacity-40 border border-secondary border-opacity-25 mt-2">
-                                        <div class="text-info small fw-semibold mb-1">
-                                            <i class="bi bi-lightbulb-fill me-1 text-warning"></i> Önerilen Düzeltme & Standart:
+                                    <div class="mt-2.5 pt-2 border-top border-secondary border-opacity-25">
+                                        <div class="text-info small fw-semibold mb-1" style="font-size: 0.75rem;">
+                                            <i class="bi bi-wrench me-1"></i> Tavsiye Edilen Çözüm:
                                         </div>
-                                        <div class="text-light small font-monospace" style="font-size: 0.8rem; word-break: break-word;">
+                                        <div class="p-2 rounded bg-black bg-opacity-50 text-light font-monospace small" style="font-size: 0.75rem; word-break: break-word;">
                                             @v.RecommendedFix
                                         </div>
                                     </div>
                                 }
-
-                                @if (!string.IsNullOrEmpty(v.V26RuleReference))
-                                {
-                                    <div class="text-muted small mt-2 d-flex align-items-center gap-1" style="font-size: 0.75rem;">
-                                        <i class="bi bi-book me-1"></i> Referans Dokümantasyon: <code>@v.V26RuleReference</code>
-                                    </div>
-                                }
                             </div>
                         }
                     </div>
                 }
-            }
-            else
-            {
-                <!-- Evaluated Queries Drilldown -->
-                @if (Scorecard.EvaluatedQueries.Count == 0)
-                {
-                    <div class="text-center py-4 text-muted">
-                        Taranmış SQL sorgusu bulunmuyor.
-                    </div>
-                }
-                else
-                {
-                    <div class="d-flex flex-column gap-3 mb-4">
-                        @foreach (var q in Scorecard.EvaluatedQueries)
-                        {
-                            <div class="p-3 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25">
-                                <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="badge-status" style="background: rgba(15, 23, 42, 0.8); border: 1px solid @GetScoreColor(q.Score); color: @GetScoreColor(q.Score);">
-                                            Skor: @q.Score/100 (@q.Grade)
-                                        </span>
-                                        @if (q.IsSucceeded)
-                                        {
-                                            <span class="badge-status badge-success">Başarılı</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="badge-status badge-danger">Hatalı</span>
-                                        }
-                                    </div>
-                                    <span class="text-muted small">
-                                        <i class="bi bi-calendar3"></i> @(q.DateCreated?.ToString("dd.MM.yyyy HH:mm") ?? "-")
-                                    </span>
-                                </div>
-
-                                @if (!string.IsNullOrEmpty(q.QuestionText))
-                                {
-                                    <div class="text-info small mb-1.5 fw-semibold">
-                                        <i class="bi bi-chat-left-quote me-1"></i> @q.QuestionText
-                                    </div>
-                                }
-
-                                <div class="sql-code-block my-2" style="max-height: 120px; overflow-y: auto;">
-                                    <code>@q.SqlQuery</code>
-                                </div>
-
-                                @if (q.ViolationTitles.Count > 0)
-                                {
-                                    <div class="d-flex flex-wrap gap-1 mt-2">
-                                        @foreach (var vTitle in q.ViolationTitles)
-                                        {
-                                            <span class="badge bg-danger bg-opacity-20 text-danger border border-danger border-opacity-30" style="font-size: 0.7rem;">
-                                                <i class="bi bi-x-circle me-0.5"></i> @vTitle
-                                            </span>
-                                        }
-                                    </div>
-                                }
-                            </div>
-                        }
-                    </div>
-                }
-            }
+            </div>
 
             <!-- Modal Footer -->
-            <div class="d-flex align-items-center justify-content-between pt-3 border-top border-secondary border-opacity-25 flex-wrap gap-2">
-                <button type="button" class="btn btn-outline-info btn-sm" @onclick="OnRefreshRequested" disabled="@isRefreshing">
-                    @if (isRefreshing)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        <span>Yeniden Hesaplanıyor...</span>
-                    }
-                    else
-                    {
-                        <i class="bi bi-arrow-clockwise me-1"></i>
-                        <span>Skoru Canlı Yeniden Hesapla</span>
-                    }
-                </button>
+            <div class="d-flex align-items-center justify-content-between pt-2.5 border-top border-secondary border-opacity-25 flex-wrap gap-2">
+                <div class="text-muted small" style="font-size: 0.72rem;">
+                    <i class="bi bi-clock-history me-1"></i> Son Güncelleme: @Scorecard.LastEvaluatedAt.ToString("dd.MM.yyyy HH:mm")
+                </div>
 
-                <button type="button" class="btn btn-secondary btn-sm px-4" @onclick="CloseModal">
-                    Kapat
-                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-info btn-sm" @onclick="OnRefreshRequested" disabled="@isRefreshing">
+                        @if (isRefreshing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            <span>Hesaplanıyor...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-arrow-clockwise me-1"></i>
+                            <span>Yeniden Analiz Et</span>
+                        }
+                    </button>
+
+                    <button type="button" class="btn btn-secondary btn-sm px-3" @onclick="CloseModal">
+                        Kapat
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -280,8 +202,16 @@
     [Parameter]
     public EventCallback OnRefresh { get; set; }
 
-    private string activeTab = "violations";
+    private HashSet<string> expandedViolations = new();
     private bool isRefreshing = false;
+
+    private void ToggleViolationDetail(string ruleId)
+    {
+        if (expandedViolations.Contains(ruleId))
+            expandedViolations.Remove(ruleId);
+        else
+            expandedViolations.Add(ruleId);
+    }
 
     private async Task CloseModal()
     {
@@ -305,6 +235,33 @@
                 isRefreshing = false;
             }
         }
+    }
+
+    private string GetHumanSummary(TenantComplianceScorecard sc)
+    {
+        if (sc.OverallScore >= 95)
+            return "Yapay zeka sorguları sisteme tam uyumlu ve çok yüksek performansla çalışıyor.";
+        if (sc.OverallScore >= 80)
+            return "Genel sistem performansı iyi. Birkaç küçük optimizasyon önerisi bulunuyor.";
+        if (sc.OverallScore >= 60)
+            return "Bazı sorgularda filtreleme ve şablon uyumsuzlukları mevcut, gözden geçirilmesi önerilir.";
+        return "Sorgularda sıkça hata ve kural ihlali oluşuyor, teknik inceleme önerilir.";
+    }
+
+    private string GetSimplifiedTitle(string rawTitle)
+    {
+        if (string.IsNullOrWhiteSpace(rawTitle)) return "Genel İyileştirme Önerisi";
+        
+        // Strip out brackets like [M-06], [M-03] if present in title
+        var title = rawTitle;
+        if (title.StartsWith("[") && title.Contains("]"))
+        {
+            var endIdx = title.IndexOf("]");
+            if (endIdx + 1 < title.Length)
+                title = title.Substring(endIdx + 1).Trim();
+        }
+
+        return title;
     }
 
     private string GetScoreColor(int score)
