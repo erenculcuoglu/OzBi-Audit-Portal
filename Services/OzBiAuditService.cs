@@ -21,15 +21,21 @@ namespace OzBiPortalCRM.Services
         }
 
         private readonly IServiceProvider _serviceProvider;
+        private readonly IErpAuditEngine _erpAuditEngine;
+        private readonly ITenantSchemaProvider _schemaProvider;
 
         public OzBiAuditService(
             IDbContextFactory<OzBiDbContext> dbFactory,
             IDbContextFactory<AppDbContext> appDbFactory,
-            IServiceProvider serviceProvider)
+            IServiceProvider serviceProvider,
+            IErpAuditEngine erpAuditEngine,
+            ITenantSchemaProvider schemaProvider)
         {
             _dbFactory = dbFactory;
             _appDbFactory = appDbFactory;
             _serviceProvider = serviceProvider;
+            _erpAuditEngine = erpAuditEngine;
+            _schemaProvider = schemaProvider;
         }
 
         public async Task<List<TenantAuditSummary>> GetTenantsSummaryAsync(string? searchTerm = null, int portalUserId = 0)
@@ -611,6 +617,303 @@ namespace OzBiPortalCRM.Services
             }
 
             return (null, null);
+        }
+        #endregion
+
+        #region Tenant Compliance Scorecard Methods
+        public async Task<TenantComplianceScorecard> GetTenantComplianceScorecardAsync(string tenantId, bool forceRefresh = false)
+        {
+            if (string.IsNullOrWhiteSpace(tenantId))
+                return new TenantComplianceScorecard();
+
+            if (_useDemoMode)
+                return GetDemoComplianceScorecard(tenantId);
+
+            try
+            {
+                await using var appDb = await _appDbFactory.CreateDbContextAsync();
+                await appDb.EnsureTablesCreatedAsync();
+
+                // 1. Check cached snapshot if not forcing refresh
+                if (!forceRefresh)
+                {
+                    var snapshot = await appDb.TenantComplianceSnapshots.AsNoTracking()
+                        .FirstOrDefaultAsync(s => s.TenantId == tenantId);
+
+                    if (snapshot != null && snapshot.LastEvaluatedAt > DateTime.UtcNow.AddHours(-12))
+                    {
+                        var scorecard = new TenantComplianceScorecard
+                        {
+                            TenantId = snapshot.TenantId,
+                            TenantName = snapshot.TenantName,
+                            ErpType = snapshot.ErpType,
+                            ErpTypeName = snapshot.ErpTypeName,
+                            OverallScore = snapshot.OverallScore,
+                            Grade = snapshot.Grade,
+                            GradeLabel = snapshot.GradeLabel,
+                            TotalQueriesEvaluated = snapshot.TotalQueriesEvaluated,
+                            CompliantCount = snapshot.CompliantCount,
+                            WarningCount = snapshot.WarningCount,
+                            CriticalCount = snapshot.CriticalCount,
+                            IsPromptSynced = snapshot.IsPromptSynced,
+                            PromptVersionLabel = snapshot.PromptVersionLabel,
+                            PromptSyncDetails = snapshot.PromptSyncDetails ?? string.Empty,
+                            LastEvaluatedAt = snapshot.LastEvaluatedAt
+                        };
+
+                        if (!string.IsNullOrEmpty(snapshot.TopViolationsJson))
+                        {
+                            try
+                            {
+                                scorecard.TopViolations = System.Text.Json.JsonSerializer.Deserialize<List<TenantRuleViolationStat>>(snapshot.TopViolationsJson) ?? new();
+                            }
+                            catch { }
+                        }
+
+                        return scorecard;
+                    }
+                }
+
+                // 2. Fetch Tenant details and latest SQL query messages from MariaDB
+                await using var db = await _dbFactory.CreateDbContextAsync();
+                var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tenantId);
+                var tenantName = tenant?.Name ?? "Tenant";
+
+                var erpConfig = await _schemaProvider.GetTenantErpConfigAsync(tenantId, tenantName);
+
+                var queryMessages = await db.ChatMessages.AsNoTracking()
+                    .Include(m => m.Chat)
+                    .Where(m => m.Chat != null && m.Chat.TenantId == tenantId && !string.IsNullOrEmpty(m.Query))
+                    .OrderByDescending(m => m.DateCreated)
+                    .Take(75)
+                    .ToListAsync();
+
+                var evaluatedList = new List<TenantQueryComplianceSummary>();
+                var allViolations = new List<MikroRuleViolation>();
+                var scores = new List<int>();
+
+                ErpComplianceReport? lastReport = null;
+
+                foreach (var msg in queryMessages)
+                {
+                    if (string.IsNullOrWhiteSpace(msg.Query)) continue;
+
+                    var report = await _erpAuditEngine.EvaluateQueryAsync(msg.Query, msg.Prompt, tenantId, tenantName);
+                    lastReport = report;
+
+                    scores.Add(report.Score);
+                    allViolations.AddRange(report.Violations);
+
+                    evaluatedList.Add(new TenantQueryComplianceSummary
+                    {
+                        MessageId = msg.Id,
+                        ChatId = msg.ChatId,
+                        QuestionText = msg.Prompt ?? msg.Message,
+                        SqlQuery = msg.Query,
+                        Score = report.Score,
+                        Grade = report.Grade,
+                        GradeLabel = report.GradeLabel,
+                        IsSucceeded = msg.IsSucceeded,
+                        ErrorMessage = msg.ErrorMessage,
+                        DateCreated = msg.DateCreated,
+                        ViolationTitles = report.Violations.Select(v => v.Title).ToList()
+                    });
+                }
+
+                int totalCount = scores.Count;
+                int overallScore = totalCount > 0 ? (int)Math.Round(scores.Average()) : 100;
+
+                string grade;
+                string gradeLabel;
+                if (overallScore >= 95) { grade = "A+"; gradeLabel = "Mükemmel"; }
+                else if (overallScore >= 85) { grade = "A"; gradeLabel = "Çok İyi"; }
+                else if (overallScore >= 70) { grade = "B"; gradeLabel = "İyi / Standart"; }
+                else if (overallScore >= 55) { grade = "C"; gradeLabel = "Geliştirilmeli"; }
+                else { grade = "F"; gradeLabel = "Kritik Uyumsuz"; }
+
+                int compliant = scores.Count(s => s >= 90);
+                int warning = scores.Count(s => s >= 60 && s < 90);
+                int critical = scores.Count(s => s < 60);
+
+                // Group top violations by RuleId/Title
+                var topViolations = allViolations
+                    .GroupBy(v => v.RuleId)
+                    .Select(g =>
+                    {
+                        var first = g.First();
+                        var count = g.Count();
+                        var pct = totalCount > 0 ? Math.Round((double)count / totalCount * 100, 1) : 0;
+                        return new TenantRuleViolationStat
+                        {
+                            RuleId = g.Key,
+                            Title = first.Title,
+                            Severity = first.Severity,
+                            Count = count,
+                            Percentage = pct,
+                            TotalPenaltyPoints = g.Sum(x => x.PenaltyPoints),
+                            RecommendedFix = first.RecommendedFix,
+                            V26RuleReference = first.V26RuleReference
+                        };
+                    })
+                    .OrderByDescending(v => v.Count)
+                    .ThenByDescending(v => v.TotalPenaltyPoints)
+                    .Take(6)
+                    .ToList();
+
+                var erpTypeName = erpConfig.ErpType == ErpSystemType.Logo ? "Logo ERP (v7)" :
+                                  erpConfig.ErpType == ErpSystemType.Mikro ? "Mikro ERP (v28)" : "Genel ERP";
+
+                bool isPromptSynced = lastReport?.IsPromptSynced ?? true;
+                string promptVerLabel = lastReport?.PromptVersionLabel ?? "Güncel";
+                string promptSyncDetails = lastReport?.PromptSyncDetails ?? "Tenant şeması ve kuralları güncel sistem standartlarıyla senkronize.";
+
+                var resultScorecard = new TenantComplianceScorecard
+                {
+                    TenantId = tenantId,
+                    TenantName = tenantName,
+                    ErpType = erpConfig.ErpType.ToString(),
+                    ErpTypeName = erpTypeName,
+                    OverallScore = overallScore,
+                    Grade = grade,
+                    GradeLabel = gradeLabel,
+                    TotalQueriesEvaluated = totalCount,
+                    CompliantCount = compliant,
+                    WarningCount = warning,
+                    CriticalCount = critical,
+                    IsPromptSynced = isPromptSynced,
+                    PromptVersionLabel = promptVerLabel,
+                    PromptSyncDetails = promptSyncDetails,
+                    TopViolations = topViolations,
+                    EvaluatedQueries = evaluatedList,
+                    LastEvaluatedAt = DateTime.UtcNow
+                };
+
+                // Persist snapshot to SQLite
+                var topViolationsJson = System.Text.Json.JsonSerializer.Serialize(topViolations);
+                var existingSnapshot = await appDb.TenantComplianceSnapshots.FirstOrDefaultAsync(s => s.TenantId == tenantId);
+                if (existingSnapshot == null)
+                {
+                    existingSnapshot = new TenantComplianceSnapshot
+                    {
+                        TenantId = tenantId,
+                        TenantName = tenantName,
+                        ErpType = erpConfig.ErpType.ToString(),
+                        ErpTypeName = erpTypeName,
+                        OverallScore = overallScore,
+                        Grade = grade,
+                        GradeLabel = gradeLabel,
+                        TotalQueriesEvaluated = totalCount,
+                        CompliantCount = compliant,
+                        WarningCount = warning,
+                        CriticalCount = critical,
+                        IsPromptSynced = isPromptSynced,
+                        PromptVersionLabel = promptVerLabel,
+                        PromptSyncDetails = promptSyncDetails,
+                        TopViolationsJson = topViolationsJson,
+                        LastEvaluatedAt = DateTime.UtcNow
+                    };
+                    appDb.TenantComplianceSnapshots.Add(existingSnapshot);
+                }
+                else
+                {
+                    existingSnapshot.TenantName = tenantName;
+                    existingSnapshot.ErpType = erpConfig.ErpType.ToString();
+                    existingSnapshot.ErpTypeName = erpTypeName;
+                    existingSnapshot.OverallScore = overallScore;
+                    existingSnapshot.Grade = grade;
+                    existingSnapshot.GradeLabel = gradeLabel;
+                    existingSnapshot.TotalQueriesEvaluated = totalCount;
+                    existingSnapshot.CompliantCount = compliant;
+                    existingSnapshot.WarningCount = warning;
+                    existingSnapshot.CriticalCount = critical;
+                    existingSnapshot.IsPromptSynced = isPromptSynced;
+                    existingSnapshot.PromptVersionLabel = promptVerLabel;
+                    existingSnapshot.PromptSyncDetails = promptSyncDetails;
+                    existingSnapshot.TopViolationsJson = topViolationsJson;
+                    existingSnapshot.LastEvaluatedAt = DateTime.UtcNow;
+                    appDb.TenantComplianceSnapshots.Update(existingSnapshot);
+                }
+
+                await appDb.SaveChangesAsync();
+                return resultScorecard;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error calculating Tenant Compliance Scorecard: {ex.Message}");
+                return new TenantComplianceScorecard
+                {
+                    TenantId = tenantId,
+                    TenantName = "Tenant",
+                    OverallScore = 100,
+                    Grade = "A+",
+                    GradeLabel = "Hesaplanamadı",
+                    PromptSyncDetails = ex.Message
+                };
+            }
+        }
+
+        public async Task<Dictionary<string, TenantComplianceSnapshot>> GetAllTenantComplianceSnapshotsAsync()
+        {
+            try
+            {
+                await using var appDb = await _appDbFactory.CreateDbContextAsync();
+                await appDb.EnsureTablesCreatedAsync();
+
+                var list = await appDb.TenantComplianceSnapshots.AsNoTracking().ToListAsync();
+                return list.ToDictionary(s => s.TenantId, s => s);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching all tenant compliance snapshots: {ex.Message}");
+                return new Dictionary<string, TenantComplianceSnapshot>();
+            }
+        }
+
+        private TenantComplianceScorecard GetDemoComplianceScorecard(string tenantId)
+        {
+            return new TenantComplianceScorecard
+            {
+                TenantId = tenantId,
+                TenantName = "Demo Test Firması A.Ş.",
+                ErpType = "Mikro",
+                ErpTypeName = "Mikro ERP (v28)",
+                OverallScore = 86,
+                Grade = "A",
+                GradeLabel = "Çok İyi",
+                TotalQueriesEvaluated = 17,
+                CompliantCount = 13,
+                WarningCount = 3,
+                CriticalCount = 1,
+                IsPromptSynced = true,
+                PromptVersionLabel = "Mikro v28 Senkronize",
+                PromptSyncDetails = "Tenant asistan promptu ve veritabanı şeması OzBi Mikro ERP v28 güncel standartlarıyla %100 senkronize.",
+                TopViolations = new List<TenantRuleViolationStat>
+                {
+                    new TenantRuleViolationStat
+                    {
+                        RuleId = "M-NOLOCK",
+                        Title = "WITH (NOLOCK) İpucu Eksik",
+                        Severity = "Warning",
+                        Count = 3,
+                        Percentage = 17.6,
+                        TotalPenaltyPoints = 15,
+                        RecommendedFix = "FROM STOKLAR WITH (NOLOCK) şeklinde lock önleyici ipucu ekleyin.",
+                        V26RuleReference = "Kural 1.2: NOLOCK Zorunluluğu"
+                    },
+                    new TenantRuleViolationStat
+                    {
+                        RuleId = "M-SOM-RECNO",
+                        Title = "STOK_HAREKETLERI som_recno filtresi eksik",
+                        Severity = "Error",
+                        Count = 1,
+                        Percentage = 5.9,
+                        TotalPenaltyPoints = 10,
+                        RecommendedFix = "WHERE sth_som_recno = 0 koşulunu ekleyin.",
+                        V26RuleReference = "Kural 3.1: SOM Kayıt Filtresi"
+                    }
+                },
+                LastEvaluatedAt = DateTime.UtcNow
+            };
         }
         #endregion
 

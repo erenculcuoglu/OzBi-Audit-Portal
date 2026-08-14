@@ -73,5 +73,9 @@ namespace OzBiPortalCRM.Services
         Task<TenantSubscription?> GetTenantSubscriptionAsync(string tenantId);
         Task<bool> SaveTenantSubscriptionAsync(string tenantId, DateTime? subscriptionEndDate, string? sourceCampaign = null);
         Task<(DateTime? StartDate, DateTime? EndDate)> GetTenantSubscriptionFromMariaDbAsync(string tenantId, string? remoteId);
+
+        // Tenant Compliance Scorecard (Multi-ERP & Prompt Sync) Methods
+        Task<TenantComplianceScorecard> GetTenantComplianceScorecardAsync(string tenantId, bool forceRefresh = false);
+        Task<Dictionary<string, TenantComplianceSnapshot>> GetAllTenantComplianceSnapshotsAsync();
     }
 }

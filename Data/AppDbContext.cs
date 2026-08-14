@@ -14,6 +14,7 @@ namespace OzBiPortalCRM.Data
         public DbSet<FavoriteItem> Favorites { get; set; } = null!;
         public DbSet<UserLoginSnapshot> UserLoginSnapshots { get; set; } = null!;
         public DbSet<TenantSubscription> TenantSubscriptions { get; set; } = null!;
+        public DbSet<TenantComplianceSnapshot> TenantComplianceSnapshots { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -32,6 +33,9 @@ namespace OzBiPortalCRM.Data
 
             modelBuilder.Entity<TenantSubscription>()
                 .HasKey(ts => ts.TenantId);
+
+            modelBuilder.Entity<TenantComplianceSnapshot>()
+                .HasKey(tc => tc.TenantId);
         }
 
         public async Task EnsureTablesCreatedAsync()
@@ -77,6 +81,28 @@ namespace OzBiPortalCRM.Data
                         LastUpdatedAt TEXT NOT NULL
                     );";
                 await cmd3.ExecuteNonQueryAsync();
+
+                using var cmd4 = Database.GetDbConnection().CreateCommand();
+                cmd4.CommandText = @"
+                    CREATE TABLE IF NOT EXISTS TenantComplianceSnapshots (
+                        TenantId TEXT PRIMARY KEY,
+                        TenantName TEXT NOT NULL,
+                        ErpType TEXT NOT NULL,
+                        ErpTypeName TEXT NOT NULL,
+                        OverallScore INTEGER NOT NULL,
+                        Grade TEXT NOT NULL,
+                        GradeLabel TEXT NOT NULL,
+                        TotalQueriesEvaluated INTEGER NOT NULL,
+                        CompliantCount INTEGER NOT NULL,
+                        WarningCount INTEGER NOT NULL,
+                        CriticalCount INTEGER NOT NULL,
+                        IsPromptSynced INTEGER NOT NULL,
+                        PromptVersionLabel TEXT NOT NULL,
+                        PromptSyncDetails TEXT,
+                        TopViolationsJson TEXT,
+                        LastEvaluatedAt TEXT NOT NULL
+                    );";
+                await cmd4.ExecuteNonQueryAsync();
             }
             catch { }
         }

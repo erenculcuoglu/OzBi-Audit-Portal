@@ -3,6 +3,7 @@
 @inject NavigationManager Navigation
 @using OzBiPortalCRM.Services
 @using OzBiPortalCRM.Models
+@using OzBiPortalCRM.Components.Shared
 
 <div class="mb-4">
     <a href="tenants" class="btn btn-outline-secondary btn-sm mb-3">
@@ -59,6 +60,87 @@
                 </div>
             </div>
         </div>
+
+        <!-- ERP Compliance Scorecard Hero Card -->
+        @if (scorecard != null)
+        {
+            <div class="glass-card mb-4 mt-3" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.8) 100%); border-left: 4px solid @GetScoreColor(scorecard.OverallScore);">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                    <!-- Left: Score Badge & Grade -->
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="text-center p-2 rounded-circle border"
+                             style="width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; flex-direction: column; background: rgba(0,0,0,0.5); border-color: @GetScoreColor(scorecard.OverallScore) !important; box-shadow: 0 0 15px @GetScoreGlowColor(scorecard.OverallScore);">
+                            <span class="fs-3 fw-bold" style="color: @GetScoreColor(scorecard.OverallScore); line-height: 1;">@scorecard.OverallScore</span>
+                            <span class="text-muted" style="font-size: 0.6rem;">/ 100</span>
+                        </div>
+
+                        <div>
+                            <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                                <span class="badge px-2.5 py-1 fw-bold" style="background: @GetScoreColor(scorecard.OverallScore); color: #000; font-size: 0.85rem;">
+                                    Not: @scorecard.Grade (@scorecard.GradeLabel)
+                                </span>
+                                <span class="badge-status badge-info" style="font-size: 0.75rem;">
+                                    <i class="bi bi-cpu"></i> @scorecard.ErpTypeName
+                                </span>
+                                <span class="badge @(scorecard.IsPromptSynced ? "bg-success bg-opacity-20 text-success border border-success border-opacity-30" : "bg-warning bg-opacity-20 text-warning border border-warning border-opacity-30") px-2 py-0.5" style="font-size: 0.75rem;">
+                                    <i class="bi @(scorecard.IsPromptSynced ? "bi-check2-circle" : "bi-exclamation-triangle") me-1"></i>@scorecard.PromptVersionLabel
+                                </span>
+                            </div>
+                            <div class="text-muted small">
+                                <i class="bi bi-clock-history me-1"></i> @scorecard.TotalQueriesEvaluated SQL sorgusu üzerinden hesaplandı &bull; Son Kontrol: @scorecard.LastEvaluatedAt.ToString("dd.MM.yyyy HH:mm")
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Center: Segmented Progress Distribution & Stats -->
+                    <div class="d-flex flex-column gap-1.5" style="min-width: 220px; flex: 1; max-width: 320px;">
+                        <div class="d-flex justify-content-between small text-muted" style="font-size: 0.75rem;">
+                            <span class="text-success fw-semibold"><i class="bi bi-check-circle me-0.5"></i>Uyumlu: @scorecard.CompliantCount</span>
+                            <span class="text-warning fw-semibold"><i class="bi bi-exclamation-circle me-0.5"></i>Uyarı: @scorecard.WarningCount</span>
+                            <span class="text-danger fw-semibold"><i class="bi bi-x-circle me-0.5"></i>Kritik: @scorecard.CriticalCount</span>
+                        </div>
+                        <div class="progress" style="height: 8px; background-color: rgba(255, 255, 255, 0.1); border-radius: 4px; overflow: hidden;">
+                            @if (scorecard.CompliantPercentage > 0)
+                            {
+                                <div class="progress-bar bg-success" style="width: @scorecard.CompliantPercentage%;"></div>
+                            }
+                            @if (scorecard.WarningPercentage > 0)
+                            {
+                                <div class="progress-bar bg-warning" style="width: @scorecard.WarningPercentage%;"></div>
+                            }
+                            @if (scorecard.CriticalPercentage > 0)
+                            {
+                                <div class="progress-bar bg-danger" style="width: @scorecard.CriticalPercentage%;"></div>
+                            }
+                        </div>
+                        @if (scorecard.TopViolations.Count > 0)
+                        {
+                            var topV = scorecard.TopViolations.First();
+                            <div class="text-danger text-truncate small" style="font-size: 0.725rem;" title="En Sık İhlal: [@topV.RuleId] @topV.Title">
+                                <i class="bi bi-exclamation-diamond me-1"></i>En Sık: <strong>@topV.Title</strong> (@topV.Count kez)
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Right: Action Buttons -->
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <button class="btn btn-sm btn-outline-info" @onclick="() => isComplianceModalOpen = true" title="Detaylı ERP Uyum Analizini Görüntüle">
+                            <i class="bi bi-shield-check me-1"></i> Detaylı Uyum Analizi
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="RefreshScorecardLive" disabled="@isCalculatingScore" title="Canlı Olarak Skoru Yeniden Hesapla">
+                            @if (isCalculatingScore)
+                            {
+                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-arrow-clockwise"></i>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
     }
 </div>
 
@@ -226,6 +308,11 @@ else
     </div>
 }
 
+<TenantComplianceModal IsOpen="@isComplianceModalOpen"
+                       Scorecard="@scorecard"
+                       OnClose="@(() => isComplianceModalOpen = false)"
+                       OnRefresh="@RefreshScorecardLive" />
+
 @code {
     [Parameter]
     public string TenantId { get; set; } = string.Empty;
@@ -234,11 +321,14 @@ else
     private List<OzBiUser>? tenantUsers;
     private List<ChatAuditSummary>? chatsList;
     private TenantSubscription? subscription;
+    private TenantComplianceScorecard? scorecard;
     private DateTime? mariaDbStartDate;
     private DateTime? mariaDbEndDate;
     private string searchTerm = string.Empty;
     private string selectedUserId = string.Empty;
     private bool isLoading = true;
+    private bool isComplianceModalOpen = false;
+    private bool isCalculatingScore = false;
 
     private int TotalQueries => chatsList?.Sum(c => c.QueryCount) ?? 0;
     private int RemainingQueries => Math.Max(0, 50 - TotalQueries);
@@ -269,6 +359,7 @@ else
             tenantUsers = await AuditService.GetUsersForTenantAsync(TenantId);
             chatsList = await AuditService.GetChatsForTenantAsync(TenantId, searchTerm, selectedUserId);
             subscription = await AuditService.GetTenantSubscriptionAsync(TenantId);
+            scorecard = await AuditService.GetTenantComplianceScorecardAsync(TenantId);
 
             var (mStart, mEnd) = await AuditService.GetTenantSubscriptionFromMariaDbAsync(TenantId, tenant?.RemoteId);
             mariaDbStartDate = mStart;
@@ -281,6 +372,23 @@ else
         finally
         {
             isLoading = false;
+        }
+    }
+
+    private async Task RefreshScorecardLive()
+    {
+        isCalculatingScore = true;
+        try
+        {
+            scorecard = await AuditService.GetTenantComplianceScorecardAsync(TenantId, forceRefresh: true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error refreshing compliance scorecard: " + ex.Message);
+        }
+        finally
+        {
+            isCalculatingScore = false;
         }
     }
 
@@ -310,5 +418,21 @@ else
     private void InspectChat(string chatId)
     {
         Navigation.NavigateTo($"/chat/{chatId}");
+    }
+
+    private string GetScoreColor(int score)
+    {
+        if (score >= 90) return "#10b981"; // emerald green
+        if (score >= 75) return "#38bdf8"; // sky blue
+        if (score >= 60) return "#f59e0b"; // amber
+        return "#ef4444"; // red
+    }
+
+    private string GetScoreGlowColor(int score)
+    {
+        if (score >= 90) return "rgba(16, 185, 129, 0.3)";
+        if (score >= 75) return "rgba(56, 189, 248, 0.3)";
+        if (score >= 60) return "rgba(245, 158, 11, 0.3)";
+        return "rgba(239, 68, 68, 0.3)";
     }
 }
