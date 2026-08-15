@@ -36,7 +36,19 @@ builder.Services.AddDataProtection()
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents(options =>
+    {
+        options.DetailedErrors = true;
+        options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(10);
+    });
+
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = true;
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
+    options.MaximumReceiveMessageSize = 1024 * 1024; // 1 MB
+});
 
 // Add Cookie Authentication
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
