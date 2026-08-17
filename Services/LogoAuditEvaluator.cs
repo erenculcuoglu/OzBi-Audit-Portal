@@ -20,16 +20,28 @@ namespace OzBiPortalCRM.Services
         {
             try
             {
-                var schemaFileName = "logo_assistant_schema_v7.json";
-                var schemaPath = Path.Combine(AppContext.BaseDirectory, "Logo", schemaFileName);
-                if (!File.Exists(schemaPath))
+                var schemaFileNames = new[] { "logo_assistant_schema_v7.1.json", "logo_assistant_schema_v7.json", "logo_assistant_schema.json" };
+                var searchDirs = new[]
                 {
-                    schemaPath = Path.Combine(Directory.GetCurrentDirectory(), "Logo", schemaFileName);
-                }
+                    Path.Combine(AppContext.BaseDirectory, "ERP", "Logo", "json"),
+                    Path.Combine(Directory.GetCurrentDirectory(), "ERP", "Logo", "json"),
+                    Path.Combine(AppContext.BaseDirectory, "ERP", "Logo"),
+                    Path.Combine(Directory.GetCurrentDirectory(), "ERP", "Logo"),
+                    Path.Combine(AppContext.BaseDirectory, "Logo", "json"),
+                    Path.Combine(Directory.GetCurrentDirectory(), "Logo", "json"),
+                    Path.Combine(AppContext.BaseDirectory, "Logo"),
+                    Path.Combine(Directory.GetCurrentDirectory(), "Logo")
+                };
 
-                if (!File.Exists(schemaPath))
+                string? schemaPath = null;
+                foreach (var fileName in schemaFileNames)
                 {
-                    schemaPath = Path.Combine(Directory.GetCurrentDirectory(), "Logo", "logo_assistant_schema.json");
+                    foreach (var dir in searchDirs)
+                    {
+                        var p = Path.Combine(dir, fileName);
+                        if (File.Exists(p)) { schemaPath = p; break; }
+                    }
+                    if (schemaPath != null) break;
                 }
 
                 if (File.Exists(schemaPath))

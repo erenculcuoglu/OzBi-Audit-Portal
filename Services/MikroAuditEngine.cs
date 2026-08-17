@@ -22,6 +22,8 @@ namespace OzBiPortalCRM.Services
             {
                 var searchDirs = new[]
                 {
+                    Path.Combine(AppContext.BaseDirectory, "ERP", "Mikro"),
+                    Path.Combine(Directory.GetCurrentDirectory(), "ERP", "Mikro"),
                     Path.Combine(AppContext.BaseDirectory, "Mikro"),
                     Path.Combine(Directory.GetCurrentDirectory(), "Mikro")
                 };
