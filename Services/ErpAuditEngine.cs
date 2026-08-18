@@ -126,13 +126,16 @@ namespace OzBiPortalCRM.Services
                     Grade = logoRep.Grade,
                     GradeLabel = logoRep.GradeLabel,
                     SummaryText = logoRep.SummaryText,
-                    IsMikroQuery = false,
+                    IsMikroQuery = logoRep.IsMikroQuery,
                     PassedChecks = logoRep.PassedChecks,
                     Violations = logoRep.Violations,
-                    ProposedTsqlFix = logoRep.ProposedTsqlFix
+                    ProposedTsqlFix = logoRep.ProposedTsqlFix,
+                    IsPromptSynced = true,
+                    PromptVersionLabel = "Logo ERP Standart",
+                    PromptSyncDetails = "Sorgu Logo ERP v1.0 standartları çerçevesinde denetlenmiştir."
                 };
             }
-            else
+            else if (erpType == ErpSystemType.Mikro)
             {
                 var mikroRep = _mikroEvaluator.EvaluateQuery(tsqlQuery, userPrompt, tenantName);
                 return new ErpComplianceReport
@@ -143,13 +146,23 @@ namespace OzBiPortalCRM.Services
                     Grade = mikroRep.Grade,
                     GradeLabel = mikroRep.GradeLabel,
                     SummaryText = mikroRep.SummaryText,
-                    IsMikroQuery = true,
+                    IsMikroQuery = mikroRep.IsMikroQuery,
                     PassedChecks = mikroRep.PassedChecks,
                     Violations = mikroRep.Violations,
                     ProposedTsqlFix = mikroRep.ProposedTsqlFix,
                     IsPromptSynced = true,
                     PromptVersionLabel = "Mikro v1.0 Standart",
                     PromptSyncDetails = "Sorgu Mikro ERP v1.0 standartları çerçevesinde denetlenmiştir."
+                };
+            }
+            else
+            {
+                return new ErpComplianceReport
+                {
+                    SystemType = ErpSystemType.Generic,
+                    SystemTypeName = "Genel Veritabanı",
+                    IsMikroQuery = false,
+                    SummaryText = "Bu sorgu Mikro veya Logo harici genel bir veritabanına aittir."
                 };
             }
         }

@@ -443,7 +443,34 @@ namespace OzBiPortalCRM.Services
             if (minDurationMs.HasValue && minDurationMs.Value > 0)
                 query = query.Where(m => m.TotalDurationMs >= minDurationMs.Value);
 
-            return await query.OrderByDescending(m => m.DateCreated).Take(maxResults).ToListAsync();
+            var messages = await query.OrderByDescending(m => m.DateCreated).Take(maxResults).ToListAsync();
+            var chatIds = messages.Select(m => m.ChatId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+
+            if (chatIds.Count > 0)
+            {
+                var userMessages = await db.ChatMessages.AsNoTracking()
+                    .Where(m => chatIds.Contains(m.ChatId) && (m.Role == "user" || m.Role == "User"))
+                    .Select(m => new { m.ChatId, m.Message, m.Prompt, m.DateCreated })
+                    .ToListAsync();
+
+                foreach (var msg in messages)
+                {
+                    if (string.IsNullOrWhiteSpace(msg.Prompt))
+                    {
+                        var userPrompt = userMessages
+                            .Where(u => u.ChatId == msg.ChatId && u.DateCreated <= msg.DateCreated)
+                            .OrderByDescending(u => u.DateCreated)
+                            .FirstOrDefault();
+
+                        if (userPrompt != null)
+                        {
+                            msg.Prompt = !string.IsNullOrWhiteSpace(userPrompt.Message) ? userPrompt.Message : userPrompt.Prompt;
+                        }
+                    }
+                }
+            }
+
+            return messages;
         }
 
         public async Task<Dictionary<string, int>> GetAiModelUsageStatsAsync()
@@ -1120,6 +1147,241 @@ namespace OzBiPortalCRM.Services
 
             return list;
         }
+
+        #region Demo Feedbacks
+        private List<OzBiChatMessage> GetDemoCustomerFeedbacks(string? tenantId, string? searchTerm, string? filterType, int maxResults)
+        {
+            var demoTenant1 = new OzBiTenant { Id = "demo-tenant-1", Name = "Test Bilişim A.Ş." };
+            var demoTenant2 = new OzBiTenant { Id = "demo-tenant-2", Name = "Tarık İnşaat San. Ltd." };
+            var demoUser1 = new OzBiUser { Id = "user-1", NameSurname = "Eren Çülcüoğlu", Email = "eren@ozbi.com" };
+            var demoUser2 = new OzBiUser { Id = "user-2", NameSurname = "Mehmet Uşma", Email = "mehmet@usma.com" };
+
+            var chat1 = new OzBiChat { Id = "chat-fb-1", Title = "Kritik düşük veya stokta yok durumundaki ürünleri listele", TenantId = demoTenant1.Id, Tenant = demoTenant1, CreatedByUser = demoUser1 };
+            var chat2 = new OzBiChat { Id = "chat-fb-2", Title = "Vadesi geçen alacak çekleri ve müşteri yaşlandırma tablosu", TenantId = demoTenant2.Id, Tenant = demoTenant2, CreatedByUser = demoUser2 };
+            var chat3 = new OzBiChat { Id = "chat-fb-3", Title = "Bu ay en çok tahsilat yapılan cariler", TenantId = demoTenant1.Id, Tenant = demoTenant1, CreatedByUser = demoUser1 };
+
+            var list = new List<OzBiChatMessage>
+            {
+                new OzBiChatMessage
+                {
+                    Id = "fb-msg-1",
+                    ChatId = chat1.Id,
+                    Chat = chat1,
+                    Role = "Model",
+                    IsLiked = false,
+                    FeedbackReason = "Tablodaki stok miktarları ile Logo ERP ana ekranı uyuşmuyor, rezerve stoklar düşülmemiş.",
+                    Prompt = "Kritik düşük veya stokta yok durumundaki ürünleri listele",
+                    Message = "## Kritik Stok Durumu Listesi\n\n🔴 **Stokta Yok Ürün:** 1 ürün\n⚠️ **Kritik Düşük Ürün:** 21 ürün\n\nToplam 22 ürün için acil tedarik planlaması gerekmektedir.",
+                    Query = @"[{""description"":""Kritik seviyenin altındaki stok kartları ve ambar bakiyeleri"",""sql"":""SELECT s.CODE AS StokKodu, s.NAME AS StokAdi, SUM(g.ONHAND) AS FiiliStok FROM LG_001_ITEMS s WITH (NOLOCK) LEFT JOIN LV_001_01_GNTOTST g WITH (NOLOCK) ON g.STOCKREF = s.LOGICALREF WHERE g.INVENNO = 0 GROUP BY s.CODE, s.NAME HAVING SUM(g.ONHAND) <= 15 ORDER BY FiiliStok ASC;""}]",
+                    IsSucceeded = true,
+                    TotalDurationMs = 19450,
+                    AIModel = new OzBiAiModel { Name = "GPT-5.4 mini" },
+                    Assistant = new OzBiAssistant { Name = "ERP Assistant - Logo v7.2" },
+                    DateCreated = DateTime.Now.AddHours(-3)
+                },
+                new OzBiChatMessage
+                {
+                    Id = "fb-msg-2",
+                    ChatId = chat2.Id,
+                    Chat = chat2,
+                    Role = "Model",
+                    IsLiked = false,
+                    FeedbackReason = "Sorgu Mikro v27 veritabanında Timeout hatası verdi, cha_som_recno filtresi eksik.",
+                    Prompt = "Vadesi geçen alacak çekleri ve müşteri yaşlandırma tablosunu getir",
+                    Message = null,
+                    Query = @"[{""description"":""Gecikmiş çekler ve cari yaşlandırma"",""sql"":""SELECT cari_unvan1, SUM(cek_tutari) AS ToplamTutar FROM CEKLER JOIN CARI_HESAPLAR ON cek_cari_kodu = cari_kod WHERE cek_vade < GETDATE() GROUP BY cari_unvan1;""}]",
+                    IsSucceeded = false,
+                    ErrorMessage = "SqlException: Execution Timeout Expired. Missing with(nolock) or som_recno index optimization.",
+                    TotalDurationMs = 60120,
+                    AIModel = new OzBiAiModel { Name = "GPT-5.4 mini" },
+                    Assistant = new OzBiAssistant { Name = "ERP Assistant - Mikro v27" },
+                    DateCreated = DateTime.Now.AddDays(-1)
+                },
+                new OzBiChatMessage
+                {
+                    Id = "fb-msg-3",
+                    ChatId = chat3.Id,
+                    Chat = chat3,
+                    Role = "Model",
+                    IsLiked = true,
+                    FeedbackReason = null,
+                    Prompt = "Bu ay en çok tahsilat yapılan cariler",
+                    Message = "## Bu Ay En Çok Tahsilat Yapılan Cariler\n\nToplam tahsilat tutarı **13.168.838,68 TL**’dir. Tahsilatın %64'ü ilk 3 ana müşteriden gerçekleştirilmiştir.",
+                    Query = @"[{""description"":""Bu ay tahsilat toplamları"",""sql"":""SELECT cha_kod, SUM(cha_meblag) AS TahsilatTutar FROM CARI_HESAP_HAREKETLERI WITH (NOLOCK) WHERE cha_tip = 1 AND cha_tarihi >= '2026-08-01' AND cha_som_recno = 0 GROUP BY cha_kod ORDER BY TahsilatTutar DESC;""}]",
+                    IsSucceeded = true,
+                    TotalDurationMs = 12340,
+                    AIModel = new OzBiAiModel { Name = "GPT-5.4 mini" },
+                    Assistant = new OzBiAssistant { Name = "ERP Assistant" },
+                    DateCreated = DateTime.Now.AddDays(-2)
+                }
+            };
+
+            var query = list.AsQueryable();
+
+            if (filterType == "disliked")
+                query = query.Where(m => m.IsLiked == false || (!string.IsNullOrEmpty(m.FeedbackReason)));
+            else if (filterType == "comments_only")
+                query = query.Where(m => !string.IsNullOrEmpty(m.FeedbackReason));
+            else if (filterType == "liked_only")
+                query = query.Where(m => m.IsLiked == true);
+            else if (filterType == "failed_disliked")
+                query = query.Where(m => (m.IsLiked == false || !string.IsNullOrEmpty(m.FeedbackReason)) && (!m.IsSucceeded || !string.IsNullOrEmpty(m.ErrorMessage)));
+
+            if (!string.IsNullOrWhiteSpace(tenantId))
+                query = query.Where(m => m.Chat != null && m.Chat.TenantId == tenantId);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var term = searchTerm.Trim().ToLower();
+                query = query.Where(m =>
+                    (m.FeedbackReason != null && m.FeedbackReason.ToLower().Contains(term)) ||
+                    (m.Prompt != null && m.Prompt.ToLower().Contains(term)) ||
+                    (m.Message != null && m.Message.ToLower().Contains(term)) ||
+                    (m.Query != null && m.Query.ToLower().Contains(term))
+                );
+            }
+
+            return query.OrderByDescending(m => m.DateCreated).Take(maxResults).ToList();
+        }
+
+        private FeedbackAuditStats GetDemoFeedbackStats(string? tenantId)
+        {
+            return new FeedbackAuditStats
+            {
+                TotalFeedbacks = 28,
+                DislikedCount = 4,
+                LikedCount = 24,
+                WithCommentCount = 3,
+                FailedAndDislikedCount = 1
+            };
+        }
+        #endregion
+
+        #region Customer Feedbacks & Dislike Hub Implementation
+        public async Task<List<OzBiChatMessage>> GetCustomerFeedbacksAsync(
+            string? tenantId = null,
+            string? searchTerm = null,
+            string? filterType = "disliked",
+            int maxResults = 150)
+        {
+            if (_useDemoMode) return GetDemoCustomerFeedbacks(tenantId, searchTerm, filterType, maxResults);
+
+            await using var db = await _dbFactory.CreateDbContextAsync();
+
+            var query = db.ChatMessages.AsNoTracking()
+                .Include(m => m.Chat)
+                    .ThenInclude(c => c!.Tenant)
+                .Include(m => m.Chat)
+                    .ThenInclude(c => c!.CreatedByUser)
+                .Include(m => m.AIModel)
+                .Include(m => m.Assistant)
+                    .ThenInclude(a => a!.DataConnection)
+                        .ThenInclude(dc => dc!.ConnectionSourceCode)
+                .AsQueryable();
+
+            if (filterType == "disliked")
+            {
+                query = query.Where(m => m.IsLiked == false || (m.FeedbackReason != null && m.FeedbackReason != ""));
+            }
+            else if (filterType == "comments_only")
+            {
+                query = query.Where(m => m.FeedbackReason != null && m.FeedbackReason != "");
+            }
+            else if (filterType == "liked_only")
+            {
+                query = query.Where(m => m.IsLiked == true);
+            }
+            else if (filterType == "failed_disliked")
+            {
+                query = query.Where(m => (m.IsLiked == false || (m.FeedbackReason != null && m.FeedbackReason != "")) && (m.ErrorMessage != null && m.ErrorMessage != ""));
+            }
+            else
+            {
+                // All with feedback
+                query = query.Where(m => m.IsLiked != null || (m.FeedbackReason != null && m.FeedbackReason != ""));
+            }
+
+            if (!string.IsNullOrWhiteSpace(tenantId))
+            {
+                query = query.Where(m => m.Chat != null && m.Chat.TenantId == tenantId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var term = searchTerm.Trim().ToLower();
+                query = query.Where(m =>
+                    (m.FeedbackReason != null && m.FeedbackReason.ToLower().Contains(term)) ||
+                    (m.Prompt != null && m.Prompt.ToLower().Contains(term)) ||
+                    (m.Message != null && m.Message.ToLower().Contains(term)) ||
+                    (m.Query != null && m.Query.ToLower().Contains(term)) ||
+                    (m.ErrorMessage != null && m.ErrorMessage.ToLower().Contains(term)) ||
+                    (m.Chat != null && m.Chat.Title != null && m.Chat.Title.ToLower().Contains(term))
+                );
+            }
+
+            var messages = await query
+                .OrderByDescending(m => m.DateCreated)
+                .Take(maxResults)
+                .ToListAsync();
+
+            var chatIds = messages.Select(m => m.ChatId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+
+            if (chatIds.Count > 0)
+            {
+                var userMessages = await db.ChatMessages.AsNoTracking()
+                    .Where(m => chatIds.Contains(m.ChatId) && (m.Role == "user" || m.Role == "User"))
+                    .Select(m => new { m.ChatId, m.Message, m.Prompt, m.DateCreated })
+                    .ToListAsync();
+
+                foreach (var msg in messages)
+                {
+                    if (string.IsNullOrWhiteSpace(msg.Prompt))
+                    {
+                        var userPrompt = userMessages
+                            .Where(u => u.ChatId == msg.ChatId && u.DateCreated <= msg.DateCreated)
+                            .OrderByDescending(u => u.DateCreated)
+                            .FirstOrDefault();
+
+                        if (userPrompt != null)
+                        {
+                            msg.Prompt = !string.IsNullOrWhiteSpace(userPrompt.Message) ? userPrompt.Message : userPrompt.Prompt;
+                        }
+                    }
+                }
+            }
+
+            return messages;
+        }
+
+        public async Task<FeedbackAuditStats> GetFeedbackStatsAsync(string? tenantId = null)
+        {
+            if (_useDemoMode) return GetDemoFeedbackStats(tenantId);
+
+            await using var db = await _dbFactory.CreateDbContextAsync();
+
+            var query = db.ChatMessages.AsNoTracking().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(tenantId))
+            {
+                query = query.Where(m => m.Chat != null && m.Chat.TenantId == tenantId);
+            }
+
+            var feedbacks = await query
+                .Where(m => m.IsLiked != null || (m.FeedbackReason != null && m.FeedbackReason != ""))
+                .Select(m => new { m.IsLiked, m.FeedbackReason, m.IsSucceeded, m.ErrorMessage })
+                .ToListAsync();
+
+            return new FeedbackAuditStats
+            {
+                TotalFeedbacks = feedbacks.Count,
+                DislikedCount = feedbacks.Count(f => f.IsLiked == false),
+                LikedCount = feedbacks.Count(f => f.IsLiked == true),
+                WithCommentCount = feedbacks.Count(f => !string.IsNullOrEmpty(f.FeedbackReason)),
+                FailedAndDislikedCount = feedbacks.Count(f => f.IsLiked == false && !string.IsNullOrEmpty(f.ErrorMessage))
+            };
+        }
+        #endregion
         #endregion
     }
 }
+

@@ -1,0 +1,853 @@
+[
+  {
+    "TABLE_NAME": "CARI_HESAPLAR",
+    "Type": "Table",
+    "Description": "Müşteri ve tedarikçi cari kartları. Kod bazlı ilişkilendirme için temel referans tablo.",
+    "Columns": [
+      {"COLUMN_NAME": "cari_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": ""},
+      {"COLUMN_NAME": "cari_unvan1", "DATA_TYPE": "NVARCHAR(127)", "MetaData": "Arama alanı."},
+      {"COLUMN_NAME": "cari_unvan2", "DATA_TYPE": "NVARCHAR(127)", "MetaData": "İkinci ünvan satırı (genellikle boş)"},
+      {"COLUMN_NAME": "cari_baglanti_tipi", "DATA_TYPE": "TINYINT", "MetaData": "0:Müşteri 1:Satıcı 2:Diğer Cari 3:Dağıtıcı 4:Bayi 5:Hedef Müşteri 6:Hedef Bayi 7:Alt Bayi 8:Bağlı Ortaklık [Koşul: Müşteri sorularında cari_baglanti_tipi = 0, Tedarikçi/Satıcı sorularında cari_baglanti_tipi = 1]"},
+      {"COLUMN_NAME": "cari_hareket_tipi", "DATA_TYPE": "TINYINT", "MetaData": "0:Mal ve Hizmet Alınır ve Satılır 1:Sadece Satılır 2:Sadece Alınır 3:Sadece Parasal Hareket 4:Hareket Yapılmaz"},
+      {"COLUMN_NAME": "cari_bolge_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Bkz. CARI_HESAP_BOLGELERI. [İlişki: CARI_HESAP_BOLGELERI.bol_kod]"},
+      {"COLUMN_NAME": "cari_grup_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Bkz. CARI_HESAP_GRUPLARI. [İlişki: CARI_HESAP_GRUPLARI.crg_kod]"},
+      {"COLUMN_NAME": "cari_temsilci_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Satış temsilcisi kodu. Bkz. PERSONELLER. [İlişki: PERSONELLER.per_kod]"},
+      {"COLUMN_NAME": "cari_vdaire_adi", "DATA_TYPE": "NVARCHAR(50)", "MetaData": ""},
+      {"COLUMN_NAME": "cari_vdaire_no", "DATA_TYPE": "NVARCHAR(15)", "MetaData": ""},
+      {"COLUMN_NAME": "cari_VergiKimlikNo", "DATA_TYPE": "NVARCHAR(10)", "MetaData": ""},
+      {"COLUMN_NAME": "cari_EMail", "DATA_TYPE": "NVARCHAR(127)", "MetaData": ""},
+      {"COLUMN_NAME": "cari_CepTel", "DATA_TYPE": "NVARCHAR(20)", "MetaData": ""},
+      {"COLUMN_NAME": "cari_firma_acik_kapal", "DATA_TYPE": "BIT", "MetaData": "0:Açık 1:Kapalı"},
+      {"COLUMN_NAME": "cari_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal edilmiş"},
+      {"COLUMN_NAME": "cari_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"},
+      {"COLUMN_NAME": "cari_doviz_cinsi", "DATA_TYPE": "TINYINT", "MetaData": "Carinin ana döviz cinsi kodu. 0:TL. Bkz. DOVIZ_KURLARI.dov_no"},
+      {"COLUMN_NAME": "cari_doviz_cinsi1", "DATA_TYPE": "TINYINT", "MetaData": "2. döviz cinsi kodu"},
+      {"COLUMN_NAME": "cari_doviz_cinsi2", "DATA_TYPE": "TINYINT", "MetaData": "3. döviz cinsi kodu"},
+      {"COLUMN_NAME": "cari_Ana_cari_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Ana cari kodu. Şube/bağlı cari ilişkisi için. Bkz. CARI_HESAPLAR.cari_kod"}
+    ]
+  },
+  {
+    "TABLE_NAME": "CARI_HESAP_HAREKETLERI",
+    "Type": "Table",
+    "Description": "Tüm cari hesap hareketleri; satış/alış faturaları, tahsilat/tediye makbuzları, çek/senet bordroları ve banka/kasa işlemleri. Her satır tek bir hareket kaydıdır.",
+    "Columns": [
+      {"COLUMN_NAME": "cha_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Cari kodu. Bkz. CARI_HESAPLAR.cari_kod"},
+      {"COLUMN_NAME": "cha_tarihi", "DATA_TYPE": "DATETIME", "MetaData": ""},
+      {"COLUMN_NAME": "cha_evrak_tip", "DATA_TYPE": "TINYINT", "MetaData": "0:Alış Faturası 1:Tahsilat Makbuzu 29:Açılış Fişi 31:Borç Dekontu 32:Alacak Dekontu 63:Satış Faturası 64:Tediye Makbuzu — Tam liste vw_Cari_Hareket_Evrak_Isimleri view'ından alınmalıdır."},
+      {"COLUMN_NAME": "cha_evrakno_seri", "DATA_TYPE": "DBO.EVRAKSERI_STR", "MetaData": "Evrak seri numarası (harf). Evrak kimliği için cha_evrakno_sira ile birleştir"},
+      {"COLUMN_NAME": "cha_evrakno_sira", "DATA_TYPE": "INT", "MetaData": "Evrak sıra numarası (sayı). Benzersiz evrak = cha_evrakno_seri + cha_evrakno_sira"},
+      {"COLUMN_NAME": "cha_tip", "DATA_TYPE": "TINYINT", "MetaData": "0:Borç 1:Alacak. [Hesaplama: CariBakiyeTL = SUM(CASE WHEN cha_tip = 0 THEN cha_meblag * cha_d_kur ELSE -cha_meblag * cha_d_kur END)]"},
+      {"COLUMN_NAME": "cha_cinsi", "DATA_TYPE": "TINYINT", "MetaData": "0:Nakit 1:Müşteri Çeki 2:Müşteri Senedi 3:Firma Çeki 4:Firma Senedi 5:Dekont 6:Toptan Fatura 7:Perakende Faturası 8:Hizmet Faturası 19:Müşteri Kredi Kartı 22:Firma Kredi Kartı 33:Avans Makbuzu"},
+      {"COLUMN_NAME": "cha_normal_Iade", "DATA_TYPE": "TINYINT", "MetaData": "0:Normal 1:İade"},
+      {"COLUMN_NAME": "cha_tpoz", "DATA_TYPE": "TINYINT", "MetaData": "Ödeme pozisyonu. 0:Açık (ödenmemiş) 1:Kapalı (ödenmiş)"},
+      {"COLUMN_NAME": "cha_meblag", "DATA_TYPE": "FLOAT", "MetaData": "Hareket tutarı (orijinal döviz cinsinden). [Hesaplama: TL_Karsiligi = cha_meblag * cha_d_kur, DovizTuru = CASE cha_d_cins WHEN 0 THEN 'TL' WHEN 1 THEN 'USD' WHEN 2 THEN 'EUR' ELSE 'Diğer' END]"},
+      {"COLUMN_NAME": "cha_vade", "DATA_TYPE": "INT", "MetaData": "Vade tarihi (INT formatında YYYYMMDD). [Koşul: AktifVadeİçin = [cha].[cha_vade] > 0], [Hesaplama: VadeTarihi = TRY_CONVERT(DATE, CONVERT(CHAR(8), [cha].[cha_vade]), 112), GecikmeGünSayısı = DATEDIFF(DAY, TRY_CONVERT(DATE, CONVERT(CHAR(8), [cha].[cha_vade]), 112), prompt_tarih)]"},
+      {"COLUMN_NAME": "cha_aciklama", "DATA_TYPE": "NVARCHAR(40)", "MetaData": "Arama alanı."},
+      {"COLUMN_NAME": "cha_belge_no", "DATA_TYPE": "DBO.BELGENO_STR", "MetaData": ""},
+      {"COLUMN_NAME": "cha_belge_tarih", "DATA_TYPE": "DATETIME", "MetaData": ""},
+      {"COLUMN_NAME": "cha_d_cins", "DATA_TYPE": "TINYINT", "MetaData": "Döviz cinsi kodu. 0:TL. Bkz. DOVIZ_KURLARI.dov_no"},
+      {"COLUMN_NAME": "cha_d_kur", "DATA_TYPE": "FLOAT", "MetaData": "Döviz kuru (TL karşılığı)"},
+      {"COLUMN_NAME": "cha_satici_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Satıcı/plasiyer kodu. Bkz. CARI_HESAPLAR.cari_kod"},
+      {"COLUMN_NAME": "cha_projekodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Proje kodu. Bkz. PROJELER"},
+      {"COLUMN_NAME": "cha_srmrkkodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Sorumluluk merkezi kodu. Bkz. SORUMLULUK_MERKEZLERI"},
+      {"COLUMN_NAME": "cha_cari_cins", "DATA_TYPE": "TINYINT", "MetaData": "0:Carimiz, 2:Bankamız [Filtre: BankaBakiyesi], 4:Kasamız [Filtre: KasaBakiyesi] — Cari, banka veya kasa hareketini ayırt eder"},
+      {"COLUMN_NAME": "cha_kasa_hizkod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Karşı kasa/banka kodu"},
+      {"COLUMN_NAME": "cha_firmano", "DATA_TYPE": "INT", "MetaData": "Çoklu firma kullanımında firma numarası"},
+      {"COLUMN_NAME": "cha_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "cha_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"},
+      {"COLUMN_NAME": "cha_satir_no", "DATA_TYPE": "INT", "MetaData": "Evrak satır numarası. Aynı evrakın birden fazla satırı olduğunda satır bazlı sorgulama için kullan"},
+      {"COLUMN_NAME": "cha_miktari", "DATA_TYPE": "FLOAT", "MetaData": "Hareket miktarı (stok içeren satırlarda dolu)"}
+    ]
+  },
+  {
+    "TABLE_NAME": "STOKLAR",
+    "Type": "Table",
+    "Description": "Stok/ürün kartları. Tüm ürün tanımları, birim, fiyat ve sınıflandırma bilgileri.",
+    "Columns": [
+      {"COLUMN_NAME": "sto_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Stok kodu (PK). [Hesaplama: EldekiMiktar = (SELECT SUM(CASE WHEN sh.sth_giris_cikis = 0 THEN sh.sth_miktar ELSE -sh.sth_miktar END) FROM STOK_HAREKETLERI_GIRIS_CIKIS sh WHERE sh.sth_stok_kod = sto_kod AND sh.sth_iptal = 0)]"},
+      {"COLUMN_NAME": "sto_isim", "DATA_TYPE": "NVARCHAR(127)", "MetaData": "Arama alanı."},
+      {"COLUMN_NAME": "sto_kisa_ismi", "DATA_TYPE": "NVARCHAR(50)", "MetaData": ""},
+      {"COLUMN_NAME": "sto_cins", "DATA_TYPE": "TINYINT", "MetaData": "0:Ticari Mal 1:İlk Madde 2:Ara Mamül 3:Yarı Mamül 4:Mamül 5:Yan Mamül 6:İşletme Malzemesi 7:Tüketim Malzemesi 8:Yedek Parça 9:Akaryakıt 10:Montaj Reçeteli Mamül 11:Temel Hammadde"},
+      {"COLUMN_NAME": "sto_birim1_ad", "DATA_TYPE": "NVARCHAR(10)", "MetaData": "Ana ölçü birimi adı (Adet, Kg, Lt vb.)"},
+      {"COLUMN_NAME": "sto_birim2_ad", "DATA_TYPE": "NVARCHAR(10)", "MetaData": "2. ölçü birimi adı"},
+      {"COLUMN_NAME": "sto_birim3_ad", "DATA_TYPE": "NVARCHAR(10)", "MetaData": "3. ölçü birimi adı"},
+      {"COLUMN_NAME": "sto_min_stok", "DATA_TYPE": "FLOAT", "MetaData": "Minimum stok seviyesi (bu seviyenin altına düşmemeli)"},
+      {"COLUMN_NAME": "sto_siparis_stok", "DATA_TYPE": "FLOAT", "MetaData": "Sipariş seviyesi (bu seviyede sipariş verilmeli)"},
+      {"COLUMN_NAME": "sto_max_stok", "DATA_TYPE": "FLOAT", "MetaData": "Maksimum stok seviyesi"},
+      {"COLUMN_NAME": "sto_kategori_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Bkz. STOK_KATEGORILERI. [İlişki: STOK_KATEGORILERI.ktg_kod]"},
+      {"COLUMN_NAME": "sto_anagrup_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Bkz. STOK_ANA_GRUPLARI"},
+      {"COLUMN_NAME": "sto_altgrup_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Bkz. STOK_ALT_GRUPLARI"},
+      {"COLUMN_NAME": "sto_marka_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Bkz. STOK_MARKALARI. [İlişki: STOK_MARKALARI.mrk_kod]"},
+      {"COLUMN_NAME": "sto_uretici_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Bkz. STOK_URETICILERI. [İlişki: STOK_URETICILERI.uer_kod]"},
+      {"COLUMN_NAME": "sto_sat_cari_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Ana tedarikçi cari kodu. Bkz. CARI_HESAPLAR"},
+      {"COLUMN_NAME": "sto_perakende_vergi", "DATA_TYPE": "TINYINT", "MetaData": "Perakende KDV oranı (%)"},
+      {"COLUMN_NAME": "sto_toptan_vergi", "DATA_TYPE": "TINYINT", "MetaData": "Toptan KDV oranı (%)"},
+      {"COLUMN_NAME": "sto_karorani", "DATA_TYPE": "FLOAT", "MetaData": ""},
+      {"COLUMN_NAME": "sto_pasif_fl", "DATA_TYPE": "BIT", "MetaData": "Stok kartı pasiflik durumu. 0:Aktif (pasif değil), 1:Pasif. [Koşul: Aktif stok kartı için sto_pasif_fl = 0]"},
+      {"COLUMN_NAME": "sto_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "sto_satis_dursun", "DATA_TYPE": "TINYINT", "MetaData": "0:Satılabilir 1:Satış Durmuş"},
+      {"COLUMN_NAME": "sto_doviz_cinsi", "DATA_TYPE": "TINYINT", "MetaData": "Stoğun tanımlandığı döviz cinsi. 0:TL. Bkz. DOVIZ_KURLARI.dov_no"}
+    ]
+  },
+  {
+    "TABLE_NAME": "STOK_HAREKETLERI",
+    "Type": "Table",
+    "Description": "Stok giriş/çıkış hareketleri; faturalar, irsaliyeler, virmanlar, üretim ve sayım fişleri. Her satır bir fatura/fiş satırına karşılık gelir.",
+    "Columns": [
+      {"COLUMN_NAME": "sth_stok_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Stok kodu. Bkz. STOKLAR.sto_kod"},
+      {"COLUMN_NAME": "sth_cari_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "İlgili cari kodu. Bkz. CARI_HESAPLAR.cari_kod"},
+      {"COLUMN_NAME": "sth_tarih", "DATA_TYPE": "DATETIME", "MetaData": ""},
+      {"COLUMN_NAME": "sth_tip", "DATA_TYPE": "TINYINT", "MetaData": "0:Giriş 1:Çıkış 2:Depo Transfer"},
+      {"COLUMN_NAME": "sth_cins", "DATA_TYPE": "TINYINT", "MetaData": "0:Toptan 1:Perakende 2:Dış Ticaret 3:Stok Virman 4:Fire 5:Sarf 6:Transfer 7:Üretim 8:Fason 10:Sayım 11:Stok Açılış"},
+      {"COLUMN_NAME": "sth_normal_iade", "DATA_TYPE": "TINYINT", "MetaData": "0:Normal 1:İade [Koşul: Satış İadesi için sth_evraktip = 3, Alış İadesi için sth_evraktip = 4]"},
+      {"COLUMN_NAME": "sth_evraktip", "DATA_TYPE": "TINYINT", "MetaData": "3:Giriş Faturası [Koşul: Satış İadesi için sth_normal_iade = 1], 4:Çıkış Faturası [Koşul: Satış için sth_normal_iade = 0, Alış İadesi için sth_normal_iade = 1] 12:Depo Giriş Fişi 0:Depo Çıkış Fişi 1:Çıkış İrsaliyesi 13:Giriş İrsaliyesi 6:Stok Virman Fişi 7:Üretim Fişi"},
+      {"COLUMN_NAME": "sth_evrakno_seri", "DATA_TYPE": "DBO.EVRAKSERI_STR", "MetaData": "Evrak seri numarası. Bağlı fatura ile eşleştirmek için sth_fat_uid kullan"},
+      {"COLUMN_NAME": "sth_evrakno_sira", "DATA_TYPE": "INT", "MetaData": ""},
+      {"COLUMN_NAME": "sth_miktar", "DATA_TYPE": "FLOAT", "MetaData": "Hareket miktarı (ana birim). [Hesaplama: NetMiktar = SUM(CASE WHEN sth_tip = 0 THEN sth_miktar ELSE -sth_miktar END)]"},
+      {"COLUMN_NAME": "sth_tutar", "DATA_TYPE": "FLOAT", "MetaData": "Hareket tutarı (kdv hariç). [Hesaplama: NetCiro = SUM(CASE WHEN sth_evraktip = 4 THEN sth_tutar ELSE -sth_tutar END) WHERE ((sth_evraktip = 4 AND sth_normal_iade = 0) OR (sth_evraktip = 3 AND sth_normal_iade = 1)) ]"},
+      {"COLUMN_NAME": "sth_iskonto1", "DATA_TYPE": "FLOAT", "MetaData": "1. iskonto tutarı. [Hesaplama: Kümülatif İskonto Yükü = SUM(ISNULL(sth_iskonto1, 0) + ISNULL(sth_iskonto2, 0) + ISNULL(sth_iskonto3, 0) + ISNULL(sth_iskonto4, 0) + ISNULL(sth_iskonto5, 0) + ISNULL(sth_iskonto6, 0)) ]"},
+      {"COLUMN_NAME": "sth_iskonto2", "DATA_TYPE": "FLOAT", "MetaData": "2. iskonto tutarı"},
+      {"COLUMN_NAME": "sth_iskonto3", "DATA_TYPE": "FLOAT", "MetaData": "3. iskonto tutarı"},
+      {"COLUMN_NAME": "sth_iskonto4", "DATA_TYPE": "FLOAT", "MetaData": "4. iskonto tutarı"},
+      {"COLUMN_NAME": "sth_iskonto5", "DATA_TYPE": "FLOAT", "MetaData": "5. iskonto tutarı"},
+      {"COLUMN_NAME": "sth_iskonto6", "DATA_TYPE": "FLOAT", "MetaData": "6. iskonto tutarı"},
+      {"COLUMN_NAME": "sth_miktar2", "DATA_TYPE": "FLOAT", "MetaData": "2. birim miktarı (sto_birim2_ad ile ilişkili)"},
+      {"COLUMN_NAME": "sth_vergi", "DATA_TYPE": "FLOAT", "MetaData": "KDV oranı (%)"},
+      {"COLUMN_NAME": "sth_giris_depo_no", "DATA_TYPE": "INT", "MetaData": "Giriş deposu numarası. Bkz. DEPOLAR.dep_no"},
+      {"COLUMN_NAME": "sth_cikis_depo_no", "DATA_TYPE": "INT", "MetaData": "Çıkış deposu numarası. Bkz. DEPOLAR.dep_no"},
+      {"COLUMN_NAME": "sth_fat_uid", "DATA_TYPE": "UNIQUEIDENTIFIER", "MetaData": "Bağlı fatura GUID'i. CARI_HESAP_HAREKETLERI ile JOIN için kullan"},
+      {"COLUMN_NAME": "sth_har_doviz_cinsi", "DATA_TYPE": "TINYINT", "MetaData": "Döviz cinsi kodu. 0:TL"},
+      {"COLUMN_NAME": "sth_har_doviz_kuru", "DATA_TYPE": "FLOAT", "MetaData": ""},
+      {"COLUMN_NAME": "sth_plasiyer_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Bkz. PERSONELLER.per_kod"},
+      {"COLUMN_NAME": "sth_aciklama", "DATA_TYPE": "NVARCHAR(50)", "MetaData": "Arama alanı."},
+      {"COLUMN_NAME": "sth_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "sth_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"},
+      {"COLUMN_NAME": "sth_sip_uid", "DATA_TYPE": "UNIQUEIDENTIFIER", "MetaData": "Bağlı sipariş satırı GUID'i. [İlişki: SIPARISLER.sip_Guid]"},
+      {"COLUMN_NAME": "sth_maliyet_ana", "DATA_TYPE": "FLOAT", "MetaData": "Satır bazlı gerçekleşen fiili maliyet (ana döviz). [Hesaplama: ToplamMaliyet = SUM(sth_maliyet_ana * sth_miktar)]"},
+      {"COLUMN_NAME": "sth_maliyet_alternatif", "DATA_TYPE": "FLOAT", "MetaData": "Satır bazlı gerçekleşen fiili alternatif döviz maliyeti."}
+    ]
+  },
+  {
+    "TABLE_NAME": "SIPARISLER",
+    "Type": "Table",
+    "Description": "Satış ve alış sipariş satırları. Her satır bir siparişin tek bir ürün kalemini temsil eder.",
+    "Columns": [
+      {"COLUMN_NAME": "sip_Guid", "DATA_TYPE": "UNIQUEIDENTIFIER", "MetaData": "Sipariş satırı benzersiz kimliği (GUID). [İlişki: STOK_HAREKETLERI.sth_sip_uid]"},
+      {"COLUMN_NAME": "sip_musteri_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Müşteri/tedarikçi cari kodu. Bkz. CARI_HESAPLAR.cari_kod"},
+      {"COLUMN_NAME": "sip_satirno", "DATA_TYPE": "INT", "MetaData": "Sipariş satır numarası"},
+      {"COLUMN_NAME": "sip_satici_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Tedarikçi kodu (temin siparişlerinde dolu). Bkz. CARI_HESAPLAR.cari_kod"},
+      {"COLUMN_NAME": "sip_stok_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Bkz. STOKLAR.sto_kod"},
+      {"COLUMN_NAME": "sip_tarih", "DATA_TYPE": "DATETIME", "MetaData": ""},
+      {"COLUMN_NAME": "sip_teslim_tarih", "DATA_TYPE": "DATETIME", "MetaData": "Teslim edilmesi gereken tarih"},
+      {"COLUMN_NAME": "sip_cins", "DATA_TYPE": "TINYINT", "MetaData": "0:Normal Sipariş 1:Konsinye 2:Proforma 3:Dış Ticaret 4:Fason 5:Dahili Sarf 6:Depolar Arası 7:Satın Alma Talebi 8:Üretim Talebi"},
+      {"COLUMN_NAME": "sip_tip", "DATA_TYPE": "TINYINT", "MetaData": "0:Talep (müşteriden gelen) [Filtre: MüşteriSiparişi / AlınanSipariş], 1:Temin (tedarikçiye verilen) [Filtre: TedarikSiparişi / VerilenSipariş]"},
+      {"COLUMN_NAME": "sip_evrakno_seri", "DATA_TYPE": "DBO.EVRAKSERI_STR", "MetaData": ""},
+      {"COLUMN_NAME": "sip_evrakno_sira", "DATA_TYPE": "INT", "MetaData": ""},
+      {"COLUMN_NAME": "sip_miktar", "DATA_TYPE": "FLOAT", "MetaData": "Sipariş miktarı. [Hesaplama: BekleyenMiktar = SUM(sip_miktar - sip_teslim_miktar) WHERE sip_kapat_fl = 0]"},
+      {"COLUMN_NAME": "sip_teslim_miktar", "DATA_TYPE": "FLOAT", "MetaData": "Teslim edilen miktar. Kalan = sip_miktar - sip_teslim_miktar"},
+      {"COLUMN_NAME": "sip_b_fiyat", "DATA_TYPE": "FLOAT", "MetaData": "Sipariş birim fiyatı"},
+      {"COLUMN_NAME": "sip_tutar", "DATA_TYPE": "FLOAT", "MetaData": "Sipariş satır tutarı. [Hesaplama: BekleyenTutarTL = SUM(sip_tutar * (1 - (sip_teslim_miktar / sip_miktar)) * sip_doviz_kuru) WHERE sip_kapat_fl = 0]"},
+      {"COLUMN_NAME": "sip_kapat_fl", "DATA_TYPE": "BIT", "MetaData": "0:Açık sipariş [Koşul: Bekleyen/AçıkSipariş için sip_kapat_fl = 0], 1:Kapatılmış sipariş"},
+      {"COLUMN_NAME": "sip_depono", "DATA_TYPE": "INT", "MetaData": "İlgili depo numarası. Bkz. DEPOLAR.dep_no"},
+      {"COLUMN_NAME": "sip_aciklama", "DATA_TYPE": "NVARCHAR(50)", "MetaData": "Arama alanı."},
+      {"COLUMN_NAME": "sip_durumu", "DATA_TYPE": "TINYINT", "MetaData": "0:Stoktan Sevk Edilecek 1:Üretilecek 2:Satın Alınacak 3:Rezerve Edildi"},
+      {"COLUMN_NAME": "sip_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "sip_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"},
+      {"COLUMN_NAME": "sip_doviz_cinsi", "DATA_TYPE": "TINYINT", "MetaData": "Döviz cinsi kodu. 0:TL. Bkz. DOVIZ_KURLARI.dov_no"},
+      {"COLUMN_NAME": "sip_doviz_kuru", "DATA_TYPE": "FLOAT", "MetaData": "Ana döviz kuru"}
+    ]
+  },
+  {
+    "TABLE_NAME": "ODEME_EMIRLERI",
+    "Type": "Table",
+    "Description": "Çek ve senet kartları. Portföydeki çekler, müşteri/firma senetleri ve kredi kartı hareketleri.",
+    "Columns": [
+      {"COLUMN_NAME": "sck_tip", "DATA_TYPE": "TINYINT", "MetaData": "0:Müşteri Çeki [Filtre: AlınacakÇekler] 1:Müşteri Senedi 2:Kendi Çekimiz [Filtre: BorçÇeklerimiz] 3:Kendi Senedimiz 4:Müşteri Havale Sözü 5:Müşteri Ödeme Sözü 6:Müşteri Kredi Kartı 7:Kendi Havale Emri 8:Kendi Ödeme Emri 9:Kendi Kredi Kartı"},
+      {"COLUMN_NAME": "sck_vade", "DATA_TYPE": "DATETIME", "MetaData": "Çek/senet vade tarihi"},
+      {"COLUMN_NAME": "sck_tutar", "DATA_TYPE": "FLOAT", "MetaData": ""},
+      {"COLUMN_NAME": "sck_odenen", "DATA_TYPE": "FLOAT", "MetaData": "Ödenen/tahsil edilen miktar. [Koşul: Tahsil olan/ödenen çekler → sck_odenen > 0 OR sck_sonpoz = 10; kalan > 0 filtresi konulmaz]"},
+      {"COLUMN_NAME": "sck_sonpoz", "DATA_TYPE": "TINYINT", "MetaData": "0:Portföyde [Koşul: Açık/Alacak Çekleri için sck_sonpoz IN (0, 2, 3, 6, 9) AND (sck_tutar - sck_odenen) > 0], [Koşul: Açık/Borç Çekleri için sck_sonpoz <> 10 AND (sck_tutar - sck_odenen) > 0] 1:Ciro 2:Tahsilde 3:Teminatta 4:İade Edilen 6:Ödenmedi Portföyde 8:İcrada 9:Kısmen Ödendi 10:Ödendi"},
+      {"COLUMN_NAME": "sck_sahip_cari_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Çeki/senedi veren cari kodu. Bkz. CARI_HESAPLAR.cari_kod"},
+      {"COLUMN_NAME": "sck_no", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Çek/senet numarası"},
+      {"COLUMN_NAME": "sck_borclu", "DATA_TYPE": "NVARCHAR(50)", "MetaData": "Çekin borçlusu/keşidecisi (serbest metin). [Koşul: İsim aramasında CARI_HESAPLAR.cari_unvan1 ile OR taranır]"},
+      {"COLUMN_NAME": "sck_duzen_tarih", "DATA_TYPE": "DATETIME", "MetaData": "Düzenlenme tarihi"},
+      {"COLUMN_NAME": "sck_refno", "DATA_TYPE": "NVARCHAR(25)", "MetaData": ""},
+      {"COLUMN_NAME": "sck_doviz", "DATA_TYPE": "TINYINT", "MetaData": "Döviz cinsi kodu. 0:TL"},
+      {"COLUMN_NAME": "sck_doviz_kur", "DATA_TYPE": "FLOAT", "MetaData": "Döviz kuru (kayıt tarihindeki kur)"},
+      {"COLUMN_NAME": "sck_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"}
+    ]
+  },
+  {
+    "TABLE_NAME": "BANKALAR",
+    "Type": "Table",
+    "Description": "Firma banka hesap kartları. Her kart bir banka hesabını temsil eder.",
+    "Columns": [
+      {"COLUMN_NAME": "ban_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Banka kodu (PK). [İlişki: CARI_HESAP_HAREKETLERI.cha_kod WHERE cha_cari_cins = 2]"},
+      {"COLUMN_NAME": "ban_ismi", "DATA_TYPE": "NVARCHAR(50)", "MetaData": "Arama alanı."},
+      {"COLUMN_NAME": "ban_sube", "DATA_TYPE": "NVARCHAR(50)", "MetaData": ""},
+      {"COLUMN_NAME": "ban_hesapno", "DATA_TYPE": "NVARCHAR(30)", "MetaData": ""},
+      {"COLUMN_NAME": "ban_IBANKodu", "DATA_TYPE": "NVARCHAR(40)", "MetaData": ""},
+      {"COLUMN_NAME": "ban_doviz_cinsi", "DATA_TYPE": "TINYINT", "MetaData": "Hesabın döviz cinsi kodu. 0:TL"},
+      {"COLUMN_NAME": "ban_hesap_tip", "DATA_TYPE": "TINYINT", "MetaData": "0:Mevduat [Filtre: MevduatHesabı], 1:Kredi [Filtre: KrediHesabı]"},
+      {"COLUMN_NAME": "ban_kredi_tavan", "DATA_TYPE": "FLOAT", "MetaData": "Kredi hesapları için limit. [Hesaplama: KullanılabilirKrediLimiti = ban_kredi_tavan - (SELECT SUM(CASE WHEN cha.cha_tip = 1 THEN cha.cha_meblag * cha.cha_d_kur ELSE -cha.cha_meblag * cha.cha_d_kur END) FROM CARI_HESAP_HAREKETLERI cha WHERE cha.cha_kod = ban_kod AND cha.cha_cari_cins = 2 AND cha.cha_iptal = 0)]"},
+      {"COLUMN_NAME": "ban_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"}
+    ]
+  },
+  {
+    "TABLE_NAME": "KASALAR",
+    "Type": "Table",
+    "Description": "Kasa kartları. Nakit kasaları ile çek/senet/kredi kartı portföy kasaları.",
+    "Columns": [
+      {"COLUMN_NAME": "kas_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Kasa kodu (PK). [İlişki: CARI_HESAP_HAREKETLERI.cha_kod WHERE cha_cari_cins = 4]"},
+      {"COLUMN_NAME": "kas_isim", "DATA_TYPE": "NVARCHAR(40)", "MetaData": "Arama alanı."},
+      {"COLUMN_NAME": "kas_tip", "DATA_TYPE": "TINYINT", "MetaData": "0:Nakit Kasası [Filtre: NakitKasası], 1:Çek Kasası [Filtre: ÇekKasası] 2:Karşılıksız Çek Kasası 3:Senet Kasası 4:Protestolu Senet Kasası 5:Verilen Senet Kasası 6:Verilen Ödeme Emirleri Kasası 7:Müşteri Ödeme Sözleri Kasası"},
+      {"COLUMN_NAME": "kas_doviz_cinsi", "DATA_TYPE": "TINYINT", "MetaData": "0:TL. Bkz. DOVIZ_KURLARI"},
+      {"COLUMN_NAME": "kas_bankakodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Çek kasaları için bağlı banka kodu"},
+      {"COLUMN_NAME": "kas_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"}
+    ]
+  },
+  {
+    "TABLE_NAME": "DEPOLAR",
+    "Type": "Table",
+    "Description": "Depo kartları. Her depo stoğun fiziksel konumunu temsil eder.",
+    "Columns": [
+      {"COLUMN_NAME": "dep_no", "DATA_TYPE": "INT", "MetaData": "Depo numarası (JOIN için kullanılır)"},
+      {"COLUMN_NAME": "dep_adi", "DATA_TYPE": "NVARCHAR(50)", "MetaData": "Arama alanı."},
+      {"COLUMN_NAME": "dep_tipi", "DATA_TYPE": "TINYINT", "MetaData": "0:Merkez Depo 1:Şube Depo 2:Mağaza 3:Market 6:Mal Kabul 7:Ham Madde 8:Yarı Mamül 11:Mamül 14:Konsinye 18:e-Ticaret"},
+      {"COLUMN_NAME": "dep_Il", "DATA_TYPE": "NVARCHAR(50)", "MetaData": ""},
+      {"COLUMN_NAME": "dep_Ilce", "DATA_TYPE": "NVARCHAR(50)", "MetaData": ""},
+      {"COLUMN_NAME": "dep_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"}
+    ]
+  },
+  {
+    "TABLE_NAME": "STOK_DEPO_DETAYLARI",
+    "Type": "Table",
+    "Description": "Her stok kartının her depodaki minimum/maksimum seviyeleri ve depo bazlı ayarları.",
+    "Columns": [
+      {"COLUMN_NAME": "sdp_depo_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Depo kodu"},
+      {"COLUMN_NAME": "sdp_depo_no", "DATA_TYPE": "INT", "MetaData": "Depo numarası. Bkz. DEPOLAR.dep_no"},
+      {"COLUMN_NAME": "sdp_min_stok", "DATA_TYPE": "FLOAT", "MetaData": "Bu depodaki minimum stok seviyesi. [Hesaplama: DepoBazlıAcilSiparişMiktarı = sdp_min_stok - (SELECT SUM(CASE WHEN sh.sth_giris_cikis = 0 THEN sh.sth_miktar ELSE -sh.sth_miktar END) FROM STOK_HAREKETLERI_GIRIS_CIKIS sh WHERE sh.sth_stok_kod = sdp_depo_kod AND sh.sth_depono = sdp_depo_no AND sh.sth_iptal = 0)]"},
+      {"COLUMN_NAME": "sdp_sip_stok", "DATA_TYPE": "FLOAT", "MetaData": "Bu depodaki sipariş seviyesi"},
+      {"COLUMN_NAME": "sdp_max_stok", "DATA_TYPE": "FLOAT", "MetaData": "Bu depodaki maksimum stok seviyesi"},
+      {"COLUMN_NAME": "sdp_satisdursun", "DATA_TYPE": "TINYINT", "MetaData": "0:Satış Açık 1:Satış Durdurulmuş"}
+    ]
+  },
+  {
+    "TABLE_NAME": "STOK_SATIS_FIYAT_LISTELERI",
+    "Type": "Table",
+    "Description": "Stok satış fiyat listeleri. Her stok için birden fazla fiyat listesi tanımlanabilir.",
+    "Columns": [
+      {"COLUMN_NAME": "sfiyat_stokkod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Stok kodu. Bkz. STOKLAR.sto_kod"},
+      {"COLUMN_NAME": "sfiyat_listesirano", "DATA_TYPE": "INT", "MetaData": "Fiyat listesi sıra numarası (1=Ana liste)"},
+      {"COLUMN_NAME": "sfiyat_fiyati", "DATA_TYPE": "FLOAT", "MetaData": ""},
+      {"COLUMN_NAME": "sfiyat_doviz", "DATA_TYPE": "TINYINT", "MetaData": "Fiyatın döviz cinsi. 0:TL"},
+      {"COLUMN_NAME": "sfiyat_doviz_kuru", "DATA_TYPE": "FLOAT", "MetaData": ""},
+      {"COLUMN_NAME": "sfiyat_birim_pntr", "DATA_TYPE": "TINYINT", "MetaData": "1:Birim1 2:Birim2 3:Birim3"}
+    ]
+  },
+  {
+    "TABLE_NAME": "PERSONELLER",
+    "Type": "Table",
+    "Description": "Personel kartları. Satış temsilcileri ve diğer çalışanlar.",
+    "Columns": [
+      {"COLUMN_NAME": "per_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": ""},
+      {"COLUMN_NAME": "per_adi", "DATA_TYPE": "NVARCHAR(50)", "MetaData": "Arama alanı."},
+      {"COLUMN_NAME": "per_soyadi", "DATA_TYPE": "NVARCHAR(50)", "MetaData": "Arama alanı."},
+      {"COLUMN_NAME": "per_tip", "DATA_TYPE": "TINYINT", "MetaData": "0:Satıcı Eleman (Plasiyer/Satış Temsilcisi) 1:Satın Almacı 2:Diğer Eleman [Koşul: Plasiyer/satış temsilcisi sorularında per_tip = 0]"},
+      {"COLUMN_NAME": "per_dept_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Departman kodu. Bkz. DEPARTMANLAR"},
+      {"COLUMN_NAME": "per_giris_tar", "DATA_TYPE": "DATETIME", "MetaData": "İşe giriş tarihi"},
+      {"COLUMN_NAME": "per_cikis_tar", "DATA_TYPE": "DATETIME", "MetaData": "İşten ayrılma tarihi (aktif personelde boş/null)"},
+      {"COLUMN_NAME": "per_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "per_bolge_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Personelin bağlı olduğu bölge kodu. Bkz. CARI_HESAP_BOLGELERI"}
+    ]
+  },
+  {
+    "TABLE_NAME": "VERILEN_TEKLIFLER",
+    "Type": "Table",
+    "Description": "Müşterilere verilen teklifler ve satın alma teklifleri.",
+    "Columns": [
+      {"COLUMN_NAME": "tkl_cari_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Müşteri/tedarikçi kodu. Bkz. CARI_HESAPLAR.cari_kod"},
+      {"COLUMN_NAME": "tkl_stok_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Bkz. STOKLAR.sto_kod"},
+      {"COLUMN_NAME": "tkl_evrak_tarihi", "DATA_TYPE": "DATETIME", "MetaData": ""},
+      {"COLUMN_NAME": "tkl_evrakno_seri", "DATA_TYPE": "DBO.EVRAKSERI_STR", "MetaData": ""},
+      {"COLUMN_NAME": "tkl_evrakno_sira", "DATA_TYPE": "INT", "MetaData": ""},
+      {"COLUMN_NAME": "tkl_baslangic_tarihi", "DATA_TYPE": "DATETIME", "MetaData": ""},
+      {"COLUMN_NAME": "tkl_Gecerlilik_Sures", "DATA_TYPE": "DATETIME", "MetaData": "Teklifin geçerlilik süresi"},
+      {"COLUMN_NAME": "tkl_miktar", "DATA_TYPE": "FLOAT", "MetaData": ""},
+      {"COLUMN_NAME": "tkl_Alisfiyati", "DATA_TYPE": "FLOAT", "MetaData": "Teklif edilen alış fiyatı"},
+      {"COLUMN_NAME": "tkl_Brut_fiyat", "DATA_TYPE": "FLOAT", "MetaData": "Teklif brüt fiyatı"},
+      {"COLUMN_NAME": "tkl_karorani", "DATA_TYPE": "FLOAT", "MetaData": ""},
+      {"COLUMN_NAME": "tkl_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "tkl_doviz_cins", "DATA_TYPE": "TINYINT", "MetaData": "Döviz cinsi kodu. 0:TL. Bkz. DOVIZ_KURLARI.dov_no"},
+      {"COLUMN_NAME": "tkl_doviz_kur", "DATA_TYPE": "FLOAT", "MetaData": "Ana döviz kuru"}
+    ]
+  },
+  {
+    "TABLE_NAME": "STOK_HAREKETLERI_GIRIS_CIKIS",
+    "Type": "View",
+    "Description": "STOK_HAREKETLERI üzerine kurulu view. Depo transfer hareketlerini hem giriş hem çıkış olarak çift satırda gösterir. View 3 hesaplanmış kolon (sth_giris_cikis, sth_depono, sth_karsi_depono) döndürür ve STOK_HAREKETLERI'nin TÜM kolonlarını (sth_*) aynen geçirir. Yani sth_stok_kod, sth_tarih, sth_miktar, sth_tutar, sth_cari_kodu, sth_cins, sth_normal_iade, sth_iptal, sth_hidden vb. hepsi kullanılabilir. Mevcut stok, eldeki miktar, net stok miktarı ve basit stok giriş/çıkış sorgularında tercih edilmeli. Transfer için her satır ayrı gösterilir.",
+    "Columns": [
+      {"COLUMN_NAME": "sth_giris_cikis", "DATA_TYPE": "TINYINT", "MetaData": "0:Giriş 1:Çıkış — Tüm hareket tipleri için normalize edilmiş yön (sth_tip'ten türetilir). Mevcut/net stok miktarı hesabında giriş pozitif, çıkış negatif yöndür."},
+      {"COLUMN_NAME": "sth_depono", "DATA_TYPE": "INT", "MetaData": "Her satır için ilgili depo numarası (giriş veya çıkış yönüne göre). Bkz. DEPOLAR.dep_no"},
+      {"COLUMN_NAME": "sth_karsi_depono", "DATA_TYPE": "INT", "MetaData": "Transfer hareketlerinde karşı depo numarası (non-transfer satırlarda 0)"},
+      {"COLUMN_NAME": "sth_stok_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Stok kodu. Bkz. STOKLAR.sto_kod"},
+      {"COLUMN_NAME": "sth_cari_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "İlgili cari kodu. Bkz. CARI_HESAPLAR.cari_kod"},
+      {"COLUMN_NAME": "sth_tarih", "DATA_TYPE": "DATETIME", "MetaData": ""},
+      {"COLUMN_NAME": "sth_tip", "DATA_TYPE": "TINYINT", "MetaData": "0:Giriş 1:Çıkış 2:Depo Transfer"},
+      {"COLUMN_NAME": "sth_cins", "DATA_TYPE": "TINYINT", "MetaData": "0:Toptan 1:Perakende 2:Dış Ticaret 3:Stok Virman 4:Fire 5:Sarf 6:Transfer 7:Üretim 8:Fason 10:Sayım 11:Stok Açılış"},
+      {"COLUMN_NAME": "sth_normal_iade", "DATA_TYPE": "TINYINT", "MetaData": "0:Normal 1:İade [Koşul: Satış İadesi için sth_evraktip = 3, Alış İadesi için sth_evraktip = 4]"},
+      {"COLUMN_NAME": "sth_evraktip", "DATA_TYPE": "TINYINT", "MetaData": "3:Giriş Faturası [Koşul: Satış İadesi için sth_normal_iade = 1], 4:Çıkış Faturası [Koşul: Satış için sth_normal_iade = 0, Alış İadesi için sth_normal_iade = 1] 12:Depo Giriş Fişi 0:Depo Çıkış Fişi 1:Çıkış İrsaliyesi 13:Giriş İrsaliyesi 6:Stok Virman Fişi 7:Üretim Fişi"},
+      {"COLUMN_NAME": "sth_evrakno_seri", "DATA_TYPE": "DBO.EVRAKSERI_STR", "MetaData": "Evrak seri numarası. Bağlı fatura ile eşleştirmek için sth_fat_uid kullan"},
+      {"COLUMN_NAME": "sth_evrakno_sira", "DATA_TYPE": "INT", "MetaData": ""},
+      {"COLUMN_NAME": "sth_miktar", "DATA_TYPE": "FLOAT", "MetaData": "Hareket miktarı (ana birim). [Hesaplama: NetMiktar = SUM(CASE WHEN sth_giris_cikis = 0 THEN sth_miktar ELSE -sth_miktar END)]"},
+      {"COLUMN_NAME": "sth_tutar", "DATA_TYPE": "FLOAT", "MetaData": "Hareket tutarı (kdv hariç). [Hesaplama: NetCiro = SUM(CASE WHEN sth_evraktip = 4 THEN sth_tutar ELSE -sth_tutar END) WHERE ((sth_evraktip = 4 AND sth_normal_iade = 0) OR (sth_evraktip = 3 AND sth_normal_iade = 1)) ]"},
+      {"COLUMN_NAME": "sth_iskonto1", "DATA_TYPE": "FLOAT", "MetaData": "1. iskonto tutarı. [Hesaplama: Kümülatif İskonto Yükü = SUM(ISNULL(sth_iskonto1, 0) + ISNULL(sth_iskonto2, 0) + ISNULL(sth_iskonto3, 0) + ISNULL(sth_iskonto4, 0) + ISNULL(sth_iskonto5, 0) + ISNULL(sth_iskonto6, 0)) ]"},
+      {"COLUMN_NAME": "sth_iskonto2", "DATA_TYPE": "FLOAT", "MetaData": "2. iskonto tutarı"},
+      {"COLUMN_NAME": "sth_iskonto3", "DATA_TYPE": "FLOAT", "MetaData": "3. iskonto tutarı"},
+      {"COLUMN_NAME": "sth_miktar2", "DATA_TYPE": "FLOAT", "MetaData": "2. birim miktarı (sto_birim2_ad ile ilişkili)"},
+      {"COLUMN_NAME": "sth_vergi", "DATA_TYPE": "FLOAT", "MetaData": "KDV oranı (%)"},
+      {"COLUMN_NAME": "sth_giris_depo_no", "DATA_TYPE": "INT", "MetaData": "Giriş deposu numarası. Bkz. DEPOLAR.dep_no"},
+      {"COLUMN_NAME": "sth_cikis_depo_no", "DATA_TYPE": "INT", "MetaData": "Çıkış deposu numarası. Bkz. DEPOLAR.dep_no"},
+      {"COLUMN_NAME": "sth_fat_uid", "DATA_TYPE": "UNIQUEIDENTIFIER", "MetaData": "Bağlı fatura GUID'i. CARI_HESAP_HAREKETLERI ile JOIN için kullan"},
+      {"COLUMN_NAME": "sth_har_doviz_cinsi", "DATA_TYPE": "TINYINT", "MetaData": "Döviz cinsi kodu. 0:TL"},
+      {"COLUMN_NAME": "sth_har_doviz_kuru", "DATA_TYPE": "FLOAT", "MetaData": ""},
+      {"COLUMN_NAME": "sth_plasiyer_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Bkz. PERSONELLER.per_kod"},
+      {"COLUMN_NAME": "sth_aciklama", "DATA_TYPE": "NVARCHAR(50)", "MetaData": "Arama alanı."},
+      {"COLUMN_NAME": "sth_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "sth_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"}
+    ]
+  },
+  {
+    "TABLE_NAME": "BANKALAR_YONETIM",
+    "Type": "View",
+    "Description": "BANKALAR tablosu üzerine banka bakiyelerini (mevduat, çek, senet, kredi kartı vb.) hesaplanmış sütunlar olarak sunar. Anlık banka bakiyesi sorgularında kullanılmalı.",
+    "Columns": [
+      {"COLUMN_NAME": "msg_S_0078", "DATA_TYPE": "VARCHAR", "MetaData": "KODU — Kod (genel)"},
+      {"COLUMN_NAME": "msg_S_0070", "DATA_TYPE": "VARCHAR", "MetaData": "İSMİ — İsim (genel). Arama alanı."},
+      {"COLUMN_NAME": "msg_S_0822", "DATA_TYPE": "VARCHAR", "MetaData": "ŞUBE"},
+      {"COLUMN_NAME": "msg_S_0771", "DATA_TYPE": "VARCHAR", "MetaData": "HESAP NO"},
+      {"COLUMN_NAME": "msg_S_0559", "DATA_TYPE": "VARCHAR", "MetaData": "HESAP TİPİ — Banka hesap cinsi adı (Mevduat/Kredi vb. )"},
+      {"COLUMN_NAME": "msg_S_0823", "DATA_TYPE": "VARCHAR", "MetaData": "MEVDUAT TİPİ — Mevduat türü adı (Vadesiz/Vadeli vb. )"},
+      {"COLUMN_NAME": "msg_S_0044", "DATA_TYPE": "VARCHAR", "MetaData": "MUHASEBE KODU — Muhasebe hesap kodu (sto_muh_kod karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0833\T", "DATA_TYPE": "FLOAT", "MetaData": "MEVDUAT BAKİYE — Mevduat bakiyesi"},
+      {"COLUMN_NAME": "msg_S_0254", "DATA_TYPE": "VARCHAR", "MetaData": "DÖVİZ — Döviz sembolü (TL, USD, EUR vb. )"},
+      {"COLUMN_NAME": "msg_S_0843", "DATA_TYPE": "VARCHAR", "MetaData": "TCMB BANKALAR KODU"},
+      {"COLUMN_NAME": "msg_S_0844", "DATA_TYPE": "VARCHAR", "MetaData": "TCMB ŞUBE KODU"},
+      {"COLUMN_NAME": "msg_S_0845", "DATA_TYPE": "VARCHAR", "MetaData": "TCMB İL KODU"},
+      {"COLUMN_NAME": "msg_S_0846", "DATA_TYPE": "VARCHAR", "MetaData": "MÜŞTERİ NUMARAMIZ"},
+      {"COLUMN_NAME": "msg_S_0847", "DATA_TYPE": "VARCHAR", "MetaData": "AYNI BANKALAR ÇEK TAHSİL SÜRESİ"},
+      {"COLUMN_NAME": "msg_S_0848", "DATA_TYPE": "VARCHAR", "MetaData": "BAŞKA BANKALAR ÇEK TAHSİL SÜRESİ"}
+    ]
+  },
+  {
+    "TABLE_NAME": "KASALAR_YONETIM",
+    "Type": "View",
+    "Description": "KASALAR tablosu üzerine anlık kasa bakiyelerini hesaplanmış sütunlar olarak sunar.",
+    "Columns": [
+      {"COLUMN_NAME": "msg_S_0954", "DATA_TYPE": "VARCHAR", "MetaData": "KASALAR TİPİ — Kasa türü adı (Nakit/Çek/Senet vb. )"},
+      {"COLUMN_NAME": "msg_S_0955", "DATA_TYPE": "VARCHAR", "MetaData": "KASALAR KODU"},
+      {"COLUMN_NAME": "msg_S_0956", "DATA_TYPE": "VARCHAR", "MetaData": "KASALAR İSMİ. Arama alanı."},
+      {"COLUMN_NAME": "msg_S_0044", "DATA_TYPE": "VARCHAR", "MetaData": "MUHASEBE KODU — Muhasebe hesap kodu (sto_muh_kod karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0957\T", "DATA_TYPE": "FLOAT", "MetaData": "ANA DÖVİZ BAKİYE — Ana döviz (TL) bakiyesi"},
+      {"COLUMN_NAME": "msg_S_1714\T", "DATA_TYPE": "FLOAT", "MetaData": "ALTERNATİF DÖVİZ BAKİYE — Alternatif döviz bakiyesi"},
+      {"COLUMN_NAME": "msg_S_0959\T", "DATA_TYPE": "FLOAT", "MetaData": "ORJİNAL DÖVİZ BAKİYE — Orijinal döviz cinsinden bakiye"},
+      {"COLUMN_NAME": "msg_S_0254", "DATA_TYPE": "VARCHAR", "MetaData": "DÖVİZ — Döviz sembolü (TL, USD, EUR vb. )"}
+    ]
+  },
+  {
+    "TABLE_NAME": "CARI_HESAP_HAREKETLERI_CHOOSE_30",
+    "Type": "View",
+    "Description": "CARI_HESAP_HAREKETLERI üzerine evrak bazında gruplanmış özet view. Aynı evrakın satırlarını tek satırda toplar; tutar SUM, diğer alanlar MIN ile alınır. Fatura/makbuz listesi sorgularında kullanılmalı.",
+    "Columns": [
+      {"COLUMN_NAME": "msg_S_0243", "DATA_TYPE": "VARCHAR", "MetaData": "SERİ NO — Evrak kodu/belge no"},
+      {"COLUMN_NAME": "msg_S_0157", "DATA_TYPE": "VARCHAR", "MetaData": "SIRA NO — Evrak tarihi / giriş tarihi"},
+      {"COLUMN_NAME": "msg_S_0089", "DATA_TYPE": "DATETIME", "MetaData": "TARİH — Tarih"},
+      {"COLUMN_NAME": "msg_S_0199", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ CİNSİ — (Cari Hesap, Kasa, Banka, Kredi sözleşmesi vb.)"},
+      {"COLUMN_NAME": "msg_S_0200", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ KODU — Cari kodu (cari_kod karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0201", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ İSMİ — Cari ismi (cari_unvan1 karşılığı) , arama alanı"},
+      {"COLUMN_NAME": "msg_S_0113", "DATA_TYPE": "VARCHAR", "MetaData": "KARŞI CARİ CİNSİ"},
+      {"COLUMN_NAME": "msg_S_0114", "DATA_TYPE": "VARCHAR", "MetaData": "KARŞI CARİ KODU"},
+      {"COLUMN_NAME": "msg_S_0115", "DATA_TYPE": "VARCHAR", "MetaData": "KARŞI CARİ İSMİ"},
+      {"COLUMN_NAME": "msg_S_0293", "DATA_TYPE": "FLOAT", "MetaData": "TUTAR — Tutar (sayısal)"},
+      {"COLUMN_NAME": "msg_S_0077", "DATA_TYPE": "VARCHAR", "MetaData": "TİPİ — Tip/hareket tipi adı (Alacak, Borç)"},
+      {"COLUMN_NAME": "msg_S_0003", "DATA_TYPE": "VARCHAR", "MetaData": "CİNSİ — Stok cinsi adı (Ticari Mal, Mamül, Hammadde vb. )"},
+      {"COLUMN_NAME": "msg_S_0555", "DATA_TYPE": "VARCHAR", "MetaData": "EVRAK ADI — Kısa evrak adı; 0:Alış faturası=Al.fat., 1:Tahsilat makbuzu=Tah.mak., 29:Açılış fişi=Açılış, 31:Borç Dekontu=Brç.dek., 32:Alacak Dekontu=Alc.dek., 63:Satış faturası=Sat.fat, 64:Tediye makbuzu=Ted.mak. Tam liste vw_Cari_Hareket_Evrak_Isimleri view'ından alınmalıdır."},
+      {"COLUMN_NAME": "msg_S_0556", "DATA_TYPE": "VARCHAR", "MetaData": "A/K — Açık/Kapalı durumu"},
+      {"COLUMN_NAME": "msg_S_0557", "DATA_TYPE": "VARCHAR", "MetaData": "N/I"},
+      {"COLUMN_NAME": "msg_S_4072", "DATA_TYPE": "VARCHAR", "MetaData": "GİB evrak numarası (seri+sıra birleşimi)"}
+    ]
+  },
+  {
+    "TABLE_NAME": "CARI_HESAPLAR_YONETIM",
+    "Type": "View",
+    "Description": "CARI_HESAPLAR üzerine cari bakiyeleri ve adres bilgilerini JOIN'li sunan view. Cari bakiye sorgularında kullanılmalı.",
+    "Columns": [
+      {"COLUMN_NAME": "msg_S_0078", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ KODU — Cari kodu"},
+      {"COLUMN_NAME": "msg_S_1022", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ ÜNVANI 1. Arama alanı."},
+      {"COLUMN_NAME": "msg_S_1023", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ ÜNVANI 2. Arama alanı."},
+      {"COLUMN_NAME": "msg_S_0970", "DATA_TYPE": "VARCHAR", "MetaData": "CADDE"},
+      {"COLUMN_NAME": "msg_S_0971", "DATA_TYPE": "VARCHAR", "MetaData": "SOKAK"},
+      {"COLUMN_NAME": "msg_S_1024", "DATA_TYPE": "VARCHAR", "MetaData": "P.KODU"},
+      {"COLUMN_NAME": "msg_S_1025", "DATA_TYPE": "VARCHAR", "MetaData": "ILÇE. Arama alanı."},
+      {"COLUMN_NAME": "msg_S_0440", "DATA_TYPE": "VARCHAR", "MetaData": "İL. Arama alanı."},
+      {"COLUMN_NAME": "msg_S_0972", "DATA_TYPE": "VARCHAR", "MetaData": "ÜLKE"},
+      {"COLUMN_NAME": "msg_S_1026", "DATA_TYPE": "VARCHAR", "MetaData": "TEL NO"},
+      {"COLUMN_NAME": "msg_S_0488", "DATA_TYPE": "VARCHAR", "MetaData": "EFATURA KULLANICISI"},
+      {"COLUMN_NAME": "msg_S_0471", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ GRUP KODU"},
+      {"COLUMN_NAME": "msg_S_0473", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ BÖLGE KODU"},
+      {"COLUMN_NAME": "msg_S_4566", "DATA_TYPE": "VARCHAR", "MetaData": "SEKTÖR"},
+      {"COLUMN_NAME": "msg_S_1404", "DATA_TYPE": "VARCHAR", "MetaData": "MUH.KODU 1"},
+      {"COLUMN_NAME": "msg_S_1405", "DATA_TYPE": "VARCHAR", "MetaData": "MUH.KODU 2"},
+      {"COLUMN_NAME": "msg_S_1406", "DATA_TYPE": "VARCHAR", "MetaData": "MUH KODU 3"},
+      {"COLUMN_NAME": "msg_S_1028", "DATA_TYPE": "VARCHAR", "MetaData": "VD.ADI"},
+      {"COLUMN_NAME": "msg_S_1029", "DATA_TYPE": "VARCHAR", "MetaData": "VD.NO"},
+      {"COLUMN_NAME": "msg_S_1030", "DATA_TYPE": "VARCHAR", "MetaData": "TEMSİLCİ"},
+      {"COLUMN_NAME": "msg_S_1031", "DATA_TYPE": "VARCHAR", "MetaData": "ANA CARİ"},
+      {"COLUMN_NAME": "msg_S_0957\T", "DATA_TYPE": "FLOAT", "MetaData": "ANA DÖVİZ BAKİYE — Ana döviz (TL) bakiyesi"},
+      {"COLUMN_NAME": "msg_S_1714\T", "DATA_TYPE": "FLOAT", "MetaData": "ALTERNATİF DÖVİZ BAKİYE — Alternatif döviz bakiyesi"},
+      {"COLUMN_NAME": "msg_S_1374\T", "DATA_TYPE": "FLOAT", "MetaData": "ORJİNAL DÖVİZ BAKİYE"},
+      {"COLUMN_NAME": "msg_S_1377", "DATA_TYPE": "VARCHAR", "MetaData": "DÖVİZ"},
+      {"COLUMN_NAME": "msg_S_1375\T", "DATA_TYPE": "FLOAT", "MetaData": "ORJİNAL DÖVİZ BAKİYE"},
+      {"COLUMN_NAME": "msg_S_1378", "DATA_TYPE": "VARCHAR", "MetaData": "DÖVİZ"},
+      {"COLUMN_NAME": "msg_S_1376\T", "DATA_TYPE": "FLOAT", "MetaData": "ORJİNAL DÖVİZ BAKİYE"},
+      {"COLUMN_NAME": "msg_S_1379", "DATA_TYPE": "VARCHAR", "MetaData": "DÖVİZ"},
+      {"COLUMN_NAME": "msg_S_3171", "DATA_TYPE": "VARCHAR", "MetaData": "BAĞLANTI TİPİ"},
+      {"COLUMN_NAME": "msg_S_0888", "DATA_TYPE": "VARCHAR", "MetaData": "HAREKET TİPİ"}
+    ]
+  },
+  {
+    "TABLE_NAME": "STOK_HAREKETLERI_CHOOSE_32",
+    "Type": "View",
+    "Description": "STOK_HAREKETLERI üzerine fatura bazında gruplanmış özet view. Bir faturanın tüm satırlarını evrak düzeyinde toplar. Fatura listesi sorgularında kullanılmalı.",
+    "Columns": [
+      {"COLUMN_NAME": "msg_S_0090", "DATA_TYPE": "VARCHAR", "MetaData": "SERİ — Tarih (hareket tarihi)"},
+      {"COLUMN_NAME": "msg_S_0157", "DATA_TYPE": "VARCHAR", "MetaData": "SIRA NO — Evrak tarihi / giriş tarihi"},
+      {"COLUMN_NAME": "msg_S_0089", "DATA_TYPE": "DATETIME", "MetaData": "TARİH — Tarih"},
+      {"COLUMN_NAME": "msg_S_0200", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ KODU — Cari kodu (cari_kod karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0001", "DATA_TYPE": "VARCHAR", "MetaData": "STOK KODU — Stok kodu (sto_kod karşılığı). Kod filtrelerinde bu kolonu kullan."},
+      {"COLUMN_NAME": "msg_S_0002", "DATA_TYPE": "VARCHAR", "MetaData": "STOK İSMİ — Stok ismi (sto_isim karşılığı). Arama alanı — UPPER(msg_S_0002) LIKE UPPER(N'%...%') kullan."},
+      {"COLUMN_NAME": "msg_S_0470", "DATA_TYPE": "FLOAT", "MetaData": "HAREKET MİKTARI — Miktar (sayısal, SUM)"},
+      {"COLUMN_NAME": "msg_S_0293", "DATA_TYPE": "FLOAT", "MetaData": "TUTAR — Tutar (sayısal)"},
+      {"COLUMN_NAME": "msg_S_1124", "DATA_TYPE": "VARCHAR", "MetaData": "ÇIKIŞ DEPO — Çıkış depo ismi"},
+      {"COLUMN_NAME": "msg_S_1125", "DATA_TYPE": "VARCHAR", "MetaData": "GİRİŞ DEPO — Giriş depo ismi"},
+      {"COLUMN_NAME": "msg_S_0555", "DATA_TYPE": "VARCHAR", "MetaData": "EVRAK ADI — Evrak tipi adı (Satış Faturası, Tahsilat Makbuzu, Alış Faturası vb.)"},
+      {"COLUMN_NAME": "msg_S_0003", "DATA_TYPE": "VARCHAR", "MetaData": "CİNSİ — Stok cinsi adı (Ticari Mal, Mamül, Hammadde vb. )"},
+      {"COLUMN_NAME": "msg_S_0212", "DATA_TYPE": "VARCHAR", "MetaData": "SATIR SAYISI — Açıklama"}
+    ]
+  },
+  {
+    "TABLE_NAME": "STOKDETAY",
+    "Type": "View",
+    "Description": "STOKLAR tablosu üzerine kategori, grup, marka, üretici gibi ilişkili tablo isimlerini JOIN'le getiren zenginleştirilmiş stok view'ı. Stok kartı, sınıflandırma, marka, üretici ve fiyat detaylarında tercih edilmeli; mevcut stok miktarı hesaplamaz.",
+    "Columns": [
+      {"COLUMN_NAME": "msg_S_0001", "DATA_TYPE": "VARCHAR", "MetaData": "STOK KODU — Stok kodu (sto_kod karşılığı). Kod filtrelerinde bu kolonu kullan."},
+      {"COLUMN_NAME": "msg_S_0002", "DATA_TYPE": "VARCHAR", "MetaData": "STOK İSMİ — Stok ismi (sto_isim karşılığı). Arama alanı — UPPER(msg_S_0002) LIKE UPPER(N'%...%') kullan."},
+      {"COLUMN_NAME": "msg_S_0003", "DATA_TYPE": "VARCHAR", "MetaData": "CİNSİ — Stok cinsi adı (Ticari Mal, Mamül, Hammadde vb. )"},
+      {"COLUMN_NAME": "msg_S_1589", "DATA_TYPE": "VARCHAR", "MetaData": "STOK DOVİZ CİNSİ — Stok döviz cinsi adı"},
+      {"COLUMN_NAME": "msg_S_0004", "DATA_TYPE": "VARCHAR", "MetaData": "KISA İSMİ — Kısa isim (sto_kisa_ismi karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0005", "DATA_TYPE": "VARCHAR", "MetaData": "YABANCI İSMİ — Yabancı isim (sto_yabanci_isim karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0006", "DATA_TYPE": "VARCHAR", "MetaData": "FİYAT — Satış fiyatı (fiyat listesi 1 — sayısal)"},
+      {"COLUMN_NAME": "msg_S_1693", "DATA_TYPE": "VARCHAR", "MetaData": "FİYAT DÖVİZ — Fiyat döviz cinsi adı (TL, USD, EUR vb.)"},
+      {"COLUMN_NAME": "msg_S_0007", "DATA_TYPE": "VARCHAR", "MetaData": "MİN. SEVİYE — Minimum stok seviyesi (sto_min_stok karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0008", "DATA_TYPE": "VARCHAR", "MetaData": "SİPARİŞ SEVİYESİ — Sipariş stok seviyesi (sto_siparis_stok karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0009", "DATA_TYPE": "VARCHAR", "MetaData": "MAX. SEVİYE — Maksimum stok seviyesi (sto_max_stok karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0010", "DATA_TYPE": "VARCHAR", "MetaData": "BİRİM — Birim adı (sto_birim1_ad karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0011", "DATA_TYPE": "VARCHAR", "MetaData": "KATEGORİ KODU — Kategori kodu (sto_kategori_kodu karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0012", "DATA_TYPE": "VARCHAR", "MetaData": "KATEGORİ İSMİ — Kategori ismi , arama alanı"},
+      {"COLUMN_NAME": "msg_S_0013", "DATA_TYPE": "VARCHAR", "MetaData": "ANA GRUP KODU — Ana grup kodu (sto_anagrup_kod karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0014", "DATA_TYPE": "VARCHAR", "MetaData": "ANA GRUP İSMİ — Ana grup ismi , arama alanı"},
+      {"COLUMN_NAME": "msg_S_0015", "DATA_TYPE": "VARCHAR", "MetaData": "ALT GRUP KODU — Alt grup kodu (sto_altgrup_kod karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0785", "DATA_TYPE": "VARCHAR", "MetaData": "ALT GRUP ISMI — Alt grup ismi , arama alanı"},
+      {"COLUMN_NAME": "msg_S_0018", "DATA_TYPE": "VARCHAR", "MetaData": "ÜRETİCİ KODU — Üretici kodu (sto_uretici_kodu karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0019", "DATA_TYPE": "VARCHAR", "MetaData": "ÜRETİCİ İSMİ — Üretici ismi , arama alanı"},
+      {"COLUMN_NAME": "msg_S_0024", "DATA_TYPE": "VARCHAR", "MetaData": "MARKA KODU — Marka kodu (sto_marka_kodu karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0025", "DATA_TYPE": "VARCHAR", "MetaData": "MARKA İSMİ — Marka ismi , arama alanı"},
+      {"COLUMN_NAME": "msg_S_0032", "DATA_TYPE": "VARCHAR", "MetaData": "SATICI CARİ KODU — Ana tedarikçi cari kodu (sto_sat_cari_kod karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0033", "DATA_TYPE": "VARCHAR", "MetaData": "SATICI CARİ İSMİ — Ana tedarikçi/satıcı ismi "},
+      {"COLUMN_NAME": "msg_S_0044", "DATA_TYPE": "VARCHAR", "MetaData": "MUHASEBE KODU — Muhasebe hesap kodu (sto_muh_kod karşılığı)"},
+      {"COLUMN_NAME": "msg_S_1694", "DATA_TYPE": "VARCHAR", "MetaData": "MUHASEBE HESAP İSMİ — Muhasebe hesap ismi"}
+    ]
+  },
+  {
+    "TABLE_NAME": "CARI_HESAP_GRUPLARI",
+    "Type": "Table",
+    "Description": "Cari hesap grup tanımları. CARI_HESAPLAR.cari_grup_kodu bu tablodaki crg_kod ile eşleşir.",
+    "Columns": [
+      {"COLUMN_NAME": "crg_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Grup kodu (PK)"},
+      {"COLUMN_NAME": "crg_isim", "DATA_TYPE": "DBO.NVARCHAR_MAXHESAPISIMNO", "MetaData": "Grup adı. Arama alanı."},
+      {"COLUMN_NAME": "crg_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "crg_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"}
+    ]
+  },
+  {
+    "TABLE_NAME": "CARI_HESAP_BOLGELERI",
+    "Type": "Table",
+    "Description": "Cari hesap bölge tanımları. CARI_HESAPLAR.cari_bolge_kodu bu tablodaki bol_kod ile eşleşir.",
+    "Columns": [
+      {"COLUMN_NAME": "bol_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Bölge kodu (PK)"},
+      {"COLUMN_NAME": "bol_ismi", "DATA_TYPE": "DBO.NVARCHAR_MAXHESAPISIMNO", "MetaData": "Bölge adı. Arama alanı."},
+      {"COLUMN_NAME": "bol_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "bol_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"}
+    ]
+  },
+  {
+    "TABLE_NAME": "CARI_HESAP_ADRESLERI",
+    "Type": "Table",
+    "Description": "Cari hesap adresleri. Fatura ve sevk adresleri. adr_cari_kod ile CARI_HESAPLAR.cari_kod'a bağlı.",
+    "Columns": [
+      {"COLUMN_NAME": "adr_cari_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Bkz. CARI_HESAPLAR.cari_kod"},
+      {"COLUMN_NAME": "adr_cadde", "DATA_TYPE": "NVARCHAR(50)", "MetaData": ""},
+      {"COLUMN_NAME": "adr_mahalle", "DATA_TYPE": "NVARCHAR(50)", "MetaData": ""},
+      {"COLUMN_NAME": "adr_il", "DATA_TYPE": "NVARCHAR(50)", "MetaData": "İl. Arama alanı."},
+      {"COLUMN_NAME": "adr_ilce", "DATA_TYPE": "NVARCHAR(50)", "MetaData": "Arama alanı."},
+      {"COLUMN_NAME": "adr_ulke", "DATA_TYPE": "NVARCHAR(50)", "MetaData": ""},
+      {"COLUMN_NAME": "adr_posta_kodu", "DATA_TYPE": "NVARCHAR(8)", "MetaData": ""},
+      {"COLUMN_NAME": "adr_tel_no1", "DATA_TYPE": "NVARCHAR(10)", "MetaData": "Telefon numarası"},
+      {"COLUMN_NAME": "adr_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"}
+    ]
+  },
+  {
+    "TABLE_NAME": "CARI_HESAP_YETKILILERI",
+    "Type": "Table",
+    "Description": "Cari hesap yetkilileri/iletişim kişileri. cye_cari_kod ile CARI_HESAPLAR.cari_kod'a bağlı.",
+    "Columns": [
+      {"COLUMN_NAME": "mye_cari_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Cari kodu. Bkz. CARI_HESAPLAR.cari_kod"},
+      {"COLUMN_NAME": "mye_isim", "DATA_TYPE": "NVARCHAR(30)", "MetaData": "Yetkili adı. Arama alanı."},
+      {"COLUMN_NAME": "mye_soyisim", "DATA_TYPE": "NVARCHAR(30)", "MetaData": "Yetkili soyadı. Arama alanı."},
+      {"COLUMN_NAME": "mye_unvan", "DATA_TYPE": "TINYINT", "MetaData": "0:Bay 1:Bayan 2:Dr. vb. (enumerated)"},
+      {"COLUMN_NAME": "mye_is_telno", "DATA_TYPE": "NVARCHAR(17)", "MetaData": "İş telefonu"},
+      {"COLUMN_NAME": "mye_email_adres", "DATA_TYPE": "NVARCHAR(127)", "MetaData": "E-posta adresi"},
+      {"COLUMN_NAME": "mye_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"}
+    ]
+  },
+  {
+    "TABLE_NAME": "STOK_ANA_GRUPLARI",
+    "Type": "Table",
+    "Description": "Stok ana grup tanımları. STOKLAR.sto_anagrup_kod bu tablodaki san_kod ile eşleşir.",
+    "Columns": [
+      {"COLUMN_NAME": "san_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Ana grup kodu (PK)"},
+      {"COLUMN_NAME": "san_isim", "DATA_TYPE": "DBO.NVARCHAR_MAXHESAPISIMNO", "MetaData": "Ana grup adı. Arama alanı."},
+      {"COLUMN_NAME": "san_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "san_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"}
+    ]
+  },
+  {
+    "TABLE_NAME": "STOK_ALT_GRUPLARI",
+    "Type": "Table",
+    "Description": "Stok alt grup tanımları. STOKLAR.sto_altgrup_kod bu tablodaki sta_kod ile eşleşir.",
+    "Columns": [
+      {"COLUMN_NAME": "sta_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Alt grup kodu (PK)"},
+      {"COLUMN_NAME": "sta_isim", "DATA_TYPE": "DBO.NVARCHAR_MAXHESAPISIMNO", "MetaData": "Alt grup adı. Arama alanı."},
+      {"COLUMN_NAME": "sta_ana_grup_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Bağlı olduğu ana grup kodu. Bkz. STOK_ANA_GRUPLARI.san_kod"},
+      {"COLUMN_NAME": "sta_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "sta_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"}
+    ]
+  },
+  {
+    "TABLE_NAME": "STOK_MARKALARI",
+    "Type": "Table",
+    "Description": "Stok marka tanımları. STOKLAR.sto_marka_kodu bu tablodaki mrk_kod ile eşleşir.",
+    "Columns": [
+      {"COLUMN_NAME": "mrk_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Marka kodu (PK)"},
+      {"COLUMN_NAME": "mrk_ismi", "DATA_TYPE": "DBO.NVARCHAR_MAXHESAPISIMNO", "MetaData": "Marka adı. Arama alanı."},
+      {"COLUMN_NAME": "mrk_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"}
+    ]
+  },
+  {
+    "TABLE_NAME": "STOK_KATEGORILERI",
+    "Type": "Table",
+    "Description": "Stok kategori tanımları. STOKLAR.sto_kategori_kodu bu tablodaki ktg_kod ile eşleşir.",
+    "Columns": [
+      {"COLUMN_NAME": "ktg_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Kategori kodu (PK)"},
+      {"COLUMN_NAME": "ktg_isim", "DATA_TYPE": "NVARCHAR(50)", "MetaData": "Kategori adı"},
+      {"COLUMN_NAME": "ktg_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"}
+    ]
+  },
+  {
+    "TABLE_NAME": "BARKOD_TANIMLARI",
+    "Type": "Table",
+    "Description": "Stok barkod tanımları. Stok-birim-barkod eşleşmeleri. bar_stokkodu ile STOKLAR.sto_kod'a bağlı.",
+    "Columns": [
+      {"COLUMN_NAME": "bar_stokkodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Bkz. STOKLAR.sto_kod"},
+      {"COLUMN_NAME": "bar_kodu", "DATA_TYPE": "DBO.BARKOD_STR", "MetaData": "Barkod numarası"},
+      {"COLUMN_NAME": "bar_birimpntr", "DATA_TYPE": "TINYINT", "MetaData": "Birim pointer (1=birim1, 2=birim2 vb.)"},
+      {"COLUMN_NAME": "bar_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"}
+    ]
+  },
+  {
+    "TABLE_NAME": "ALINAN_TEKLIFLER",
+    "Type": "Table",
+    "Description": "Alınan teklif kayıtları (satınalma teklifleri). VERILEN_TEKLIFLER ile aynı yapıda, altkl_ prefix kullanır.",
+    "Columns": [
+      {"COLUMN_NAME": "altkl_tarihi", "DATA_TYPE": "DATETIME", "MetaData": "Teklif tarihi"},
+      {"COLUMN_NAME": "altkl_belge_no", "DATA_TYPE": "DBO.BELGENO_STR", "MetaData": "Belge numarası"},
+      {"COLUMN_NAME": "altkl_cari_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Cari kodu. Bkz. CARI_HESAPLAR.cari_kod"},
+      {"COLUMN_NAME": "altkl_miktar", "DATA_TYPE": "FLOAT", "MetaData": ""},
+      {"COLUMN_NAME": "altkl_birim_fiyati", "DATA_TYPE": "FLOAT", "MetaData": ""},
+      {"COLUMN_NAME": "altkl_tutar", "DATA_TYPE": "FLOAT", "MetaData": ""},
+      {"COLUMN_NAME": "altkl_teslimat_tarihi", "DATA_TYPE": "DATETIME", "MetaData": "Teslim edilmesi gereken tarih"},
+      {"COLUMN_NAME": "altkl_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"}
+    ]
+  },
+  {
+    "TABLE_NAME": "ODEME_PLANLARI",
+    "Type": "Table",
+    "Description": "Ödeme planı tanımları. Vade yapıları ve taksit planları.",
+    "Columns": [
+      {"COLUMN_NAME": "odp_no", "DATA_TYPE": "INT", "MetaData": "Plan numarası (PK)"},
+      {"COLUMN_NAME": "odp_adi", "DATA_TYPE": "NVARCHAR(50)", "MetaData": "Plan adı"},
+      {"COLUMN_NAME": "odp_ortgun", "DATA_TYPE": "INT", "MetaData": "Ortalama vade günü"},
+      {"COLUMN_NAME": "odp_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"}
+    ]
+  },
+  {
+    "TABLE_NAME": "MUHASEBE_HESAP_PLANI",
+    "Type": "Table",
+    "Description": "Muhasebe hesap planı. Tekdüzen hesap planı kartları.",
+    "Columns": [
+      {"COLUMN_NAME": "muh_hesap_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Hesap kodu (PK). Tekdüzen hesap planı formatında (100, 100.01 vb.)"},
+      {"COLUMN_NAME": "muh_hesap_isim1", "DATA_TYPE": "DBO.NVARCHAR_MAXHESAPISIMNO", "MetaData": "Hesap adı. Arama alanı."},
+      {"COLUMN_NAME": "muh_hesap_tip", "DATA_TYPE": "TINYINT", "MetaData": "0:Aktif 1:Pasif"},
+      {"COLUMN_NAME": "muh_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "muh_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"}
+    ]
+  },
+  {
+    "TABLE_NAME": "MUHASEBE_FISLERI",
+    "Type": "Table",
+    "Description": "Muhasebe fiş başlıkları. Açılış, mahsup, tahsil, tediye fişleri. Detaylar MUHASEBE_FIS_DETAYLARI tablosunda.",
+    "Columns": [
+      {"COLUMN_NAME": "fis_sira_no", "DATA_TYPE": "INT", "MetaData": "Fiş sıra numarası"},
+      {"COLUMN_NAME": "fis_tarih", "DATA_TYPE": "DATETIME", "MetaData": "Fiş tarihi"},
+      {"COLUMN_NAME": "fis_tur", "DATA_TYPE": "TINYINT", "MetaData": "0:Mahsup 1:Tahsil 2:Tediye 3:Açılış"},
+      {"COLUMN_NAME": "fis_fozelmahkod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Özel mahsup kodu"},
+      {"COLUMN_NAME": "fis_aciklama1", "DATA_TYPE": "NVARCHAR(127)", "MetaData": "Fiş açıklaması. Arama alanı."},
+      {"COLUMN_NAME": "fis_firmano", "DATA_TYPE": "INT", "MetaData": "Firma numarası"},
+      {"COLUMN_NAME": "fis_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "fis_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"}
+    ]
+  },
+  {
+    "TABLE_NAME": "MUHASEBE_FIS_DETAYLARI",
+    "Type": "Table",
+    "Description": "Muhasebe fiş satırları. Her satır bir borç veya alacak kaydıdır. fis_no ile MUHASEBE_FISLERI'ne bağlı.",
+    "Columns": [
+      {"COLUMN_NAME": "mfd_evrak_sira", "DATA_TYPE": "INT", "MetaData": "Evrak sıra numarası"},
+      {"COLUMN_NAME": "mfd_belgetarihi", "DATA_TYPE": "DATETIME", "MetaData": "Belge tarihi"},
+      {"COLUMN_NAME": "mfd_carimuhkodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Muhasebe hesap kodu"},
+      {"COLUMN_NAME": "mfd_aciklama", "DATA_TYPE": "NVARCHAR(127)", "MetaData": ""},
+      {"COLUMN_NAME": "mfd_carikodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Cari kodu"},
+      {"COLUMN_NAME": "mfd_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"}
+    ]
+  },
+  {
+    "TABLE_NAME": "FIRMALAR",
+    "Type": "Table",
+    "Description": "Firma tanımları ve parametreleri. Çoklu firma yapılandırmasında firma bilgileri.",
+    "Columns": [
+      {"COLUMN_NAME": "fir_sirano", "DATA_TYPE": "INT", "MetaData": "Firma sıra numarası"},
+      {"COLUMN_NAME": "fir_unvan", "DATA_TYPE": "NVARCHAR(127)", "MetaData": "Firma unvanı. Arama alanı."},
+      {"COLUMN_NAME": "fir_FVergiDaire", "DATA_TYPE": "NVARCHAR(10)", "MetaData": "Vergi dairesi kodu"},
+      {"COLUMN_NAME": "fir_FVergiNo", "DATA_TYPE": "NVARCHAR(20)", "MetaData": "Vergi numarası"}
+    ]
+  },
+  {
+    "TABLE_NAME": "DEPARTMANLAR",
+    "Type": "Table",
+    "Description": "Departman tanımları. Maliyet merkezi olarak da kullanılır.",
+    "Columns": [
+      {"COLUMN_NAME": "pdp_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Departman kodu (PK)"},
+      {"COLUMN_NAME": "pdp_adi", "DATA_TYPE": "NVARCHAR(127)", "MetaData": "Departman adı. Arama alanı."},
+      {"COLUMN_NAME": "pdp_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "pdp_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"}
+    ]
+  },
+  {
+    "TABLE_NAME": "SORUMLULUK_MERKEZLERI",
+    "Type": "Table",
+    "Description": "Sorumluluk merkezi tanımları. Muhasebe ve maliyet analizi için. CARI_HESAP_HAREKETLERI.cha_srmrkkodu ile eşleşir.",
+    "Columns": [
+      {"COLUMN_NAME": "som_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Sorumluluk merkezi kodu (PK)"},
+      {"COLUMN_NAME": "som_isim", "DATA_TYPE": "NVARCHAR(40)", "MetaData": "Sorumluluk merkezi adı"},
+      {"COLUMN_NAME": "som_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "som_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"}
+    ]
+  },
+  {
+    "TABLE_NAME": "PROJELER",
+    "Type": "Table",
+    "Description": "Proje tanımları. Proje bazlı maliyet ve gelir takibi. CARI_HESAP_HAREKETLERI.cha_projekodu ile eşleşir.",
+    "Columns": [
+      {"COLUMN_NAME": "pro_kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Proje kodu (PK). [İlişki: CARI_HESAP_HAREKETLERI.cha_projekodu, STOK_HAREKETLERI.sth_proje_kodu, SIPARISLER.sip_projekodu]"},
+      {"COLUMN_NAME": "pro_adi", "DATA_TYPE": "NVARCHAR(40)", "MetaData": "Proje adı. Arama alanı."},
+      {"COLUMN_NAME": "pro_planlanan_bastarih", "DATA_TYPE": "DATETIME", "MetaData": "Planlanan başlangıç tarihi"},
+      {"COLUMN_NAME": "pro_planlanan_bittarih", "DATA_TYPE": "DATETIME", "MetaData": "Planlanan bitiş tarihi"},
+      {"COLUMN_NAME": "pro_sormerkodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Sorumluluk merkezi kodu"},
+      {"COLUMN_NAME": "pro_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "pro_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"}
+    ]
+  },
+  {
+    "TABLE_NAME": "HIZMET_HESAPLARI",
+    "Type": "Table",
+    "Description": "Hizmet hesapları kartları. Hizmet alış/satış tanımları. Stok hareket satırlarında hizmet olarak kullanılır.",
+    "Columns": [
+      {"COLUMN_NAME": "hiz_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Hizmet kodu (PK)"},
+      {"COLUMN_NAME": "hiz_isim", "DATA_TYPE": "NVARCHAR(127)", "MetaData": "Hizmet adı. Arama alanı."},
+      {"COLUMN_NAME": "hiz_birim_ad", "DATA_TYPE": "NVARCHAR(10)", "MetaData": "Ölçü birimi adı"},
+      {"COLUMN_NAME": "hiz_fiyat", "DATA_TYPE": "FLOAT", "MetaData": "Birim fiyatı"},
+      {"COLUMN_NAME": "hiz_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "hiz_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"}
+    ]
+  },
+  {
+    "TABLE_NAME": "MASRAF_HESAPLARI",
+    "Type": "Table",
+    "Description": "Masraf hesapları kartları. Genel gider tanımları.",
+    "Columns": [
+      {"COLUMN_NAME": "his_kod", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Masraf kodu (PK)"},
+      {"COLUMN_NAME": "his_isim", "DATA_TYPE": "NVARCHAR(40)", "MetaData": "Masraf hesap adı. Arama alanı."},
+      {"COLUMN_NAME": "his_birim_ad", "DATA_TYPE": "NVARCHAR(10)", "MetaData": "Ölçü birimi adı"},
+      {"COLUMN_NAME": "his_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "his_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"}
+    ]
+  },
+  {
+    "TABLE_NAME": "CARIDETAY",
+    "Type": "View",
+    "Description": "CARI_HESAPLAR tablosu üzerine grup, bölge, temsilci gibi ilişkili tablo isimlerini JOIN'le getiren zenginleştirilmiş cari view'ı. Cari detay sorgularında tercih edilmeli.",
+    "Columns": [
+      {"COLUMN_NAME": "msg_S_1032", "DATA_TYPE": "VARCHAR", "MetaData": "CARI KODU"},
+      {"COLUMN_NAME": "msg_S_1033", "DATA_TYPE": "VARCHAR", "MetaData": "CARI ÜNVANI. Arama alanı."},
+      {"COLUMN_NAME": "msg_S_1034", "DATA_TYPE": "VARCHAR", "MetaData": "CARI ÜNVANI 2. Arama alanı."},
+      {"COLUMN_NAME": "msg_S_1029", "DATA_TYPE": "VARCHAR", "MetaData": "VD.NO"},
+      {"COLUMN_NAME": "msg_S_1028", "DATA_TYPE": "VARCHAR", "MetaData": "VD.ADI"},
+      {"COLUMN_NAME": "msg_S_0471", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ GRUP KODU"},
+      {"COLUMN_NAME": "msg_S_0472", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ GRUP İSMİ. Arama alanı."},
+      {"COLUMN_NAME": "msg_S_0473", "DATA_TYPE": "VARCHAR", "MetaData": "BÖLGE KODU"},
+      {"COLUMN_NAME": "msg_S_1101", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ BÖLGE İSMİ. Arama alanı."},
+      {"COLUMN_NAME": "msg_S_0474", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ SEKTÖR KODU"},
+      {"COLUMN_NAME": "msg_S_0475", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ SEKTÖR İSMİ. Arama alanı."},
+      {"COLUMN_NAME": "msg_S_1037", "DATA_TYPE": "VARCHAR", "MetaData": "ANA CARİ KODU"},
+      {"COLUMN_NAME": "msg_S_0977", "DATA_TYPE": "VARCHAR", "MetaData": "TEMSİLCİ KODU"},
+      {"COLUMN_NAME": "msg_S_0978", "DATA_TYPE": "VARCHAR", "MetaData": "TEMSİLCİ ADI. Arama alanı."}
+    ]
+  },
+  {
+    "TABLE_NAME": "ODEME_EMIRLERI_YONETIM",
+    "Type": "View",
+    "Description": "ODEME_EMIRLERI üzerine çek/senet pozisyon, cari ismi ve döviz bilgilerini hesaplanmış sütunlar olarak sunar. Çek/senet bakiye ve vade sorgularında kullanılmalı.",
+    "Columns": [
+      {"COLUMN_NAME": "msg_S_0077", "DATA_TYPE": "VARCHAR", "MetaData": "TİPİ — Tip/hareket tipi adı"},
+      {"COLUMN_NAME": "msg_S_0297", "DATA_TYPE": "VARCHAR", "MetaData": "SON POZİSYON — Son pozisyon adı (Portföyde, Tahsilde, Ödendi vb.)"},
+      {"COLUMN_NAME": "msg_S_0298", "DATA_TYPE": "VARCHAR", "MetaData": "REFERANS NO"},
+      {"COLUMN_NAME": "msg_S_0299", "DATA_TYPE": "VARCHAR", "MetaData": "ÇEK NO"},
+      {"COLUMN_NAME": "msg_S_0300", "DATA_TYPE": "DATETIME", "MetaData": "VADE TARİHİ — Vade tarihi"},
+      {"COLUMN_NAME": "msg_S_0293\T", "DATA_TYPE": "FLOAT", "MetaData": "TUTAR — Tutar (sayısal)"},
+      {"COLUMN_NAME": "msg_S_0238\T", "DATA_TYPE": "FLOAT", "MetaData": "ÖDENEN — Ödenen tutar. [Koşul: Tahsil olan/ödenen çekler → msg_S_0238\T > 0 OR msg_S_0297 = 'Ödendi'; kalan > 0 filtresi konulmaz]"},
+      {"COLUMN_NAME": "msg_S_0254", "DATA_TYPE": "VARCHAR", "MetaData": "DÖVİZ — Döviz sembolü (TL, USD, EUR vb. )"},
+      {"COLUMN_NAME": "msg_S_0302", "DATA_TYPE": "VARCHAR", "MetaData": "DÖVİZ KURU"},
+      {"COLUMN_NAME": "msg_S_0301\T", "DATA_TYPE": "FLOAT", "MetaData": "KALAN MİKTAR — Kalan tutar (Tutar - Ödenen)"},
+      {"COLUMN_NAME": "msg_S_1108", "DATA_TYPE": "VARCHAR", "MetaData": "GÜN — Vade tarihine kalan/geçen gün sayısı (sayısal)"},
+      {"COLUMN_NAME": "msg_S_1413", "DATA_TYPE": "VARCHAR", "MetaData": "SAHİBİ — İmza sahibi/imzacı adı "},
+      {"COLUMN_NAME": "msg_S_0327", "DATA_TYPE": "VARCHAR", "MetaData": "EVRAK NO — İlk evrak numarası (seri+sıra birleşik )"},
+      {"COLUMN_NAME": "msg_S_0303", "DATA_TYPE": "VARCHAR", "MetaData": "BANKASI"},
+      {"COLUMN_NAME": "msg_S_0304", "DATA_TYPE": "VARCHAR", "MetaData": "ŞUBESİ"},
+      {"COLUMN_NAME": "msg_S_0307", "DATA_TYPE": "DATETIME", "MetaData": "VERİLİŞ TARİHİ"},
+      {"COLUMN_NAME": "msg_S_0212", "DATA_TYPE": "VARCHAR", "MetaData": "SATIR NO — Açıklama"},
+      {"COLUMN_NAME": "msg_S_0199", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ CİNSİ — Evrak numarası (seri+sıra birleşimi veya seri)"},
+      {"COLUMN_NAME": "msg_S_0200", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ KODU — Cari kodu (cari_kod karşılığı)"},
+      {"COLUMN_NAME": "msg_S_0201", "DATA_TYPE": "VARCHAR", "MetaData": "CARİ İSMİ — Cari ismi (cari_unvan1 karşılığı) , arama alanı"},
+      {"COLUMN_NAME": "msg_S_1407", "DATA_TYPE": "VARCHAR", "MetaData": "BORÇLU ADI — Çekin borçlusu/keşidecisi. [Koşul: İsim aramasında msg_S_0201 ile OR taranır]"}
+    ]
+  },
+  {
+    "TABLE_NAME": "STOK_DEPO_DETAYLARI_YONETIM",
+    "Type": "View",
+    "Description": "Stok depo detayları yönetim view'ı. Depo bazlı yönetim parametreleri, fiyat ve durdurma/pasif durum bilgilerini sunar. Mevcut stok miktarı hesabı için STOK_HAREKETLERI_GIRIS_CIKIS kullanılmalı.",
+    "Columns": [
+      {"COLUMN_NAME": "msg_S_0001", "DATA_TYPE": "VARCHAR", "MetaData": "STOK KODU — Stok kodu (sto_kod karşılığı). Kod filtrelerinde bu kolonu kullan."},
+      {"COLUMN_NAME": "msg_S_0002", "DATA_TYPE": "VARCHAR", "MetaData": "STOK İSMİ — Stok ismi (sto_isim karşılığı). Arama alanı — UPPER(msg_S_0002) LIKE UPPER(N'%...%') kullan."},
+      {"COLUMN_NAME": "msg_S_0873", "DATA_TYPE": "VARCHAR", "MetaData": "DEPO NO — Depo numarası"},
+      {"COLUMN_NAME": "msg_S_0874", "DATA_TYPE": "VARCHAR", "MetaData": "DEPO ADI — Depo adı. Arama alanı."},
+      {"COLUMN_NAME": "msg_S_1179", "DATA_TYPE": "VARCHAR", "MetaData": "TEDARİKÇİ"},
+      {"COLUMN_NAME": "msg_S_1180", "DATA_TYPE": "VARCHAR", "MetaData": "HEDEF KAR"},
+      {"COLUMN_NAME": "msg_S_1181", "DATA_TYPE": "VARCHAR", "MetaData": "FIYAT — Satış fiyatı"},
+      {"COLUMN_NAME": "msg_S_1182", "DATA_TYPE": "VARCHAR", "MetaData": "MIN.SEV. — Minimum stok seviyesi"},
+      {"COLUMN_NAME": "msg_S_1183", "DATA_TYPE": "VARCHAR", "MetaData": "SIP.SEV."},
+      {"COLUMN_NAME": "msg_S_1184", "DATA_TYPE": "VARCHAR", "MetaData": "HEDEF SEV"},
+      {"COLUMN_NAME": "msg_S_1691", "DATA_TYPE": "VARCHAR", "MetaData": "SİPARİŞ DURSUN"},
+      {"COLUMN_NAME": "msg_S_1690", "DATA_TYPE": "VARCHAR", "MetaData": "MAL KABUL DURSUN"},
+      {"COLUMN_NAME": "msg_S_1173", "DATA_TYPE": "VARCHAR", "MetaData": "DVZ — Fiyat döviz cinsi adı (TL, USD, EUR vb. ). NOT: Önceden etiketi 'DEPO İSMİ' idi ama gerçekte döviz cinsidir."},
+      {"COLUMN_NAME": "msg_S_1692", "DATA_TYPE": "VARCHAR", "MetaData": "SATIŞ DURSUN — 'Evet'/'Hayır' metni (sdp_satisdursun bit alanının çevirisi)"},
+      {"COLUMN_NAME": "msg_S_1689", "DATA_TYPE": "VARCHAR", "MetaData": "TASFİYEDE — 'Evet'/'Hayır' metni (sdp_Tasfiyede_Fl bit alanının çevirisi)"},
+      {"COLUMN_NAME": "msg_S_1688", "DATA_TYPE": "VARCHAR", "MetaData": "PASİF — 'Evet'/'Hayır' metni (sdp_Pasif_fl bit alanının çevirisi)"}
+    ]
+  },
+  {
+    "TABLE_NAME": "STOK_SATIS_FIYAT_LISTELERI_YONETIM",
+    "Type": "View",
+    "Description": "Stok satış fiyat listeleri yönetim view'ı. Fiyat listesi detayları ve stok bilgileri.",
+    "Columns": [
+      {"COLUMN_NAME": "msg_S_0001", "DATA_TYPE": "VARCHAR", "MetaData": "STOK KODU — Stok kodu (sto_kod karşılığı). Kod filtrelerinde bu kolonu kullan."},
+      {"COLUMN_NAME": "msg_S_0002", "DATA_TYPE": "VARCHAR", "MetaData": "STOK İSMİ — Stok ismi (sto_isim karşılığı). Arama alanı — UPPER(msg_S_0002) LIKE UPPER(N'%...%') kullan."},
+      {"COLUMN_NAME": "msg_S_1264", "DATA_TYPE": "VARCHAR", "MetaData": "FİYAT LİSTE NO"},
+      {"COLUMN_NAME": "msg_S_1265", "DATA_TYPE": "VARCHAR", "MetaData": "FİYAT LİSTE AÇIKLAMASI. Arama alanı."},
+      {"COLUMN_NAME": "msg_S_0159", "DATA_TYPE": "VARCHAR", "MetaData": "DEPO"},
+      {"COLUMN_NAME": "msg_S_1266", "DATA_TYPE": "VARCHAR", "MetaData": "DEPO İSMİ — Fiyat listesinin bağlı olduğu depo adı . Arama alanı."},
+      {"COLUMN_NAME": "msg_S_4612", "DATA_TYPE": "VARCHAR", "MetaData": "FİYAT BİRİMİ"},
+      {"COLUMN_NAME": "msg_S_0099", "DATA_TYPE": "INT", "MetaData": "VADE GÜN"},
+      {"COLUMN_NAME": "msg_S_0984", "DATA_TYPE": "FLOAT", "MetaData": "FİYATI"},
+      {"COLUMN_NAME": "msg_S_0254", "DATA_TYPE": "VARCHAR", "MetaData": "Döviz sembolü (TL, USD, EUR vb. )"},
+      {"COLUMN_NAME": "msg_S_1267", "DATA_TYPE": "VARCHAR", "MetaData": "ISKONTO"},
+      {"COLUMN_NAME": "msg_S_1748", "DATA_TYPE": "VARCHAR", "MetaData": "KAMPANYA KODU"}
+    ]
+  },
+  {
+    "TABLE_NAME": "vw_Cari_Hareket_Evrak_Isimleri",
+    "Type": "View",
+    "Description": "Cari hareket evrak tipi kısa/uzun isim eşleştirme view'ı. CARI_HESAP_HAREKETLERI_CHOOSE_30.msg_S_0555 kısa evrak adı döndürdüğü için, kullanıcı uzun evrak adı söylediğinde bu view ile eşleştirme yapılmalı.",
+    "Columns": [
+      {"COLUMN_NAME": "CHEvrNo", "DATA_TYPE": "TINYINT", "MetaData": "Cari hareket evrak tipi kodu. Örn: 0:Alış Faturası 1:Tahsilat Makbuzu 29:Açılış Fişi 31:Borç Dekontu 32:Alacak Dekontu 63:Satış Faturası 64:Tediye Makbuzu"},
+      {"COLUMN_NAME": "CHEvrKisaIsim", "DATA_TYPE": "VARCHAR", "MetaData": "Kısa evrak adı."},
+      {"COLUMN_NAME": "CHEvrUzunIsim", "DATA_TYPE": "VARCHAR", "MetaData": "Uzun evrak adı."}
+    ]
+  },
+  {
+    "TABLE_NAME": "STOK_HAREKETLERINE_MALIYET_YANSITMA",
+    "Type": "Table",
+    "Description": "Stok hareket satırlarına yansıyan ilave maliyetler (masraflar).",
+    "Columns": [
+      {"COLUMN_NAME": "shmy_Guid", "DATA_TYPE": "UNIQUEIDENTIFIER", "MetaData": ""},
+      {"COLUMN_NAME": "shmy_iptal", "DATA_TYPE": "BIT", "MetaData": "0:Aktif 1:İptal"},
+      {"COLUMN_NAME": "shmy_hidden", "DATA_TYPE": "BIT", "MetaData": "0:Görünür 1:Gizli"},
+      {"COLUMN_NAME": "shmy_tarihi", "DATA_TYPE": "DATETIME", "MetaData": "Maliyet yansıtma tarihi"},
+      {"COLUMN_NAME": "shmy_har_uid", "DATA_TYPE": "UNIQUEIDENTIFIER", "MetaData": "İlgili stok hareketi UID'i. [İlişki: STOK_HAREKETLERI.sth_Guid]"},
+      {"COLUMN_NAME": "shmy_ilave_maliyet_ana", "DATA_TYPE": "FLOAT", "MetaData": "Ana Döviz Cinsinden İlave Maliyet. [Hesaplama: İlaveMaliyet = SUM(shmy_ilave_maliyet_ana)]"},
+      {"COLUMN_NAME": "shmy_ilave_maliyet_alt", "DATA_TYPE": "FLOAT", "MetaData": "Alternatif Döviz Cinsinden İlave Maliyet."},
+      {"COLUMN_NAME": "shmy_aciklama", "DATA_TYPE": "NVARCHAR(50)", "MetaData": "Açıklama"}
+    ]
+  },
+  {
+    "TABLE_NAME": "SIPARISLER_OZET",
+    "Type": "Table",
+    "Description": "Sipariş özet durumları. Sipariş performans ve karşılama raporlarında performans amacıyla tercih edilir.",
+    "Columns": [
+      {"COLUMN_NAME": "so_RECno", "DATA_TYPE": "INT", "MetaData": ""},
+      {"COLUMN_NAME": "so_firmano", "DATA_TYPE": "INT", "MetaData": "Firma No"},
+      {"COLUMN_NAME": "so_subeno", "DATA_TYPE": "INT", "MetaData": "Şube No"},
+      {"COLUMN_NAME": "so_Tipi", "DATA_TYPE": "TINYINT", "MetaData": "0:Stok 1:Hizmet 2:Gider 3:Demirbaş"},
+      {"COLUMN_NAME": "so_Kodu", "DATA_TYPE": "NVARCHAR(25)", "MetaData": "Stok Kodu. [İlişki: STOKLAR.sto_kod]"},
+      {"COLUMN_NAME": "so_Depo", "DATA_TYPE": "INT", "MetaData": "Depo No"},
+      {"COLUMN_NAME": "so_MaliYil", "DATA_TYPE": "INT", "MetaData": "Mali Yıl"},
+      {"COLUMN_NAME": "so_Donem", "DATA_TYPE": "TINYINT", "MetaData": "Dönem"},
+      {"COLUMN_NAME": "so_HareketCins", "DATA_TYPE": "TINYINT", "MetaData": "0:Normal Sipariş 1:Konsinye Sipariş 2:Proforma Sipariş 3:Dış Ticaret Siparişi 4:Fason Siparişi 5:Dahili Sarf Siparişi 6:Depolar Arası Sipariş 7:Satın Alma Talebi 8:Üretim Talebi 9:İş Emirleri 10:Fason Talebi"},
+      {"COLUMN_NAME": "so_TalepMiktar", "DATA_TYPE": "FLOAT", "MetaData": "Talep Edilen Miktar"},
+      {"COLUMN_NAME": "so_TalepKarsilanan", "DATA_TYPE": "FLOAT", "MetaData": "Karşılanan/teslim edilen sipariş miktarı"},
+      {"COLUMN_NAME": "so_TalepKapanan", "DATA_TYPE": "FLOAT", "MetaData": "Manuel veya tolerans dahilinde kapatılan sipariş miktarı"},
+      {"COLUMN_NAME": "so_TeminMiktar", "DATA_TYPE": "FLOAT", "MetaData": "Temin Edilen Miktar"},
+      {"COLUMN_NAME": "so_TeminKarsilanan", "DATA_TYPE": "FLOAT", "MetaData": "Karşılanan Temin Miktarı"},
+      {"COLUMN_NAME": "so_TeminKapanan", "DATA_TYPE": "FLOAT", "MetaData": "Kapanan Temin Miktarı"}
+    ]
+  }
+]

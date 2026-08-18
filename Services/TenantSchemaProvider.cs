@@ -54,16 +54,24 @@ namespace OzBiPortalCRM.Services
                 }
 
                 // 2. Fetch Active Data Connections for this tenant
-                var connection = await db.Connections.AsNoTracking()
+                var connections = await db.Connections.AsNoTracking()
                     .Include(c => c.ConnectionSourceCode)
                     .Where(c => c.TenantId == tenantId && c.IsActive)
-                    .FirstOrDefaultAsync();
+                    .ToListAsync();
 
-                if (connection?.ConnectionSourceCode != null)
+                var erpConn = connections.FirstOrDefault(c =>
+                    c.ConnectionSourceCode != null &&
+                    ((c.ConnectionSourceCode.ProgrammaticName ?? "").ToUpperInvariant().Contains("MIKRO") ||
+                     (c.ConnectionSourceCode.DisplayName_TR ?? "").ToUpperInvariant().Contains("MIKRO") ||
+                     (c.ConnectionSourceCode.ProgrammaticName ?? "").ToUpperInvariant().Contains("LOGO") ||
+                     (c.ConnectionSourceCode.DisplayName_TR ?? "").ToUpperInvariant().Contains("LOGO")))
+                    ?? connections.FirstOrDefault();
+
+                if (erpConn?.ConnectionSourceCode != null)
                 {
-                    config.ConnectionSourceName = connection.ConnectionSourceCode.DisplayName_TR ?? connection.ConnectionSourceCode.ProgrammaticName ?? string.Empty;
-                    var progName = (connection.ConnectionSourceCode.ProgrammaticName ?? string.Empty).ToUpperInvariant();
-                    var dispName = (connection.ConnectionSourceCode.DisplayName_TR ?? string.Empty).ToUpperInvariant();
+                    config.ConnectionSourceName = erpConn.ConnectionSourceCode.DisplayName_TR ?? erpConn.ConnectionSourceCode.ProgrammaticName ?? string.Empty;
+                    var progName = (erpConn.ConnectionSourceCode.ProgrammaticName ?? string.Empty).ToUpperInvariant();
+                    var dispName = (erpConn.ConnectionSourceCode.DisplayName_TR ?? string.Empty).ToUpperInvariant();
 
                     if (progName.Contains("LOGO") || dispName.Contains("LOGO"))
                     {

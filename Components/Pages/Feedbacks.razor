@@ -1,0 +1,957 @@
+@page "/feedbacks"
+@inject IOzBiAuditService AuditService
+@inject IMikroAuditEngine MikroAuditEngine
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+@using OzBiPortalCRM.Services
+@using OzBiPortalCRM.Models
+@using OzBiPortalCRM.Components.Shared
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <h2 class="fw-bold mb-1">
+            <i class="bi bi-chat-square-quote-fill text-warning me-2"></i>Müşteri Geri Bildirimleri & Gelişim Alanları
+        </h2>
+        <div class="text-muted">Müşterilerin beğenmediği yanıtları, girdikleri yazılı yorumları ve prompt gelişim fırsatlarını tek ekranda inceleyin</div>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" @onclick="LoadData">
+        <i class="bi bi-arrow-clockwise"></i> Yenile
+    </button>
+</div>
+
+<!-- KPI Summary Cards -->
+<div class="row g-3 mb-4">
+    <!-- Disliked Count KPI -->
+    <div class="col-12 col-md-6">
+        <div class="glass-card p-3.5 h-100 d-flex align-items-center justify-content-between cursor-pointer @(filterType == "disliked" ? "border-danger border-2" : "")"
+             @onclick='() => SetFilterType("disliked")' style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(15, 23, 42, 0.65) 100%);">
+            <div>
+                <div class="text-muted small fw-bold text-uppercase mb-1" style="font-size: 0.725rem; letter-spacing: 0.5px;">Beğenilmeyen Yanıtlar</div>
+                <div class="fs-3 fw-bold text-danger">@(stats?.DislikedCount ?? 0)</div>
+                <div class="small text-muted" style="font-size: 0.75rem;">Müşterinin "Beğenmedim" bastığı yanıtlar</div>
+            </div>
+            <div class="p-3 rounded-circle" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(248, 113, 113, 0.3);">
+                <i class="bi bi-hand-thumbs-down-fill text-danger fs-4"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liked Count KPI -->
+    <div class="col-12 col-md-6">
+        <div class="glass-card p-3.5 h-100 d-flex align-items-center justify-content-between cursor-pointer @(filterType == "liked_only" ? "border-success border-2" : "")"
+             @onclick='() => SetFilterType("liked_only")' style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.65) 100%);">
+            <div>
+                <div class="text-muted small fw-bold text-uppercase mb-1" style="font-size: 0.725rem; letter-spacing: 0.5px;">Beğenilen Yanıtlar</div>
+                <div class="fs-3 fw-bold text-success">@(stats?.LikedCount ?? 0)</div>
+                <div class="small text-muted" style="font-size: 0.75rem;">Olumlu değerlendirilen çıktılar</div>
+            </div>
+            <div class="p-3 rounded-circle" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(52, 211, 153, 0.3);">
+                <i class="bi bi-hand-thumbs-up-fill text-success fs-4"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search & Filters Bar -->
+<div class="glass-card mb-4 p-3.5">
+    <div class="row g-3 align-items-center">
+        <!-- Search Input -->
+        <div class="col-12 col-md-5">
+            <label class="form-label text-muted small mb-1">Müşteri Yorumu, Soru veya SQL İle Ara</label>
+            <div class="input-group">
+                <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control input-custom" placeholder="Yorum metni, soru, SQL, tablo adı..." @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleSearch" />
+            </div>
+        </div>
+
+        <!-- Tenant Selector -->
+        <div class="col-12 col-md-3">
+            <label class="form-label text-muted small mb-1">Firma / Tenant Filtresi</label>
+            <select class="form-select bg-dark border-secondary text-light input-custom" @bind="selectedTenantId" @bind:after="LoadData">
+                <option value="">Tüm Firmalar</option>
+                @if (tenantsList != null)
+                {
+                    @foreach (var t in tenantsList)
+                    {
+                        <option value="@t.Tenant.Id">@t.Tenant.Name</option>
+                    }
+                }
+            </select>
+        </div>
+
+        <!-- Quick Filter Buttons -->
+        <div class="col-12 col-md-4 d-flex align-items-center justify-content-md-end gap-1.5 flex-wrap pt-md-3">
+            <button type="button" class="btn btn-sm @(filterType == "disliked" ? "btn-danger fw-semibold" : "btn-outline-secondary")" @onclick='() => SetFilterType("disliked")'>
+                <i class="bi bi-hand-thumbs-down"></i> Beğenilmeyenler
+            </button>
+            <button type="button" class="btn btn-sm @(filterType == "comments_only" ? "btn-warning fw-semibold text-dark" : "btn-outline-secondary")" @onclick='() => SetFilterType("comments_only")'>
+                <i class="bi bi-chat-left-text"></i> Yorumlular
+            </button>
+            <button type="button" class="btn btn-sm @(filterType == "all" ? "btn-info fw-semibold text-dark" : "btn-outline-secondary")" @onclick='() => SetFilterType("all")'>
+                Tümü
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Results Feed List -->
+@if (isLoading)
+{
+    <div class="glass-card text-center py-5">
+        <div class="spinner-border text-warning mb-3" role="status"></div>
+        <div class="text-muted">Müşteri geri bildirimleri ve yanıt kayıtları taranıyor...</div>
+    </div>
+}
+else if (feedbackItems == null || feedbackItems.Count == 0)
+{
+    <div class="glass-card text-center py-5">
+        <i class="bi bi-emoji-smile text-muted" style="font-size: 3.5rem;"></i>
+        <h5 class="mt-3 text-muted">Seçilen kriterlere uygun müşteri geri bildirimi bulunamadı</h5>
+        <p class="text-muted small mb-0">Filtreleri değiştirerek veya arama terimini temizleyerek tekrar deneyebilirsiniz.</p>
+    </div>
+}
+else
+{
+    <div class="d-flex flex-column gap-4">
+        @foreach (var (item, index) in feedbackItems.Select((x, i) => (x, i + 1)))
+        {
+            var isDisliked = item.IsLiked == false;
+            var isLiked = item.IsLiked == true;
+            var hasComment = !string.IsNullOrWhiteSpace(item.FeedbackReason);
+            var sqlItems = ExtractSqlItemsFromQuery(item.Query);
+            var promptText = !string.IsNullOrWhiteSpace(item.Prompt) ? item.Prompt : item.Chat?.Title ?? "Soru Başlığı";
+            var cardBorderClass = isDisliked ? "feedback-card-disliked" : (isLiked ? "feedback-card-liked" : "feedback-card-comment");
+
+            <div class="feedback-card @cardBorderClass mb-3">
+                <!-- 1. Top Header Bar: Status, Metadata & Action -->
+                <div class="feedback-card-header">
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <!-- Reaction Pill -->
+                        @if (isDisliked)
+                        {
+                            <span class="status-pill status-pill-disliked">
+                                <i class="bi bi-hand-thumbs-down-fill me-1"></i> Beğenilmedi
+                            </span>
+                        }
+                        else if (isLiked)
+                        {
+                            <span class="status-pill status-pill-liked">
+                                <i class="bi bi-hand-thumbs-up-fill me-1"></i> Beğenildi
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="status-pill status-pill-comment">
+                                <i class="bi bi-chat-square-text-fill me-1"></i> Yorum Girildi
+                            </span>
+                        }
+
+                        <!-- Structured Metadata Group -->
+                        <div class="meta-tags-container">
+                            <span class="meta-tag" title="Firma / Tenant">
+                                <i class="bi bi-building text-info opacity-75"></i>
+                                <span class="fw-semibold">@(item.Chat?.Tenant?.Name ?? "Tenant")</span>
+                            </span>
+                            <span class="meta-divider">•</span>
+                            <span class="meta-tag" title="Kullanıcı">
+                                <i class="bi bi-person text-secondary opacity-75"></i>
+                                <span>@(item.Chat?.CreatedByUser?.NameSurname ?? item.Chat?.CreatedByUser?.Email ?? "Kullanıcı")</span>
+                            </span>
+                            @if (item.AIModel != null || item.Assistant != null)
+                            {
+                                <span class="meta-divider">•</span>
+                                <span class="meta-tag" title="AI Modeli ve Asistan">
+                                    <i class="bi bi-cpu text-primary opacity-75"></i>
+                                    <span>@(item.AIModel?.Name ?? item.AIModel?.ProgrammaticName ?? "AI") @(item.Assistant != null ? $"· {item.Assistant.Name}" : "")</span>
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Right Side: Date & Sohbete Git Button (Spacious layout) -->
+                    <div class="d-flex align-items-center gap-3 flex-wrap ms-auto">
+                        <span class="date-chip">
+                            <i class="bi bi-clock me-1 opacity-75"></i>@(item.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")
+                        </span>
+                        <a href="chat/@item.ChatId" class="btn-goto-chat ms-md-2" title="Bu sohbetin tüm akışını ve konuşma geçmişini aç">
+                            <span>Sohbete Git</span>
+                            <i class="bi bi-arrow-up-right"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- 2. Customer Voice / Feedback Callout (If user wrote a comment) -->
+                @if (hasComment)
+                {
+                    <div class="customer-quote-box">
+                        <div class="quote-header">
+                            <i class="bi bi-chat-quote-fill quote-icon"></i>
+                            <span class="quote-title">MÜŞTERİ GERİ BİLDİRİMİ / ELEŞTİRİSİ</span>
+                        </div>
+                        <div class="quote-body">
+                            “@item.FeedbackReason”
+                        </div>
+                    </div>
+                }
+
+                <!-- 3. User Question / Prompt Flow Block -->
+                <div class="prompt-flow-block">
+                    <div class="prompt-flow-header">
+                        <span class="prompt-icon-badge"><i class="bi bi-question-lg"></i></span>
+                        <div class="prompt-flow-content">
+                            <span class="prompt-flow-label">Kullanıcı Sorusu:</span>
+                            <span class="prompt-flow-text">@promptText</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Generated SQL Queries & Multi-ERP Compliance -->
+                @if (sqlItems.Count > 0)
+                {
+                    <div class="sql-flow-container">
+                        @foreach (var sqlItem in sqlItems)
+                        {
+                            var compliance = MikroAuditEngine.EvaluateQuery(sqlItem.Sql, promptText, item.Chat?.Tenant?.Name);
+                            var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro v27";
+
+                            <div class="sql-flow-card">
+                                <div class="sql-flow-topbar">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <span class="terminal-dots">
+                                            <span class="dot red"></span>
+                                            <span class="dot yellow"></span>
+                                            <span class="dot green"></span>
+                                        </span>
+                                        <span class="sql-tag-title"><i class="bi bi-terminal-fill me-1 text-info opacity-75"></i>SQL Sorgusu</span>
+
+                                        <!-- Multi-ERP Compliance Badge (Only if Mikro/Logo query) -->
+                                        @if (compliance.IsMikroQuery)
+                                        {
+                                            <button type="button" class="compliance-chip" @onclick="() => OpenComplianceModal(compliance, sqlItem.Sql)" title="Detaylı ERP Uyum Raporunu İncele">
+                                                <span class="compliance-dot" style="background-color: @GetScoreColor(compliance.Score);"></span>
+                                                <span>@erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)</span>
+                                                <i class="bi bi-chevron-right ms-1 opacity-50" style="font-size: 0.65rem;"></i>
+                                            </button>
+                                        }
+
+                                        @if (!string.IsNullOrEmpty(item.ErrorMessage))
+                                        {
+                                            <span class="sql-status-badge error">
+                                                <i class="bi bi-exclamation-triangle-fill me-1"></i>SQL Hatası
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="sql-status-badge success">
+                                                <i class="bi bi-check2 me-1"></i>SQL Çalıştırıldı
+                                            </span>
+                                        }
+                                    </div>
+
+                                    <button class="btn-copy-sql" @onclick="() => CopySql(sqlItem.Sql)" title="SQL Panoya Kopyala">
+                                        <i class="bi bi-clipboard me-1"></i> Kopyala
+                                    </button>
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(sqlItem.Description))
+                                {
+                                    <div class="sql-desc-text">@sqlItem.Description</div>
+                                }
+
+                                <div class="sql-code-wrapper">
+                                    <code>@sqlItem.Sql</code>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- 5. Error Box (If any error occurred) -->
+                @if (!string.IsNullOrEmpty(item.ErrorMessage))
+                {
+                    <div class="error-alert-box">
+                        <div class="d-flex align-items-start gap-2.5">
+                            <i class="bi bi-exclamation-octagon-fill text-danger fs-5 mt-0.5 flex-shrink-0"></i>
+                            <div>
+                                <div class="fw-bold text-danger small text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Hata Detayı</div>
+                                <div class="font-monospace text-light small mt-1" style="white-space: pre-wrap; font-size: 0.825rem; line-height: 1.5;">@item.ErrorMessage</div>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- 6. AI Response (Clean Collapsible Accordion) -->
+                @if (!string.IsNullOrWhiteSpace(item.Message) || !string.IsNullOrWhiteSpace(item.Summary))
+                {
+                    var responseText = !string.IsNullOrWhiteSpace(item.Message) ? item.Message : item.Summary;
+                    var isExpanded = expandedMessageIds.Contains(item.Id);
+
+                    <div class="ai-response-accordion @(isExpanded ? "expanded" : "")">
+                        <div class="ai-response-bar cursor-pointer" @onclick="() => ToggleMessageExpansion(item.Id)">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="bi bi-stars text-primary fs-6"></i>
+                                <span class="ai-bar-title">AI YANITI</span>
+                                @if (item.TotalDurationMs.HasValue && item.TotalDurationMs > 0)
+                                {
+                                    <span class="duration-pill"><i class="bi bi-stopwatch me-1"></i>@(item.TotalDurationMs)ms</span>
+                                }
+                            </div>
+                            <div class="ai-toggle-hint">
+                                <span>@(isExpanded ? "Metni Gizle" : "Tüm Yanıtı Gör")</span>
+                                <i class="bi @(isExpanded ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                            </div>
+                        </div>
+
+                        @if (isExpanded)
+                        {
+                            <div class="ai-response-content">
+                                <div class="ai-markdown-view">
+                                    @responseText
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+<!-- Mikro / Multi-ERP Compliance Modal -->
+<ErpComplianceModal @bind-IsOpen="isComplianceModalOpen" Report="@selectedComplianceReport" TestedSql="@selectedTestedSql" />
+
+<style>
+    /* ==========================================================================
+       Feedback Hub Modern Design System
+       ========================================================================== */
+    
+    .feedback-card {
+        background: linear-gradient(180deg, rgba(17, 24, 39, 0.75) 0%, rgba(15, 23, 42, 0.85) 100%);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        padding: 1.25rem 1.5rem;
+        box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.4);
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+    }
+
+    .feedback-card:hover {
+        border-color: rgba(255, 255, 255, 0.16);
+        box-shadow: 0 14px 32px -6px rgba(0, 0, 0, 0.55);
+        transform: translateY(-2px);
+    }
+
+    .feedback-card-disliked {
+        border-left: 4px solid #f43f5e !important;
+    }
+
+    .feedback-card-liked {
+        border-left: 4px solid #10b981 !important;
+    }
+
+    .feedback-card-comment {
+        border-left: 4px solid #f59e0b !important;
+    }
+
+    /* Header & Meta */
+    .feedback-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 1rem;
+        margin-bottom: 1.15rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.35rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.775rem;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+    }
+
+    .status-pill-disliked {
+        background: rgba(244, 63, 94, 0.15);
+        border: 1px solid rgba(244, 63, 94, 0.45);
+        color: #fb7185;
+    }
+
+    .status-pill-liked {
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.45);
+        color: #34d399;
+    }
+
+    .status-pill-comment {
+        background: rgba(245, 158, 11, 0.15);
+        border: 1px solid rgba(245, 158, 11, 0.45);
+        color: #fbbf24;
+    }
+
+    .meta-tags-container {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.65rem;
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 0.35rem 0.9rem;
+        font-size: 0.825rem;
+        color: #94a3b8;
+    }
+
+    .meta-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        color: #cbd5e1;
+    }
+
+    .meta-divider {
+        color: rgba(255, 255, 255, 0.2);
+        font-size: 0.75rem;
+    }
+
+    .date-chip {
+        font-size: 0.825rem;
+        color: #94a3b8;
+        font-family: monospace;
+    }
+
+    .btn-goto-chat {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.18) 0%, rgba(99, 102, 241, 0.25) 100%);
+        border: 1px solid rgba(96, 165, 250, 0.45);
+        color: #bfdbfe;
+        padding: 0.4rem 1.05rem;
+        border-radius: 8px;
+        font-size: 0.825rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-goto-chat:hover {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.4) 0%, rgba(99, 102, 241, 0.55) 100%);
+        border-color: #60a5fa;
+        color: #ffffff;
+        box-shadow: 0 0 16px rgba(59, 130, 246, 0.45);
+        transform: translateY(-1px);
+    }
+
+    /* Customer Voice Quote Box */
+    .customer-quote-box {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.14) 0%, rgba(245, 158, 11, 0.07) 100%);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        border-radius: 10px;
+        padding: 0.9rem 1.15rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .quote-header {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        margin-bottom: 0.4rem;
+    }
+
+    .quote-icon {
+        font-size: 1.15rem;
+        color: #f87171;
+    }
+
+    .quote-title {
+        font-size: 0.725rem;
+        font-weight: 800;
+        letter-spacing: 0.6px;
+        color: #fca5a5;
+        text-transform: uppercase;
+    }
+
+    .quote-body {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #f8fafc;
+        padding-left: 1.6rem;
+        line-height: 1.55;
+    }
+
+    /* Prompt Flow Block */
+    .prompt-flow-block {
+        background: rgba(15, 23, 42, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .prompt-flow-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .prompt-icon-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 6px;
+        background: rgba(6, 182, 212, 0.18);
+        border: 1px solid rgba(6, 182, 212, 0.4);
+        color: #38bdf8;
+        font-size: 0.85rem;
+        font-weight: bold;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .prompt-flow-content {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .prompt-flow-label {
+        font-size: 0.725rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        color: #38bdf8;
+        text-transform: uppercase;
+    }
+
+    .prompt-flow-text {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #f1f5f9;
+        line-height: 1.5;
+    }
+
+    /* SQL Flow Terminal Box */
+    .sql-flow-container {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .sql-flow-card {
+        background: rgba(8, 12, 22, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .sql-flow-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 0.85rem;
+        background: rgba(15, 23, 42, 0.8);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .terminal-dots {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-right: 4px;
+    }
+
+    .terminal-dots .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .terminal-dots .dot.red { background: #ff5f56; }
+    .terminal-dots .dot.yellow { background: #ffbd2e; }
+    .terminal-dots .dot.green { background: #27c93f; }
+
+    .sql-tag-title {
+        font-size: 0.775rem;
+        font-weight: 700;
+        color: #94a3b8;
+        letter-spacing: 0.4px;
+    }
+
+    .compliance-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 9999px;
+        padding: 0.2rem 0.65rem;
+        font-size: 0.75rem;
+        color: #e2e8f0;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .compliance-chip:hover {
+        border-color: #60a5fa;
+        background: rgba(30, 41, 59, 0.95);
+        transform: scale(1.02);
+    }
+
+    .compliance-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .sql-status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.2rem 0.55rem;
+        border-radius: 6px;
+        font-size: 0.725rem;
+        font-weight: 600;
+    }
+
+    .sql-status-badge.success {
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.35);
+        color: #34d399;
+    }
+
+    .sql-status-badge.error {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #f87171;
+    }
+
+    .btn-copy-sql {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #94a3b8;
+        padding: 0.2rem 0.6rem;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        transition: all 0.2s;
+    }
+
+    .btn-copy-sql:hover {
+        background: rgba(255, 255, 255, 0.12);
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    .sql-desc-text {
+        padding: 0.5rem 0.85rem 0.2rem 0.85rem;
+        font-size: 0.825rem;
+        color: #94a3b8;
+        font-weight: 500;
+    }
+
+    .sql-code-wrapper {
+        padding: 0.65rem 0.85rem;
+        max-height: 160px;
+        overflow-y: auto;
+    }
+
+    .sql-code-wrapper code {
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 0.825rem;
+        color: #e2e8f0;
+        line-height: 1.5;
+        white-space: pre-wrap;
+    }
+
+    /* Error Alert */
+    .error-alert-box {
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1rem;
+    }
+
+    /* AI Response Accordion */
+    .ai-response-accordion {
+        background: rgba(15, 23, 42, 0.4);
+        border: 1px solid rgba(139, 92, 246, 0.18);
+        border-radius: 10px;
+        overflow: hidden;
+        transition: all 0.2s ease;
+    }
+
+    .ai-response-accordion.expanded {
+        border-color: rgba(139, 92, 246, 0.4);
+        background: rgba(15, 23, 42, 0.6);
+    }
+
+    .ai-response-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.65rem 1rem;
+        user-select: none;
+        transition: background 0.15s;
+    }
+
+    .ai-response-bar:hover {
+        background: rgba(139, 92, 246, 0.08);
+    }
+
+    .ai-bar-title {
+        font-size: 0.75rem;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        color: #c084fc;
+        text-transform: uppercase;
+    }
+
+    .duration-pill {
+        font-size: 0.75rem;
+        font-family: monospace;
+        color: #94a3b8;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 0.15rem 0.45rem;
+        border-radius: 4px;
+    }
+
+    .ai-toggle-hint {
+        font-size: 0.775rem;
+        color: #38bdf8;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .ai-response-content {
+        padding: 0.85rem 1rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .ai-markdown-view {
+        font-size: 0.875rem;
+        color: #cbd5e1;
+        line-height: 1.6;
+        white-space: pre-wrap;
+    }
+
+    .cursor-pointer {
+        cursor: pointer;
+    }
+</style>
+
+@code {
+    private List<OzBiChatMessage>? feedbackItems;
+    private List<TenantAuditSummary>? tenantsList;
+    private FeedbackAuditStats? stats;
+
+    private bool isLoading = true;
+    private string searchQuery = string.Empty;
+    private string selectedTenantId = string.Empty;
+    private string filterType = "disliked"; // "disliked", "comments_only", "all", "liked_only", "failed_disliked"
+
+    private HashSet<string> expandedMessageIds = new();
+
+    // Compliance Modal
+    private bool isComplianceModalOpen = false;
+    private MikroComplianceReport? selectedComplianceReport;
+    private string selectedTestedSql = string.Empty;
+
+    public class FeedSqlItem
+    {
+        public string Description { get; set; } = string.Empty;
+        public string Sql { get; set; } = string.Empty;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            tenantsList = await AuditService.GetTenantsSummaryAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error loading tenants for filter: " + ex.Message);
+        }
+
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            var tenantFilter = string.IsNullOrWhiteSpace(selectedTenantId) ? null : selectedTenantId;
+            stats = await AuditService.GetFeedbackStatsAsync(tenantFilter);
+            feedbackItems = await AuditService.GetCustomerFeedbacksAsync(
+                tenantId: tenantFilter,
+                searchTerm: searchQuery,
+                filterType: filterType,
+                maxResults: 150);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error loading feedbacks: " + ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SetFilterType(string newType)
+    {
+        filterType = newType;
+        await LoadData();
+    }
+
+    private async Task HandleSearch(KeyboardEventArgs e)
+    {
+        await LoadData();
+    }
+
+    private void ToggleMessageExpansion(string msgId)
+    {
+        if (expandedMessageIds.Contains(msgId))
+        {
+            expandedMessageIds.Remove(msgId);
+        }
+        else
+        {
+            expandedMessageIds.Add(msgId);
+        }
+    }
+
+    private void OpenComplianceModal(MikroComplianceReport report, string sql)
+    {
+        selectedComplianceReport = report;
+        selectedTestedSql = sql;
+        isComplianceModalOpen = true;
+    }
+
+    private string GetScoreColor(int score)
+    {
+        if (score >= 90) return "#10b981"; // Green
+        if (score >= 75) return "#3b82f6"; // Blue
+        if (score >= 60) return "#f59e0b"; // Yellow/Amber
+        return "#ef4444"; // Red
+    }
+
+    private async Task CopySql(string text)
+    {
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+    }
+
+    private List<FeedSqlItem> ExtractSqlItemsFromQuery(string? rawQuery)
+    {
+        var result = new List<FeedSqlItem>();
+        if (string.IsNullOrWhiteSpace(rawQuery)) return result;
+
+        var trimmed = rawQuery.Trim();
+
+        // Check if JSON array or JSON object
+        if ((trimmed.StartsWith("[") && trimmed.EndsWith("]")) || (trimmed.StartsWith("{") && trimmed.EndsWith("}")))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(trimmed);
+                if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var elem in doc.RootElement.EnumerateArray())
+                    {
+                        var item = ExtractFromElement(elem);
+                        if (item != null) result.Add(item);
+                    }
+                }
+                else if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    var item = ExtractFromElement(doc.RootElement);
+                    if (item != null) result.Add(item);
+                }
+            }
+            catch
+            {
+                // Fallback to raw string
+            }
+        }
+
+        if (result.Count == 0 && !string.IsNullOrWhiteSpace(trimmed))
+        {
+            result.Add(new FeedSqlItem
+            {
+                Description = string.Empty,
+                Sql = trimmed
+            });
+        }
+
+        return result;
+    }
+
+    private FeedSqlItem? ExtractFromElement(System.Text.Json.JsonElement elem)
+    {
+        string desc = string.Empty;
+        string sql = string.Empty;
+
+        if (TryGetJsonProp(elem, "description", out var val) ||
+            TryGetJsonProp(elem, "Description", out val) ||
+            TryGetJsonProp(elem, "summary", out val) ||
+            TryGetJsonProp(elem, "title", out val))
+        {
+            desc = val;
+        }
+
+        if (TryGetJsonProp(elem, "sql", out var sqlVal) ||
+            TryGetJsonProp(elem, "Sql", out sqlVal) ||
+            TryGetJsonProp(elem, "query", out sqlVal) ||
+            TryGetJsonProp(elem, "Query", out sqlVal) ||
+            TryGetJsonProp(elem, "tSql", out sqlVal))
+        {
+            sql = sqlVal;
+        }
+
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            if (elem.ValueKind == System.Text.Json.JsonValueKind.String)
+                sql = elem.GetString() ?? string.Empty;
+            else
+                sql = elem.GetRawText();
+        }
+
+        if (string.IsNullOrWhiteSpace(sql)) return null;
+
+        return new FeedSqlItem
+        {
+            Description = desc,
+            Sql = sql
+        };
+    }
+
+    private bool TryGetJsonProp(System.Text.Json.JsonElement elem, string propName, out string value)
+    {
+        value = string.Empty;
+        if (elem.ValueKind == System.Text.Json.JsonValueKind.Object && elem.TryGetProperty(propName, out var prop))
+        {
+            if (prop.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                value = prop.GetString() ?? string.Empty;
+                return !string.IsNullOrWhiteSpace(value);
+            }
+        }
+        return false;
+    }
+}

@@ -77,5 +77,23 @@ namespace OzBiPortalCRM.Services
         // Tenant Compliance Scorecard (Multi-ERP & Prompt Sync) Methods
         Task<TenantComplianceScorecard> GetTenantComplianceScorecardAsync(string tenantId, bool forceRefresh = false);
         Task<Dictionary<string, TenantComplianceSnapshot>> GetAllTenantComplianceSnapshotsAsync();
+
+        // Customer Feedbacks & Dislike Hub Methods
+        Task<List<OzBiChatMessage>> GetCustomerFeedbacksAsync(
+            string? tenantId = null,
+            string? searchTerm = null,
+            string? filterType = "disliked",
+            int maxResults = 150);
+        Task<FeedbackAuditStats> GetFeedbackStatsAsync(string? tenantId = null);
+    }
+
+    public class FeedbackAuditStats
+    {
+        public int TotalFeedbacks { get; set; }
+        public int DislikedCount { get; set; }
+        public int LikedCount { get; set; }
+        public int WithCommentCount { get; set; }
+        public int FailedAndDislikedCount { get; set; }
     }
 }
+

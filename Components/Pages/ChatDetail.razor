@@ -1,4 +1,5 @@
 @page "/chat/{ChatId}"
+@page "/chats/{ChatId}"
 @inject IOzBiAuditService AuditService
 @inject IMikroAuditEngine MikroAuditEngine
 @inject IJSRuntime JSRuntime
@@ -50,6 +51,20 @@
                         <div class="fs-5 fw-bold text-success">@TotalSqlCount</div>
                         <div class="text-muted small">Üretilen SQL</div>
                     </div>
+                    @if (DislikedCount > 0)
+                    {
+                        <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-danger border-opacity-30 px-3" style="background: rgba(239, 68, 68, 0.08);">
+                            <div class="fs-5 fw-bold text-danger"><i class="bi bi-hand-thumbs-down-fill me-1"></i>@DislikedCount</div>
+                            <div class="text-muted small">Beğenilmeyen</div>
+                        </div>
+                    }
+                    @if (LikedCount > 0)
+                    {
+                        <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-success border-opacity-30 px-3" style="background: rgba(16, 185, 129, 0.08);">
+                            <div class="fs-5 fw-bold text-success"><i class="bi bi-hand-thumbs-up-fill me-1"></i>@LikedCount</div>
+                            <div class="text-muted small">Beğenilen</div>
+                        </div>
+                    }
                 </div>
             </div>
         </div>
@@ -72,137 +87,242 @@ else if (messagesList == null || messagesList.Count == 0)
 }
 else
 {
-    <!-- Tab Switcher Header (Sorgu | Veri) -->
+    <!-- Tab Switcher Header (Agent Modu | Sorgu Modu) -->
     <div class="tab-container mb-4">
-        <button class="btn-tab @(activeTab == "sorgu" ? "active" : "")" @onclick='() => SetActiveTab("sorgu")'>
-            <i class="bi bi-code-slash me-1"></i> SQL Sorguları (@TotalSqlCount)
-        </button>
         <button class="btn-tab @(activeTab == "veri" ? "active" : "")" @onclick='() => SetActiveTab("veri")'>
-            <i class="bi bi-file-earmark-text me-1"></i> AI Yanıtları (@AiResponseCount)
+            <i class="bi bi-robot me-1.5" style="color: #c084fc;"></i> Agent Modu (@GetConversationTurns().Count)
+        </button>
+        <button class="btn-tab @(activeTab == "sorgu" ? "active" : "")" @onclick='() => SetActiveTab("sorgu")'>
+            <i class="bi bi-terminal-fill me-1.5" style="color: #38bdf8;"></i> Sorgu Modu (@TotalSqlCount)
         </button>
     </div>
 
-    @if (activeTab == "sorgu")
+    @if (activeTab == "veri")
     {
-        <!-- SORGU TAB: Grouped BY USER QUESTION / PROMPT -->
-        var questionGroups = GetQuestionSqlGroups();
+        <!-- VERİ / AKIŞ TAB: Unified Question & AI Response Turn Cards -->
+        var turns = GetConversationTurns();
 
-        if (questionGroups.Count == 0)
+        if (turns.Count == 0)
         {
             <div class="glass-card text-center py-5">
-                <i class="bi bi-code-slash text-muted" style="font-size: 3rem;"></i>
-                <h5 class="mt-3 text-muted">Bu sohbete ait üretilmiş SQL sorgusu bulunamadı</h5>
+                <i class="bi bi-chat-square-dots text-muted" style="font-size: 3rem;"></i>
+                <h5 class="mt-3 text-muted">Bu sohbete ait soru & yanıt kaydı bulunamadı</h5>
             </div>
         }
         else
         {
             <div class="d-flex flex-column gap-4">
-                @foreach (var qGroup in questionGroups)
+                @foreach (var turn in turns)
                 {
-                    <div class="glass-card border-primary border-opacity-30">
-                        <!-- User Question Group Header -->
-                        <div class="p-3 mb-3 rounded bg-black bg-opacity-40 border border-primary border-opacity-25 d-flex align-items-center justify-content-between flex-wrap gap-2">
-                            <div>
-                                <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
-                                    <span class="badge-status" style="background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(96, 165, 250, 0.5); color: #60a5fa; font-weight: 700;">
-                                        Soru #@qGroup.QuestionIndex
+                    var isTurnDisliked = turn.IsLiked == false;
+                    var isTurnLiked = turn.IsLiked == true;
+                    var hasTurnComment = !string.IsNullOrWhiteSpace(turn.FeedbackReason);
+                    var turnCardClass = isTurnDisliked ? "turn-card-disliked" : (isTurnLiked ? "turn-card-liked" : (hasTurnComment ? "turn-card-comment" : "turn-card-default"));
+
+                    <div class="turn-card @turnCardClass mb-3">
+                        <!-- Top Header Bar -->
+                        <div class="turn-card-header">
+                            <div class="d-flex align-items-center gap-3 flex-wrap">
+                                <!-- Turn Index -->
+                                <span class="turn-index-badge">
+                                    #@turn.TurnIndex Soru & Yanıt
+                                </span>
+
+                                <!-- Mode Badge -->
+                                @if (turn.IsAsistantMode)
+                                {
+                                    <span class="turn-mode-badge agent" title="Agent Modu: Doğal dil ile açıklama ve yanıt metni üretilir">
+                                        <i class="bi bi-robot me-1"></i> Agent Modu
                                     </span>
-
-                                    @if (qGroup.IsAsistantMode)
-                                    {
-                                        <span class="badge-status" style="background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(192, 132, 252, 0.4); color: #c084fc;" title="Agent Modu">
-                                            Agent Modu
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge-status" style="background: rgba(14, 165, 233, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;" title="Sorgu Modu (SQL Raporu)">
-                                            Sorgu Modu
-                                        </span>
-                                    }
-
-                                    @if (!string.IsNullOrEmpty(qGroup.AiModelName))
-                                    {
-                                        <span class="badge-status" style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(129, 140, 248, 0.4); color: #818cf8;" title="AI Modeli">
-                                            Model: @qGroup.AiModelName
-                                        </span>
-                                    }
-
-                                    @if (!string.IsNullOrEmpty(qGroup.AssistantName))
-                                    {
-                                        <span class="badge-status" style="background: rgba(20, 184, 166, 0.15); border: 1px solid rgba(45, 212, 191, 0.4); color: #2dd4bf;" title="Çalıştırılan Asistan">
-                                            Asistan: @qGroup.AssistantName
-                                        </span>
-                                    }
-
-                                    <span class="text-muted small ms-1">
-                                        <i class="bi bi-clock"></i> @(qGroup.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")
+                                }
+                                else
+                                {
+                                    <span class="turn-mode-badge query" title="Sorgu Modu (SQL Raporu): Doğrudan veritabanı sorgusu ve dinamik tablo üretilir">
+                                        <i class="bi bi-table me-1"></i> Sorgu Modu
                                     </span>
-                                </div>
-                                <div class="fs-6 fw-bold text-main">
-                                    <i class="bi bi-question-circle-fill text-info me-1"></i> @qGroup.QuestionText
+                                }
+
+                                <!-- Feedback Reaction Badge (If any) -->
+                                @if (isTurnDisliked)
+                                {
+                                    <span class="status-pill status-pill-disliked">
+                                        <i class="bi bi-hand-thumbs-down-fill me-1"></i> Beğenilmedi
+                                    </span>
+                                }
+                                else if (isTurnLiked)
+                                {
+                                    <span class="status-pill status-pill-liked">
+                                        <i class="bi bi-hand-thumbs-up-fill me-1"></i> Beğenildi
+                                    </span>
+                                }
+                                else if (hasTurnComment)
+                                {
+                                    <span class="status-pill status-pill-comment">
+                                        <i class="bi bi-chat-square-text-fill me-1"></i> Yorum Girildi
+                                    </span>
+                                }
+
+                                <!-- Metadata Group -->
+                                <div class="meta-tags-container">
+                                    <span class="meta-tag" title="Kullanıcı">
+                                        <i class="bi bi-person text-secondary opacity-75"></i>
+                                        <span>@turn.UserName</span>
+                                    </span>
+                                    @if (!string.IsNullOrEmpty(turn.AiModelName) || !string.IsNullOrEmpty(turn.AssistantName))
+                                    {
+                                        <span class="meta-divider">•</span>
+                                        <span class="meta-tag" title="Model & Asistan">
+                                            <i class="bi bi-cpu text-primary opacity-75"></i>
+                                            <span>@(turn.AiModelName ?? "AI") @(!string.IsNullOrEmpty(turn.AssistantName) ? $"· {turn.AssistantName}" : "")</span>
+                                        </span>
+                                    }
                                 </div>
                             </div>
 
-                            <span class="badge-status badge-success">
-                                @qGroup.SqlQueries.Count SQL Sorgusu Üretildi
-                            </span>
+                            <!-- Right Side: Duration & Timestamp (Spacious layout) -->
+                            <div class="d-flex align-items-center gap-3 flex-wrap ms-auto">
+                                @if (turn.TotalDurationMs.HasValue && turn.TotalDurationMs > 0)
+                                {
+                                    <span class="duration-pill"><i class="bi bi-stopwatch me-1 opacity-75"></i>@(turn.TotalDurationMs)ms</span>
+                                }
+                                <span class="date-chip">
+                                    <i class="bi bi-clock me-1 opacity-75"></i>@((turn.ResponseDate ?? turn.QuestionDate)?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")
+                                </span>
+                            </div>
                         </div>
 
-                        <!-- SQL Queries generated for THIS Question -->
-                        <div class="d-flex flex-column gap-3">
-                            @foreach (var sqlItem in qGroup.SqlQueries)
+                        <!-- Customer Voice / Feedback Callout (If customer wrote a comment) -->
+                        @if (hasTurnComment)
+                        {
+                            <div class="customer-quote-box">
+                                <div class="quote-header">
+                                    <i class="bi bi-chat-quote-fill quote-icon"></i>
+                                    <span class="quote-title">MÜŞTERİ GERİ BİLDİRİMİ / ELEŞTİRİSİ</span>
+                                </div>
+                                <div class="quote-body">
+                                    “@turn.FeedbackReason”
+                                </div>
+                            </div>
+                        }
+
+                        <!-- 1. KULLANICI SORUSU (Prompt) -->
+                        <div class="prompt-flow-block">
+                            <div class="prompt-flow-header">
+                                <span class="prompt-icon-badge"><i class="bi bi-question-lg"></i></span>
+                                <div class="prompt-flow-content">
+                                    <span class="prompt-flow-label">Kullanıcı Sorusu:</span>
+                                    <span class="prompt-flow-text">@turn.UserQuestion</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. AI YANITI & ÇIKTISI (In the same card) -->
+                        <div class="turn-ai-response-container">
+                            <div class="turn-ai-header mb-2.5">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-stars text-primary fs-5"></i>
+                                    <span class="turn-ai-title">AI YANITI & ÇIKTISI</span>
+                                </div>
+                                @if (turn.SqlQueries.Count > 0)
+                                {
+                                    <span class="badge-status" style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(52, 211, 153, 0.3); color: #34d399; font-size: 0.725rem;">
+                                        <i class="bi bi-database-check me-1"></i> @turn.SqlQueries.Count SQL Sorgusu Üretildi
+                                    </span>
+                                }
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(turn.AiMessage))
                             {
-                                var compliance = MikroAuditEngine.EvaluateQuery(sqlItem.Sql, qGroup.QuestionText, chat?.Tenant?.Name);
+                                <div class="ai-markdown-view mb-3">
+                                    @turn.AiMessage
+                                </div>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(turn.AiSummary))
+                            {
+                                <div class="ai-markdown-view mb-3">
+                                    @turn.AiSummary
+                                </div>
+                            }
 
-                                <div class="p-3 rounded bg-black bg-opacity-20 border border-secondary border-opacity-25">
-                                    @if (!string.IsNullOrEmpty(sqlItem.Description))
+                            <!-- Generated SQL Queries for this Turn -->
+                            @if (turn.SqlQueries.Count > 0)
+                            {
+                                <div class="sql-flow-container">
+                                    @foreach (var sqlItem in turn.SqlQueries)
                                     {
-                                        <div class="text-main fw-semibold mb-2" style="font-size: 0.9rem;">
-                                            @sqlItem.Description
-                                        </div>
-                                    }
+                                        var compliance = MikroAuditEngine.EvaluateQuery(sqlItem.Sql, turn.UserQuestion, chat?.Tenant?.Name);
+                                        var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro v27";
 
-                                    <div class="sql-header py-2 px-3">
-                                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                                            <span class="badge-status" style="background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-family: monospace;">
-                                                Sorgu #@qGroup.QuestionIndex.@sqlItem.SubIndex
-                                            </span>
-
-                                            <!-- Multi-ERP Compliance Score Badge (Mikro / Logo) -->
-                                            @if (compliance.IsMikroQuery)
-                                            {
-                                                var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro v27";
-                                                <button type="button" class="btn btn-sm p-0 border-0 bg-transparent text-decoration-none" @onclick="() => OpenComplianceModal(compliance, sqlItem.Sql)">
-                                                    <span class="badge-status" style="background: rgba(15, 23, 42, 0.8); border: 1px solid @GetScoreColor(compliance.Score); color: @GetScoreColor(compliance.Score); cursor: pointer;" title="Detaylı ERP Uyum Raporu İçin Tıklayın">
-                                                        @erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)
+                                        <div class="sql-flow-card">
+                                            <div class="sql-flow-topbar">
+                                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                    <span class="terminal-dots">
+                                                        <span class="dot red"></span>
+                                                        <span class="dot yellow"></span>
+                                                        <span class="dot green"></span>
                                                     </span>
+                                                    <span class="sql-tag-title"><i class="bi bi-terminal-fill me-1 text-info opacity-75"></i>SQL Sorgusu</span>
+
+                                                    @if (compliance.IsMikroQuery)
+                                                    {
+                                                        <button type="button" class="compliance-chip" @onclick="() => OpenComplianceModal(compliance, sqlItem.Sql)" title="Detaylı ERP Uyum Raporunu İncele">
+                                                            <span class="compliance-dot" style="background-color: @GetScoreColor(compliance.Score);"></span>
+                                                            <span>@erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)</span>
+                                                            <i class="bi bi-chevron-right ms-1 opacity-50" style="font-size: 0.65rem;"></i>
+                                                        </button>
+                                                    }
+
+                                                    @if (!string.IsNullOrEmpty(sqlItem.ErrorMessage) || !string.IsNullOrEmpty(turn.ErrorMessage))
+                                                    {
+                                                        <span class="sql-status-badge error">
+                                                            <i class="bi bi-exclamation-triangle-fill me-1"></i> SQL Hatası
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="sql-status-badge success">
+                                                            <i class="bi bi-check2 me-1"></i> SQL Çalıştırıldı
+                                                        </span>
+                                                    }
+                                                </div>
+
+                                                <button class="btn-copy-sql" @onclick="() => CopySql(sqlItem.Sql)" title="SQL Panoya Kopyala">
+                                                    <i class="bi bi-clipboard me-1"></i> Kopyala
                                                 </button>
+                                            </div>
+
+                                            @if (!string.IsNullOrEmpty(sqlItem.Description))
+                                            {
+                                                <div class="sql-desc-text">@sqlItem.Description</div>
                                             }
 
-                                            @if (sqlItem.IsSucceeded)
-                                            {
-                                                <span class="badge-status badge-success ms-1">Başarılı</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="badge-status badge-danger ms-1">Sorgu Hatalı</span>
-                                            }
-                                        </div>
-                                        <button class="btn-copy" @onclick="() => CopySql(sqlItem.Sql)">
-                                            <i class="bi bi-clipboard"></i> SQL Kopyala
-                                        </button>
-                                    </div>
-                                    <div class="sql-code-block">
-                                        <code>@sqlItem.Sql</code>
-                                    </div>
-
-                                    @if (!string.IsNullOrEmpty(sqlItem.ErrorMessage))
-                                    {
-                                        <div class="p-2.5 mt-2 rounded bg-danger bg-opacity-10 border border-danger border-opacity-20 text-danger small font-monospace">
-                                            <i class="bi bi-exclamation-triangle-fill me-1"></i> <strong>Hata Detayı:</strong> @sqlItem.ErrorMessage
+                                            <div class="sql-code-wrapper">
+                                                <code>@sqlItem.Sql</code>
+                                            </div>
                                         </div>
                                     }
+                                </div>
+                            }
+                            else if (string.IsNullOrWhiteSpace(turn.AiMessage) && string.IsNullOrWhiteSpace(turn.AiSummary))
+                            {
+                                <div class="p-3 rounded-3" style="background: rgba(14, 165, 233, 0.06); border: 1px solid rgba(56, 189, 248, 0.2);">
+                                    <div class="text-info small fw-semibold">
+                                        <i class="bi bi-info-circle me-1"></i> Bu soru için doğrudan dinamik tablo raporu üretilmiş ve kullanıcı ekranında gösterilmiştir.
+                                    </div>
+                                </div>
+                            }
+
+                            <!-- Error Box (If any) -->
+                            @if (!string.IsNullOrEmpty(turn.ErrorMessage))
+                            {
+                                <div class="error-alert-box mt-2.5">
+                                    <div class="d-flex align-items-start gap-2.5">
+                                        <i class="bi bi-exclamation-octagon-fill text-danger fs-5 mt-0.5 flex-shrink-0"></i>
+                                        <div>
+                                            <div class="fw-bold text-danger small text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Hata Detayı</div>
+                                            <div class="font-monospace text-light small mt-1" style="white-space: pre-wrap; font-size: 0.825rem; line-height: 1.5;">@turn.ErrorMessage</div>
+                                        </div>
+                                    </div>
                                 </div>
                             }
                         </div>
@@ -211,161 +331,217 @@ else
             </div>
         }
     }
-    else if (activeTab == "veri")
+    else if (activeTab == "sorgu")
     {
-        <!-- VERİ TAB: Displays User Prompts & AI Analysis Response Text -->
-        <div class="d-flex flex-column gap-4">
-            @foreach (var (msg, index) in messagesList.Select((m, i) => (m, i + 1)))
-            {
-                var isUser = msg.Role?.ToLower() == "user";
-                var cardBorderClass = isUser ? "border-start border-4 border-info" : "border-start border-4 border-primary";
-                var cardBgStyle = isUser ? "background: linear-gradient(135deg, rgba(6, 182, 212, 0.04) 0%, rgba(15, 23, 42, 0.65) 100%);" : "background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(15, 23, 42, 0.65) 100%);";
-                var modelName = msg.AIModel?.Name ?? msg.AIModel?.ProgrammaticName ?? messagesList.FirstOrDefault(m => m.AIModel != null)?.AIModel?.Name;
-                var assistantName = msg.Assistant?.Name ?? messagesList.FirstOrDefault(m => m.Assistant != null)?.Assistant?.Name;
+        <!-- SORGU MODU TAB: Dedicated SQL Audit View with Identical Executive UI/UX -->
+        var questionGroups = GetQuestionSqlGroups();
 
-                <div class="glass-card @cardBorderClass p-3.5 p-md-4" style="@cardBgStyle">
-                    <!-- Log Card Top Bar -->
-                    <div class="d-flex align-items-center justify-content-between mb-3.5 flex-wrap gap-2 pb-3 border-bottom border-secondary border-opacity-20">
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                            <!-- Log Index Badge -->
-                            <span class="badge-status" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); color: #e2e8f0; font-family: monospace;">
-                                #@index Log Kaydı
-                            </span>
+        if (questionGroups.Count == 0)
+        {
+            <div class="glass-card text-center py-5">
+                <i class="bi bi-terminal-x text-muted" style="font-size: 3rem;"></i>
+                <h5 class="mt-3 text-muted">Bu sohbete ait üretilmiş SQL sorgusu bulunamadı</h5>
+            </div>
+        }
+        else
+        {
+            <div class="d-flex flex-column gap-4">
+                @foreach (var qGroup in questionGroups)
+                {
+                    var isGroupDisliked = qGroup.IsLiked == false;
+                    var isGroupLiked = qGroup.IsLiked == true;
+                    var hasGroupComment = !string.IsNullOrWhiteSpace(qGroup.FeedbackReason);
+                    var turnCardClass = isGroupDisliked ? "turn-card-disliked" : (isGroupLiked ? "turn-card-liked" : (hasGroupComment ? "turn-card-comment" : "turn-card-default"));
 
-                            <!-- Role Badge -->
-                            @if (isUser)
-                            {
-                                <span class="badge-status" style="background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.35); color: #38bdf8;">
-                                    Kullanıcı Sorusu
+                    <div class="turn-card @turnCardClass mb-3">
+                        <!-- Top Header Bar -->
+                        <div class="turn-card-header">
+                            <div class="d-flex align-items-center gap-3 flex-wrap">
+                                <!-- Question Index -->
+                                <span class="turn-index-badge">
+                                    #@qGroup.QuestionIndex Soru & SQL
                                 </span>
-                            }
-                            else
-                            {
-                                <span class="badge-status" style="background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.35); color: #c084fc;">
-                                    AI Yanıtı
-                                </span>
-                            }
 
-                            <!-- Mode Badge (Sorgu Modu vs Agent Modu) -->
-                            @if (msg.IsAssistantModeEffective)
-                            {
-                                <span class="badge-status" style="background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(192, 132, 252, 0.4); color: #c084fc;" title="Agent Modu: Doğal dil ile açıklama ve yanıt metni üretilir">
-                                    Agent Modu
-                                </span>
-                            }
-                            else
-                            {
-                                <span class="badge-status" style="background: rgba(14, 165, 233, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;" title="Sorgu Modu (SQL Raporu): Doğrudan veritabanı sorgusu ve tablo üretir">
-                                    Sorgu Modu
-                                </span>
-                            }
-                        </div>
-
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                            @if (!string.IsNullOrEmpty(modelName))
-                            {
-                                <span class="badge-status" style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(129, 140, 248, 0.4); color: #818cf8;" title="AI Modeli">
-                                    Model: @modelName
-                                </span>
-                            }
-                            @if (!string.IsNullOrEmpty(assistantName))
-                            {
-                                <span class="badge-status" style="background: rgba(20, 184, 166, 0.15); border: 1px solid rgba(45, 212, 191, 0.4); color: #2dd4bf;" title="Asistan">
-                                    Asistan: @assistantName
-                                </span>
-                            }
-                            <span class="text-muted small"><i class="bi bi-clock"></i> @(msg.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")</span>
-                        </div>
-                    </div>
-
-                    <!-- Kullanıcı Sorusu (Prompt) -->
-                    @if (!string.IsNullOrEmpty(msg.Prompt) || (isUser && !string.IsNullOrEmpty(msg.Message)))
-                    {
-                        <div class="p-3 mb-3 rounded-3" style="background: rgba(6, 182, 212, 0.05); border: 1px solid rgba(6, 182, 212, 0.2);">
-                            <div class="text-info small fw-bold mb-1.5 text-uppercase d-flex align-items-center gap-2" style="letter-spacing: 0.5px; font-size: 0.725rem;">
-                                <i class="bi bi-chat-left-text-fill text-info fs-6"></i>
-                                <span>KULLANICI SORUSU</span>
-                            </div>
-                            <div class="text-main fw-semibold" style="white-space: pre-wrap; font-size: 0.95rem; line-height: 1.55;">
-                                @(string.IsNullOrEmpty(msg.Prompt) ? msg.Message : msg.Prompt)
-                            </div>
-                        </div>
-                    }
-
-                    <!-- AI Yanıtı Block -->
-                    @if (!isUser)
-                    {
-                        <div class="p-3.5 rounded-3" style="background: rgba(15, 23, 42, 0.45); border: 1px solid rgba(139, 92, 246, 0.25);">
-                            <!-- AI Response Header Row -->
-                            <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom border-secondary border-opacity-20 flex-wrap gap-2">
-                                <div class="d-flex align-items-center gap-2">
-                                    <i class="bi bi-stars text-primary fs-5"></i>
-                                    <span class="fw-bold text-main text-uppercase" style="letter-spacing: 0.5px; font-size: 0.78rem;">AI YANITI</span>
-                                </div>
-                                @if (msg.TotalDurationMs.HasValue && msg.TotalDurationMs > 0)
+                                <!-- Mode Badge -->
+                                @if (qGroup.IsAsistantMode)
                                 {
-                                    <span class="text-muted small font-monospace"><i class="bi bi-stopwatch me-1 text-primary opacity-75"></i>@(msg.TotalDurationMs)ms</span>
+                                    <span class="turn-mode-badge agent" title="Agent Modu: Doğal dil ile açıklama ve yanıt metni üretilir">
+                                        <i class="bi bi-robot me-1"></i> Agent Modu
+                                    </span>
                                 }
-                            </div>
+                                else
+                                {
+                                    <span class="turn-mode-badge query" title="Sorgu Modu (SQL Raporu): Doğrudan veritabanı sorgusu ve dinamik tablo üretilir">
+                                        <i class="bi bi-table me-1"></i> Sorgu Modu
+                                    </span>
+                                }
 
-                            @if (!string.IsNullOrWhiteSpace(msg.Message))
-                            {
-                                <div class="text-main" style="white-space: pre-wrap; font-size: 0.935rem; line-height: 1.6;">
-                                    @msg.Message
-                                </div>
-                            }
-                            else if (!string.IsNullOrWhiteSpace(msg.Summary))
-                            {
-                                <div class="text-main" style="white-space: pre-wrap; font-size: 0.935rem; line-height: 1.6;">
-                                    @msg.Summary
-                                </div>
-                            }
-                            else if (!msg.IsAssistantModeEffective)
-                            {
-                                <!-- Polished Sorgu Modu Info Box -->
-                                <div class="p-4 rounded-3" style="background: linear-gradient(135deg, rgba(14, 165, 233, 0.08) 0%, rgba(15, 23, 42, 0.7) 100%); border: 1px solid rgba(56, 189, 248, 0.25);">
-                                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-                                        <span class="badge-status" style="background: rgba(14, 165, 233, 0.18); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); font-size: 0.725rem; letter-spacing: 0.5px;">
-                                            SORGU MODU — TABLO RAPORU ÜRETİLDİ
-                                        </span>
-                                        @if (!string.IsNullOrWhiteSpace(msg.Query))
-                                        {
-                                            <span class="badge-status" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(52, 211, 153, 0.4); color: #34d399;">
-                                                SQL Sorgusu Üretildi
-                                            </span>
-                                        }
-                                    </div>
-                                    <div class="text-main small mb-3" style="line-height: 1.65; font-size: 0.875rem; opacity: 0.92;">
-                                        Bu soru <strong>Sorgu Modu</strong>'nda sorulmuştur. Sorgu modında OzBI uygulaması doğrudan SQL sorgusu çalıştırarak dinamik tablo raporu üretir. Veritabanında doğal dil yanıt metni (<code>Message</code>) saklanması beklenmez; <u>bu durum bir hata değildir</u>.
-                                    </div>
-                                    @if (!string.IsNullOrWhiteSpace(msg.Query))
+                                <!-- Feedback Reaction Badge (If any) -->
+                                @if (isGroupDisliked)
+                                {
+                                    <span class="status-pill status-pill-disliked">
+                                        <i class="bi bi-hand-thumbs-down-fill me-1"></i> Beğenilmedi
+                                    </span>
+                                }
+                                else if (isGroupLiked)
+                                {
+                                    <span class="status-pill status-pill-liked">
+                                        <i class="bi bi-hand-thumbs-up-fill me-1"></i> Beğenildi
+                                    </span>
+                                }
+                                else if (hasGroupComment)
+                                {
+                                    <span class="status-pill status-pill-comment">
+                                        <i class="bi bi-chat-square-text-fill me-1"></i> Yorum Girildi
+                                    </span>
+                                }
+
+                                <!-- Metadata Group -->
+                                <div class="meta-tags-container">
+                                    <span class="meta-tag" title="Kullanıcı">
+                                        <i class="bi bi-person text-secondary opacity-75"></i>
+                                        <span>@(chat?.CreatedByUser?.NameSurname ?? chat?.CreatedByUser?.Email ?? "Kullanıcı")</span>
+                                    </span>
+                                    @if (!string.IsNullOrEmpty(qGroup.AiModelName) || !string.IsNullOrEmpty(qGroup.AssistantName))
                                     {
-                                        <div class="pt-3 mt-3 border-top border-info border-opacity-20 d-flex justify-content-end">
-                                            <button class="btn btn-sm btn-outline-info px-3 py-1.5 fw-semibold d-inline-flex align-items-center gap-1.5" @onclick='() => SetActiveTab("sorgu")' style="font-size: 0.8rem; border-radius: 6px;">
-                                                <i class="bi bi-code-slash"></i> SQL Sorguları Sekmesine Git
-                                            </button>
-                                        </div>
+                                        <span class="meta-divider">•</span>
+                                        <span class="meta-tag" title="Model & Asistan">
+                                            <i class="bi bi-cpu text-primary opacity-75"></i>
+                                            <span>@(qGroup.AiModelName ?? "AI") @(!string.IsNullOrEmpty(qGroup.AssistantName) ? $"· {qGroup.AssistantName}" : "")</span>
+                                        </span>
                                     }
                                 </div>
-                            }
-                            else
-                            {
-                                <!-- Polished Agent Modu Warning Box -->
-                                <div class="p-3.5 rounded-3" style="background: linear-gradient(135deg, rgba(234, 179, 8, 0.08) 0%, rgba(15, 23, 42, 0.7) 100%); border: 1px solid rgba(245, 158, 11, 0.3);">
-                                    <div class="d-flex align-items-center gap-2 text-warning small fw-bold mb-1.5">
-                                        <i class="bi bi-exclamation-triangle-fill fs-6"></i>
-                                        <span>Agent Modu — Yanıt Metni Eksik</span>
-                                    </div>
-                                    <div class="text-main small opacity-90" style="line-height: 1.55; font-size: 0.875rem;">
-                                        Bu istek <strong>Agent Modu</strong>'nda sorulmuştur fakat AI doğal dil yanıt metni veritabanına boş kaydedilmiştir (Ana OzBI uygulamasındaki kayıt aşamasında <code>Message</code> alanı doldurulmamış).
-                                    </div>
-                                </div>
-                            }
+                            </div>
+
+                            <!-- Right Side: Date & Sql Count -->
+                            <div class="d-flex align-items-center gap-3 flex-wrap ms-auto">
+                                <span class="badge-status" style="background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; font-size: 0.775rem; font-weight: 700;">
+                                    <i class="bi bi-database-check me-1"></i> @qGroup.SqlQueries.Count SQL Sorgusu
+                                </span>
+                                <span class="date-chip">
+                                    <i class="bi bi-clock me-1 opacity-75"></i>@(qGroup.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")
+                                </span>
+                            </div>
                         </div>
-                    }
-                </div>
-            }
-        </div>
+
+                        <!-- Customer Voice / Feedback Callout (If customer wrote a comment) -->
+                        @if (hasGroupComment)
+                        {
+                            <div class="customer-quote-box">
+                                <div class="quote-header">
+                                    <i class="bi bi-chat-quote-fill quote-icon"></i>
+                                    <span class="quote-title">MÜŞTERİ GERİ BİLDİRİMİ / ELEŞTİRİSİ</span>
+                                </div>
+                                <div class="quote-body">
+                                    “@qGroup.FeedbackReason”
+                                </div>
+                            </div>
+                        }
+
+                        <!-- 1. KULLANICI SORUSU (Prompt Flow Block) -->
+                        <div class="prompt-flow-block">
+                            <div class="prompt-flow-header">
+                                <span class="prompt-icon-badge"><i class="bi bi-question-lg"></i></span>
+                                <div class="prompt-flow-content">
+                                    <span class="prompt-flow-label">Kullanıcı Sorusu:</span>
+                                    <span class="prompt-flow-text">@qGroup.QuestionText</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. ÜRETİLEN SQL SORGULARI & ERP DENETİMİ -->
+                        <div class="turn-ai-response-container">
+                            <div class="turn-ai-header mb-2.5">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-terminal-fill text-info fs-5"></i>
+                                    <span class="turn-ai-title" style="color: #38bdf8;">ÜRETİLEN SQL SORGULARI & ERP DENETİMİ</span>
+                                </div>
+                                <span class="badge-status" style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(52, 211, 153, 0.3); color: #34d399; font-size: 0.725rem;">
+                                    <i class="bi bi-shield-check me-1"></i> @qGroup.SqlQueries.Count Sorgu Doğrulandı
+                                </span>
+                            </div>
+
+                            <div class="sql-flow-container">
+                                @foreach (var sqlItem in qGroup.SqlQueries)
+                                {
+                                    var compliance = MikroAuditEngine.EvaluateQuery(sqlItem.Sql, qGroup.QuestionText, chat?.Tenant?.Name);
+                                    var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro v27";
+
+                                    <div class="sql-flow-card">
+                                        <div class="sql-flow-topbar">
+                                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                <span class="terminal-dots">
+                                                    <span class="dot red"></span>
+                                                    <span class="dot yellow"></span>
+                                                    <span class="dot green"></span>
+                                                </span>
+                                                <span class="sql-tag-title">
+                                                    <i class="bi bi-terminal-fill me-1 text-info opacity-75"></i>Sorgu #@qGroup.QuestionIndex.@sqlItem.SubIndex
+                                                </span>
+
+                                                @if (compliance.IsMikroQuery)
+                                                {
+                                                    <button type="button" class="compliance-chip" @onclick="() => OpenComplianceModal(compliance, sqlItem.Sql)" title="Detaylı ERP Uyum Raporunu İncele">
+                                                        <span class="compliance-dot" style="background-color: @GetScoreColor(compliance.Score);"></span>
+                                                        <span>@erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)</span>
+                                                        <i class="bi bi-chevron-right ms-1 opacity-50" style="font-size: 0.65rem;"></i>
+                                                    </button>
+                                                }
+
+                                                @if (!string.IsNullOrEmpty(sqlItem.ErrorMessage))
+                                                {
+                                                    <span class="sql-status-badge error">
+                                                        <i class="bi bi-exclamation-triangle-fill me-1"></i> SQL Hatası
+                                                    </span>
+                                                }
+                                                else if (sqlItem.IsSucceeded)
+                                                {
+                                                    <span class="sql-status-badge success">
+                                                        <i class="bi bi-check2 me-1"></i> SQL Başarılı
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="sql-status-badge success">
+                                                        <i class="bi bi-check2 me-1"></i> SQL Çalıştırıldı
+                                                    </span>
+                                                }
+                                            </div>
+
+                                            <button class="btn-copy-sql" @onclick="() => CopySql(sqlItem.Sql)" title="SQL Panoya Kopyala">
+                                                <i class="bi bi-clipboard me-1"></i> Kopyala
+                                            </button>
+                                        </div>
+
+                                        @if (!string.IsNullOrEmpty(sqlItem.Description))
+                                        {
+                                            <div class="sql-desc-text">@sqlItem.Description</div>
+                                        }
+
+                                        <div class="sql-code-wrapper">
+                                            <code>@sqlItem.Sql</code>
+                                        </div>
+
+                                        @if (!string.IsNullOrEmpty(sqlItem.ErrorMessage))
+                                        {
+                                            <div class="error-alert-box mt-2.5">
+                                                <div class="d-flex align-items-start gap-2.5">
+                                                    <i class="bi bi-exclamation-octagon-fill text-danger fs-5 mt-0.5 flex-shrink-0"></i>
+                                                    <div>
+                                                        <div class="fw-bold text-danger small text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Hata Detayı</div>
+                                                        <div class="font-monospace text-light small mt-1" style="white-space: pre-wrap; font-size: 0.825rem; line-height: 1.5;">@sqlItem.ErrorMessage</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
     }
 }
 
@@ -379,7 +555,7 @@ else
     private OzBiChat? chat;
     private List<OzBiChatMessage>? messagesList;
     private bool isLoading = true;
-    private string activeTab = "sorgu";
+    private string activeTab = "veri";
 
     private bool isComplianceModalOpen = false;
     private MikroComplianceReport? selectedComplianceReport;
@@ -390,6 +566,32 @@ else
     private int QueryModeCount => messagesList?.Count(m => !m.IsAssistantModeEffective && m.Role?.ToLower() != "user") ?? 0;
     private int AssistantModeCount => messagesList?.Count(m => m.IsAssistantModeEffective && m.Role?.ToLower() != "user") ?? 0;
     private int TotalSqlCount => GetQuestionSqlGroups().Sum(g => g.SqlQueries.Count);
+    private int DislikedCount => messagesList?.Count(m => m.IsLiked == false) ?? 0;
+    private int LikedCount => messagesList?.Count(m => m.IsLiked == true) ?? 0;
+    private int FeedbackCommentCount => messagesList?.Count(m => !string.IsNullOrEmpty(m.FeedbackReason)) ?? 0;
+
+    public class ConversationTurn
+    {
+        public int TurnIndex { get; set; }
+        public string UserQuestion { get; set; } = string.Empty;
+        public DateTime? QuestionDate { get; set; }
+        public string? UserName { get; set; }
+
+        public string? AiMessage { get; set; }
+        public string? AiSummary { get; set; }
+        public string? RawQuery { get; set; }
+        public List<SqlLogItem> SqlQueries { get; set; } = new();
+        public bool IsAsistantMode { get; set; }
+        public string? AssistantName { get; set; }
+        public string? AiModelName { get; set; }
+        public long? TotalDurationMs { get; set; }
+        public DateTime? ResponseDate { get; set; }
+        public bool IsSucceeded { get; set; } = true;
+        public string? ErrorMessage { get; set; }
+
+        public bool? IsLiked { get; set; }
+        public string? FeedbackReason { get; set; }
+    }
 
     public class QuestionSqlGroup
     {
@@ -399,6 +601,8 @@ else
         public string? AssistantName { get; set; }
         public string? AiModelName { get; set; }
         public DateTime? DateCreated { get; set; }
+        public bool? IsLiked { get; set; }
+        public string? FeedbackReason { get; set; }
         public List<SqlLogItem> SqlQueries { get; set; } = new();
     }
 
@@ -454,6 +658,104 @@ else
         return "#ef4444"; // Red
     }
 
+    private List<ConversationTurn> GetConversationTurns()
+    {
+        var turns = new List<ConversationTurn>();
+        if (messagesList == null || messagesList.Count == 0) return turns;
+
+        ConversationTurn? currentTurn = null;
+        int turnCounter = 0;
+
+        foreach (var msg in messagesList.OrderBy(m => m.DateCreated))
+        {
+            bool isUserRole = msg.Role?.ToLower() == "user";
+            var promptText = !string.IsNullOrWhiteSpace(msg.Prompt) 
+                ? msg.Prompt 
+                : (isUserRole ? msg.Message : null);
+
+            if (!string.IsNullOrWhiteSpace(promptText))
+            {
+                turnCounter++;
+                currentTurn = new ConversationTurn
+                {
+                    TurnIndex = turnCounter,
+                    UserQuestion = promptText,
+                    QuestionDate = msg.DateCreated,
+                    UserName = chat?.CreatedByUser?.NameSurname ?? chat?.CreatedByUser?.Email ?? "Kullanıcı",
+                    IsLiked = msg.IsLiked,
+                    FeedbackReason = msg.FeedbackReason,
+                    IsAsistantMode = msg.IsAssistantModeEffective,
+                    AssistantName = msg.Assistant?.Name,
+                    AiModelName = msg.AIModel?.Name ?? msg.AIModel?.ProgrammaticName
+                };
+                turns.Add(currentTurn);
+            }
+
+            if (currentTurn != null)
+            {
+                if (msg.IsLiked.HasValue) currentTurn.IsLiked = msg.IsLiked;
+                if (!string.IsNullOrEmpty(msg.FeedbackReason)) currentTurn.FeedbackReason = msg.FeedbackReason;
+                if (msg.IsAssistantModeEffective) currentTurn.IsAsistantMode = true;
+                if (!string.IsNullOrEmpty(msg.Assistant?.Name)) currentTurn.AssistantName = msg.Assistant.Name;
+                if (!string.IsNullOrEmpty(msg.AIModel?.Name ?? msg.AIModel?.ProgrammaticName)) 
+                    currentTurn.AiModelName = msg.AIModel?.Name ?? msg.AIModel?.ProgrammaticName;
+                
+                if (!isUserRole)
+                {
+                    if (!string.IsNullOrWhiteSpace(msg.Message)) currentTurn.AiMessage = msg.Message;
+                    if (!string.IsNullOrWhiteSpace(msg.Summary)) currentTurn.AiSummary = msg.Summary;
+                    if (msg.TotalDurationMs.HasValue && msg.TotalDurationMs > 0) currentTurn.TotalDurationMs = msg.TotalDurationMs;
+                    if (msg.DateCreated.HasValue) currentTurn.ResponseDate = msg.DateCreated;
+                    if (!string.IsNullOrEmpty(msg.ErrorMessage)) currentTurn.ErrorMessage = msg.ErrorMessage;
+                    
+                    if (!string.IsNullOrWhiteSpace(msg.Query))
+                    {
+                        currentTurn.RawQuery = msg.Query;
+                        var extracted = ExtractSqlItemsFromQuery(msg.Query, msg.IsSucceeded, msg.ErrorMessage);
+                        foreach (var sql in extracted)
+                        {
+                            if (!currentTurn.SqlQueries.Any(s => s.Sql == sql.Sql))
+                            {
+                                sql.SubIndex = currentTurn.SqlQueries.Count + 1;
+                                currentTurn.SqlQueries.Add(sql);
+                            }
+                        }
+                    }
+                }
+            }
+            else if (!isUserRole)
+            {
+                // Standalone AI message without preceding user prompt
+                turnCounter++;
+                currentTurn = new ConversationTurn
+                {
+                    TurnIndex = turnCounter,
+                    UserQuestion = chat?.Title ?? "Sohbet Talebi",
+                    QuestionDate = msg.DateCreated,
+                    UserName = chat?.CreatedByUser?.NameSurname ?? chat?.CreatedByUser?.Email ?? "Kullanıcı",
+                    AiMessage = msg.Message,
+                    AiSummary = msg.Summary,
+                    RawQuery = msg.Query,
+                    TotalDurationMs = msg.TotalDurationMs,
+                    ResponseDate = msg.DateCreated,
+                    IsLiked = msg.IsLiked,
+                    FeedbackReason = msg.FeedbackReason,
+                    IsAsistantMode = msg.IsAssistantModeEffective,
+                    AssistantName = msg.Assistant?.Name,
+                    AiModelName = msg.AIModel?.Name ?? msg.AIModel?.ProgrammaticName,
+                    ErrorMessage = msg.ErrorMessage
+                };
+                if (!string.IsNullOrWhiteSpace(msg.Query))
+                {
+                    currentTurn.SqlQueries = ExtractSqlItemsFromQuery(msg.Query, msg.IsSucceeded, msg.ErrorMessage);
+                }
+                turns.Add(currentTurn);
+            }
+        }
+
+        return turns;
+    }
+
     private List<QuestionSqlGroup> GetQuestionSqlGroups()
     {
         var groups = new List<QuestionSqlGroup>();
@@ -478,6 +780,8 @@ else
                     AssistantName = msg.Assistant?.Name,
                     AiModelName = msg.AIModel?.Name ?? msg.AIModel?.ProgrammaticName,
                     DateCreated = msg.DateCreated,
+                    IsLiked = msg.IsLiked,
+                    FeedbackReason = msg.FeedbackReason,
                     SqlQueries = new List<SqlLogItem>()
                 };
                 groups.Add(currentGroup);
@@ -497,6 +801,14 @@ else
                 {
                     currentGroup.AiModelName = msg.AIModel.Name ?? msg.AIModel.ProgrammaticName;
                 }
+                if (msg.IsLiked.HasValue)
+                {
+                    currentGroup.IsLiked = msg.IsLiked;
+                }
+                if (!string.IsNullOrEmpty(msg.FeedbackReason))
+                {
+                    currentGroup.FeedbackReason = msg.FeedbackReason;
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(msg.Query))
@@ -511,6 +823,8 @@ else
                         IsAsistantMode = isAssistant,
                         AssistantName = msg.Assistant?.Name,
                         DateCreated = msg.DateCreated,
+                        IsLiked = msg.IsLiked,
+                        FeedbackReason = msg.FeedbackReason,
                         SqlQueries = new List<SqlLogItem>()
                     };
                     groups.Add(currentGroup);
@@ -638,3 +952,425 @@ else
         await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
     }
 }
+
+<style>
+    /* ==========================================================================
+       Chat Detail Turn Card Modern Design System
+       ========================================================================== */
+    
+    .turn-card {
+        background: linear-gradient(180deg, rgba(17, 24, 39, 0.75) 0%, rgba(15, 23, 42, 0.85) 100%);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        padding: 1.25rem 1.5rem;
+        box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.4);
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+    }
+
+    .turn-card:hover {
+        border-color: rgba(255, 255, 255, 0.16);
+        box-shadow: 0 14px 32px -6px rgba(0, 0, 0, 0.55);
+        transform: translateY(-2px);
+    }
+
+    .turn-card-default {
+        border-left: 4px solid #38bdf8 !important;
+    }
+
+    .turn-card-disliked {
+        border-left: 4px solid #f43f5e !important;
+    }
+
+    .turn-card-liked {
+        border-left: 4px solid #10b981 !important;
+    }
+
+    .turn-card-comment {
+        border-left: 4px solid #f59e0b !important;
+    }
+
+    /* Turn Header & Meta */
+    .turn-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 1rem;
+        margin-bottom: 1.15rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .turn-index-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.35rem 0.75rem;
+        border-radius: 7px;
+        font-size: 0.775rem;
+        font-weight: 700;
+        font-family: monospace;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        color: #e2e8f0;
+    }
+
+    .turn-mode-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.35rem 0.75rem;
+        border-radius: 7px;
+        font-size: 0.775rem;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+    }
+
+    .turn-mode-badge.agent {
+        background: rgba(168, 85, 247, 0.15);
+        border: 1px solid rgba(192, 132, 252, 0.4);
+        color: #c084fc;
+    }
+
+    .turn-mode-badge.query {
+        background: rgba(14, 165, 233, 0.15);
+        border: 1px solid rgba(56, 189, 248, 0.4);
+        color: #38bdf8;
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.35rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.775rem;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+    }
+
+    .status-pill-disliked {
+        background: rgba(244, 63, 94, 0.15);
+        border: 1px solid rgba(244, 63, 94, 0.45);
+        color: #fb7185;
+    }
+
+    .status-pill-liked {
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.45);
+        color: #34d399;
+    }
+
+    .status-pill-comment {
+        background: rgba(245, 158, 11, 0.15);
+        border: 1px solid rgba(245, 158, 11, 0.45);
+        color: #fbbf24;
+    }
+
+    .meta-tags-container {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.65rem;
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 0.35rem 0.9rem;
+        font-size: 0.825rem;
+        color: #94a3b8;
+    }
+
+    .meta-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        color: #cbd5e1;
+    }
+
+    .meta-divider {
+        color: rgba(255, 255, 255, 0.2);
+        font-size: 0.75rem;
+    }
+
+    .duration-pill {
+        font-size: 0.775rem;
+        font-family: monospace;
+        color: #94a3b8;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 0.3rem 0.65rem;
+        border-radius: 7px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .date-chip {
+        font-size: 0.825rem;
+        color: #94a3b8;
+        font-family: monospace;
+    }
+
+    /* Customer Voice Quote Box */
+    .customer-quote-box {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.14) 0%, rgba(245, 158, 11, 0.07) 100%);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        border-radius: 10px;
+        padding: 0.9rem 1.15rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .quote-header {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        margin-bottom: 0.4rem;
+    }
+
+    .quote-icon {
+        font-size: 1.15rem;
+        color: #f87171;
+    }
+
+    .quote-title {
+        font-size: 0.725rem;
+        font-weight: 800;
+        letter-spacing: 0.6px;
+        color: #fca5a5;
+        text-transform: uppercase;
+    }
+
+    .quote-body {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #f8fafc;
+        padding-left: 1.6rem;
+        line-height: 1.55;
+    }
+
+    /* Prompt Flow Block */
+    .prompt-flow-block {
+        background: rgba(15, 23, 42, 0.45);
+        border: 1px solid rgba(6, 182, 212, 0.25);
+        border-radius: 10px;
+        padding: 0.85rem 1.15rem;
+        margin-bottom: 1rem;
+    }
+
+    .prompt-flow-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .prompt-icon-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 6px;
+        background: rgba(6, 182, 212, 0.18);
+        border: 1px solid rgba(6, 182, 212, 0.4);
+        color: #38bdf8;
+        font-size: 0.85rem;
+        font-weight: bold;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .prompt-flow-content {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .prompt-flow-label {
+        font-size: 0.725rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        color: #38bdf8;
+        text-transform: uppercase;
+    }
+
+    .prompt-flow-text {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #f1f5f9;
+        line-height: 1.55;
+    }
+
+    /* Turn AI Response Container */
+    .turn-ai-response-container {
+        background: rgba(15, 23, 42, 0.35);
+        border: 1px solid rgba(139, 92, 246, 0.2);
+        border-radius: 10px;
+        padding: 1rem 1.15rem;
+    }
+
+    .turn-ai-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding-bottom: 0.65rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .turn-ai-title {
+        font-size: 0.75rem;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        color: #c084fc;
+        text-transform: uppercase;
+    }
+
+    .ai-markdown-view {
+        font-size: 0.875rem;
+        color: #cbd5e1;
+        line-height: 1.65;
+        white-space: pre-wrap;
+    }
+
+    /* SQL Flow Terminal Box */
+    .sql-flow-container {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .sql-flow-card {
+        background: rgba(8, 12, 22, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .sql-flow-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 0.85rem;
+        background: rgba(15, 23, 42, 0.8);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .terminal-dots {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-right: 4px;
+    }
+
+    .terminal-dots .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .terminal-dots .dot.red { background: #ff5f56; }
+    .terminal-dots .dot.yellow { background: #ffbd2e; }
+    .terminal-dots .dot.green { background: #27c93f; }
+
+    .sql-tag-title {
+        font-size: 0.775rem;
+        font-weight: 700;
+        color: #94a3b8;
+        letter-spacing: 0.4px;
+    }
+
+    .compliance-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 9999px;
+        padding: 0.2rem 0.65rem;
+        font-size: 0.75rem;
+        color: #e2e8f0;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .compliance-chip:hover {
+        border-color: #60a5fa;
+        background: rgba(30, 41, 59, 0.95);
+        transform: scale(1.02);
+    }
+
+    .compliance-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .sql-status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.2rem 0.55rem;
+        border-radius: 6px;
+        font-size: 0.725rem;
+        font-weight: 600;
+    }
+
+    .sql-status-badge.success {
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.35);
+        color: #34d399;
+    }
+
+    .sql-status-badge.error {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #f87171;
+    }
+
+    .btn-copy-sql {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #94a3b8;
+        padding: 0.2rem 0.6rem;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        transition: all 0.2s;
+    }
+
+    .btn-copy-sql:hover {
+        background: rgba(255, 255, 255, 0.12);
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    .sql-desc-text {
+        padding: 0.5rem 0.85rem 0.2rem 0.85rem;
+        font-size: 0.825rem;
+        color: #94a3b8;
+        font-weight: 500;
+    }
+
+    .sql-code-wrapper {
+        padding: 0.65rem 0.85rem;
+        max-height: 180px;
+        overflow-y: auto;
+    }
+
+    .sql-code-wrapper code {
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 0.825rem;
+        color: #e2e8f0;
+        line-height: 1.5;
+        white-space: pre-wrap;
+    }
+
+    /* Error Alert */
+    .error-alert-box {
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+    }
+</style>

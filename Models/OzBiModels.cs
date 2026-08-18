@@ -62,7 +62,7 @@ namespace OzBiPortalCRM.Models
         public string? AIModelId { get; set; }
 
         [NotMapped]
-        public bool IsAssistantModeEffective => IsAsistantMode || !string.IsNullOrEmpty(AsistantId) || Assistant != null;
+        public bool IsAssistantModeEffective => IsAsistantMode;
         public string? ComponentId { get; set; }
         public bool IsActive { get; set; }
         public DateTime? DateCreated { get; set; }

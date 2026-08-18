@@ -79,18 +79,34 @@ namespace OzBiPortalCRM.Services
             }
         }
 
+        private bool IsTableInSql(string sqlUpper, string tableName)
+        {
+            var pattern = $@"(?<![A-Z0-9_]){Regex.Escape(tableName.ToUpperInvariant())}(?![A-Z0-9_])";
+            return Regex.IsMatch(sqlUpper, pattern);
+        }
+
         public MikroComplianceReport Evaluate(string tsqlQuery, string? userPrompt = null, string? tenantName = null)
         {
-            var report = new MikroComplianceReport
-            {
-                IsMikroQuery = true
-            };
+            var report = new MikroComplianceReport();
 
             if (string.IsNullOrWhiteSpace(tsqlQuery)) return report;
 
             var sql = tsqlQuery.Trim();
             var upperSql = sql.ToUpperInvariant();
+
+            bool isLogoTenant = tenantName != null && tenantName.ToLowerInvariant().Contains("logo");
+            bool containsLogoTables = _knownLogoTables.Any(t => IsTableInSql(upperSql, t)) || upperSql.Contains("LG_");
+
+            if (!isLogoTenant && !containsLogoTables)
+            {
+                report.IsMikroQuery = false;
+                report.SummaryText = "Bu sorgu Logo ERP veritabanı haricinde bir veri kaynağına aittir.";
+                return report;
+            }
+
+            report.IsMikroQuery = true;
             int score = 100;
+
 
             // -------------------------------------------------------------
             // RULE L-01: CANCELLED = 0 FILTER - Penalty: -15 pts

@@ -11,30 +11,32 @@
         <h2 class="fw-bold mb-1"><i class="bi bi-database-fill-gear text-info me-2"></i>Son İşlemler</h2>
         <div class="text-muted">Tüm tenant ve sohbetlerde çalıştırılan SQL sorgularını ve sorularını canlı akış halinde inceleyin</div>
     </div>
-    <button class="btn btn-outline-secondary btn-sm" @onclick="LoadData">
+    <button class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1.5" @onclick="LoadData">
         <i class="bi bi-arrow-clockwise"></i> Yenile
     </button>
 </div>
 
 <!-- Search & Filters -->
-<div class="glass-card mb-4">
+<div class="glass-card mb-4 p-3.5">
     <div class="row g-3 align-items-center">
-        <div class="col-md-7">
-            <label class="form-label text-muted small mb-1">Soru veya SQL İle Ara</label>
+        <div class="col-12 col-md-7">
+            <label class="form-label text-muted small mb-1">Soru, Tablo veya SQL İle Ara</label>
             <div class="input-group">
                 <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-search"></i></span>
                 <input type="text" class="form-control input-custom" placeholder="Soru metni, tablo adı, SQL anahtar kelimesi..." @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleSearch" />
             </div>
         </div>
 
-        <div class="col-md-5 d-flex align-items-center justify-content-end gap-3 pt-3">
+        <div class="col-12 col-md-5 d-flex align-items-center justify-content-md-end gap-3 pt-md-3">
             <div class="form-check form-switch mb-0">
                 <input class="form-check-input" type="checkbox" role="switch" id="failedOnlySwitch" @bind="failedOnly" @bind:after="LoadData">
-                <label class="form-check-label text-danger small fw-semibold" for="failedOnlySwitch">
+                <label class="form-check-label text-danger small fw-semibold cursor-pointer" for="failedOnlySwitch">
                     Sadece Hatalı Sorgular
                 </label>
             </div>
-            <span class="text-muted small">Bulunan: <strong>@(feedItems?.Count ?? 0)</strong></span>
+            <span class="badge-status" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); color: #cbd5e1;">
+                Bulunan: <strong>@(feedItems?.Count ?? 0)</strong>
+            </span>
         </div>
     </div>
 </div>
@@ -61,100 +63,155 @@ else
         {
             var item = feedItem.MessageItem;
             var compliance = feedItem.Compliance;
+            var isFailed = !string.IsNullOrEmpty(item.ErrorMessage);
+            var isDisliked = item.IsLiked == false;
+            var isLiked = item.IsLiked == true;
+            var hasComment = !string.IsNullOrWhiteSpace(item.FeedbackReason);
+            var cardBorderClass = isFailed ? "query-card-error" : (isDisliked ? "query-card-disliked" : (isLiked ? "query-card-liked" : (hasComment ? "query-card-comment" : "query-card-default")));
 
-            <div class="glass-card border-secondary border-opacity-25">
-                <!-- Top Metadata Header: Tenant, User, Model, Status, Date -->
-                <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2 pb-2 border-bottom border-secondary border-opacity-25">
-                    <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <!-- Tenant Badge -->
-                        <span class="badge-status" style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(148, 163, 184, 0.3); color: #cbd5e1;" title="Tenant Firması">
-                            @(item.Chat?.Tenant?.Name ?? "Tenant")
-                        </span>
-
-                        <!-- User Badge -->
-                        <span class="badge-status" style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(148, 163, 184, 0.3); color: #e2e8f0;" title="Sorguyu Çalıştıran Kullanıcı">
-                            @(item.Chat?.CreatedByUser?.NameSurname ?? item.Chat?.CreatedByUser?.Email ?? "Kullanıcı Belli Değil")
-                        </span>
-
+            <div class="query-feed-card @cardBorderClass">
+                <!-- Top Header Bar: Metadata, Model, Duration, Date, Action -->
+                <div class="query-card-header">
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
                         <!-- Mode Badge -->
                         @if (item.IsAssistantModeEffective)
                         {
-                            <span class="badge-status" style="background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(192, 132, 252, 0.4); color: #c084fc;" title="Agent Modu">
-                                Agent Modu
+                            <span class="turn-mode-badge agent" title="Agent Modu">
+                                <i class="bi bi-robot me-1"></i> Agent Modu
                             </span>
                         }
                         else
                         {
-                            <span class="badge-status" style="background: rgba(14, 165, 233, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;" title="Sorgu Modu (SQL Raporu)">
-                                Sorgu Modu
+                            <span class="turn-mode-badge query" title="Sorgu Modu (SQL Raporu)">
+                                <i class="bi bi-table me-1"></i> Sorgu Modu
                             </span>
                         }
 
-                        <!-- AI Model Badge -->
-                        @if (item.AIModel != null)
+                        <!-- Status Pill -->
+                        @if (isFailed)
                         {
-                            <span class="badge-status" style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(129, 140, 248, 0.4); color: #818cf8;" title="AI Modeli">
-                                Model: @(item.AIModel.Name ?? item.AIModel.ProgrammaticName)
+                            <span class="sql-status-badge error">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i> SQL Hatası
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="sql-status-badge success">
+                                <i class="bi bi-check2 me-1"></i> SQL Çalıştırıldı
                             </span>
                         }
 
-                        <!-- Assistant Badge -->
-                        @if (item.Assistant != null)
+                        <!-- Reaction Pill (If any) -->
+                        @if (isDisliked)
                         {
-                            <span class="badge-status" style="background: rgba(20, 184, 166, 0.15); border: 1px solid rgba(45, 212, 191, 0.4); color: #2dd4bf;" title="Çalıştırılan Asistan">
-                                Asistan: @item.Assistant.Name
+                            <span class="status-pill status-pill-disliked">
+                                <i class="bi bi-hand-thumbs-down-fill me-1"></i> Beğenilmedi
+                            </span>
+                        }
+                        else if (isLiked)
+                        {
+                            <span class="status-pill status-pill-liked">
+                                <i class="bi bi-hand-thumbs-up-fill me-1"></i> Beğenildi
                             </span>
                         }
 
-                        <!-- Multi-ERP Compliance Score Badge -->
-                        @if (compliance.IsMikroQuery)
-                        {
-                            var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro v27";
-                            <button type="button" class="btn btn-sm p-0 border-0 bg-transparent text-decoration-none" @onclick="() => OpenComplianceModal(compliance, feedItem.Sql)">
-                                <span class="badge-status" style="background: rgba(15, 23, 42, 0.85); border: 1px solid @GetScoreColor(compliance.Score); color: @GetScoreColor(compliance.Score); cursor: pointer;" title="Detaylı ERP Uyum Raporu İçin Tıklayın">
-                                    @erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)
+                        <!-- Structured Meta Tags -->
+                        <div class="meta-tags-container">
+                            <span class="meta-tag" title="Firma / Tenant">
+                                <i class="bi bi-building text-info opacity-75"></i>
+                                <span class="fw-semibold">@(item.Chat?.Tenant?.Name ?? "Tenant")</span>
+                            </span>
+                            <span class="meta-divider">•</span>
+                            <span class="meta-tag" title="Kullanıcı">
+                                <i class="bi bi-person text-secondary opacity-75"></i>
+                                <span>@(item.Chat?.CreatedByUser?.NameSurname ?? item.Chat?.CreatedByUser?.Email ?? "Kullanıcı")</span>
+                            </span>
+                            @if (item.AIModel != null || item.Assistant != null)
+                            {
+                                <span class="meta-divider">•</span>
+                                <span class="meta-tag" title="AI Modeli ve Asistan">
+                                    <i class="bi bi-cpu text-primary opacity-75"></i>
+                                    <span>@(item.AIModel?.Name ?? item.AIModel?.ProgrammaticName ?? "AI") @(item.Assistant != null ? $"· {item.Assistant.Name}" : "")</span>
                                 </span>
-                            </button>
-                        }
-
-                        <!-- Status Badge -->
-                        @if (string.IsNullOrEmpty(item.ErrorMessage))
-                        {
-                            <span class="badge-status" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(52, 211, 153, 0.4); color: #34d399;" title="Sorgu Başarılı">
-                                Başarılı
-                            </span>
-                        }
-                        else
-                        {
-                            <span class="badge-status" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(248, 113, 113, 0.4); color: #f87171;" title="Sorgu Hatalı">
-                                Hatalı
-                            </span>
-                        }
+                            }
+                        </div>
                     </div>
 
-                    <!-- Date & Time -->
-                    <div class="text-muted small">
-                        <i class="bi bi-clock me-1"></i>@(item.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")
+                    <!-- Right Side: Duration, Date & Sohbete Git Button (With generous spacing) -->
+                    <div class="d-flex align-items-center gap-3 flex-wrap ms-auto">
+                        @if (item.TotalDurationMs.HasValue && item.TotalDurationMs > 0)
+                        {
+                            <span class="duration-pill"><i class="bi bi-stopwatch me-1 opacity-75"></i>@(item.TotalDurationMs)ms</span>
+                        }
+                        <span class="date-chip">
+                            <i class="bi bi-clock me-1 opacity-75"></i>@(item.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")
+                        </span>
+                        <a href="chat/@item.ChatId" class="btn-goto-chat ms-md-2" title="Bu sohbetin tüm akışını ve geçmişini aç">
+                            <span>Sohbete Git</span>
+                            <i class="bi bi-arrow-up-right"></i>
+                        </a>
                     </div>
                 </div>
 
-                <!-- Specific Question Header (Son Soru) -->
-                <div class="fw-bold text-main fs-6 mb-3 d-flex align-items-start gap-2">
-                    <i class="bi bi-chat-left-text text-primary mt-1 flex-shrink-0"></i>
-                    <div class="flex-grow-1">
-                        <span>@feedItem.QuestionText</span>
+                <!-- Customer Voice / Feedback Callout (If user wrote feedback reason on this message) -->
+                @if (hasComment)
+                {
+                    <div class="customer-quote-box">
+                        <div class="quote-header">
+                            <i class="bi bi-chat-quote-fill quote-icon"></i>
+                            <span class="quote-title">MÜŞTERİ GERİ BİLDİRİMİ / ELEŞTİRİSİ</span>
+                        </div>
+                        <div class="quote-body">
+                            “@item.FeedbackReason”
+                        </div>
+                    </div>
+                }
+
+                <!-- User Question / Prompt Flow Block -->
+                <div class="prompt-flow-block">
+                    <div class="prompt-flow-header">
+                        <span class="prompt-icon-badge"><i class="bi bi-question-lg"></i></span>
+                        <div class="prompt-flow-content">
+                            <span class="prompt-flow-label">Kullanıcı Sorusu:</span>
+                            <span class="prompt-flow-text">@feedItem.QuestionText</span>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Extracted SQL Code Block -->
-                <div class="mb-3">
-                    <div class="sql-header py-2 px-3">
-                        <span class="text-info small fw-bold"><i class="bi bi-code-slash me-1"></i>SQL Sorgusu</span>
-                        <button class="btn-copy" @onclick="() => CopySql(feedItem.Sql)">
-                            <i class="bi bi-clipboard"></i> SQL Kopyala
+                <!-- macOS Style SQL Terminal Box -->
+                <div class="sql-flow-card">
+                    <div class="sql-flow-topbar">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="terminal-dots">
+                                <span class="dot red"></span>
+                                <span class="dot yellow"></span>
+                                <span class="dot green"></span>
+                            </span>
+                            <span class="sql-tag-title"><i class="bi bi-terminal-fill me-1 text-info opacity-75"></i>SQL Sorgusu</span>
+
+                            <!-- Multi-ERP Compliance Score Badge -->
+                            @if (compliance.IsMikroQuery)
+                            {
+                                var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro v27";
+                                <button type="button" class="compliance-chip" @onclick="() => OpenComplianceModal(compliance, feedItem.Sql)" title="Detaylı ERP Uyum Raporunu İncele">
+                                    <span class="compliance-dot" style="background-color: @GetScoreColor(compliance.Score);"></span>
+                                    <span>@erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)</span>
+                                    <i class="bi bi-chevron-right ms-1 opacity-50" style="font-size: 0.65rem;"></i>
+                                </button>
+                            }
+                        </div>
+
+                        <button class="btn-copy-sql" @onclick="() => CopySql(feedItem.Sql)" title="SQL Panoya Kopyala">
+                            <i class="bi bi-clipboard me-1"></i> Kopyala
                         </button>
                     </div>
-                    <div class="sql-code-block">
+
+                    @if (!string.IsNullOrEmpty(feedItem.Description))
+                    {
+                        <div class="sql-desc-text">@feedItem.Description</div>
+                    }
+
+                    <div class="sql-code-wrapper">
                         <code>@feedItem.Sql</code>
                     </div>
                 </div>
@@ -162,20 +219,16 @@ else
                 <!-- Error Message if present -->
                 @if (!string.IsNullOrEmpty(item.ErrorMessage))
                 {
-                    <div class="p-2.5 mb-3 rounded bg-danger bg-opacity-10 border border-danger border-opacity-20 text-danger small font-monospace">
-                        <i class="bi bi-exclamation-triangle-fill me-1"></i> <strong>Hata Detayı:</strong> @item.ErrorMessage
+                    <div class="error-alert-box mt-3">
+                        <div class="d-flex align-items-start gap-2.5">
+                            <i class="bi bi-exclamation-octagon-fill text-danger fs-5 mt-0.5 flex-shrink-0"></i>
+                            <div>
+                                <div class="fw-bold text-danger small text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Hata Detayı</div>
+                                <div class="font-monospace text-light small mt-1" style="white-space: pre-wrap; font-size: 0.825rem; line-height: 1.5;">@item.ErrorMessage</div>
+                            </div>
+                        </div>
                     </div>
                 }
-
-                <!-- Footer Info -->
-                <div class="d-flex align-items-center justify-content-between pt-2 border-top border-secondary border-opacity-25 text-muted small">
-                    <div>
-                        Çalışma Süresi: <strong class="text-light">@(item.TotalDurationMs.HasValue ? $"{item.TotalDurationMs} ms" : "-")</strong>
-                    </div>
-                    <a href="chat/@item.ChatId" class="btn btn-sm btn-outline-primary px-3">
-                        <i class="bi bi-box-arrow-up-right me-1"></i> Chat İncele
-                    </a>
-                </div>
             </div>
         }
     </div>
@@ -427,4 +480,396 @@ else
         await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
     }
 }
+
+<style>
+    /* ==========================================================================
+       Global Queries (Son İşlemler) Executive Design System
+       ========================================================================== */
+    
+    .query-feed-card {
+        background: linear-gradient(180deg, rgba(17, 24, 39, 0.75) 0%, rgba(15, 23, 42, 0.85) 100%);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        padding: 1.25rem 1.5rem;
+        box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.4);
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+    }
+
+    .query-feed-card:hover {
+        border-color: rgba(255, 255, 255, 0.16);
+        box-shadow: 0 14px 32px -6px rgba(0, 0, 0, 0.55);
+        transform: translateY(-2px);
+    }
+
+    .query-card-default {
+        border-left: 4px solid #38bdf8 !important;
+    }
+
+    .query-card-error {
+        border-left: 4px solid #f43f5e !important;
+    }
+
+    .query-card-disliked {
+        border-left: 4px solid #fb7185 !important;
+    }
+
+    .query-card-liked {
+        border-left: 4px solid #10b981 !important;
+    }
+
+    .query-card-comment {
+        border-left: 4px solid #f59e0b !important;
+    }
+
+    /* Query Header & Meta */
+    .query-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 1rem;
+        margin-bottom: 1.15rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .turn-mode-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.35rem 0.75rem;
+        border-radius: 7px;
+        font-size: 0.775rem;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+    }
+
+    .turn-mode-badge.agent {
+        background: rgba(168, 85, 247, 0.15);
+        border: 1px solid rgba(192, 132, 252, 0.4);
+        color: #c084fc;
+    }
+
+    .turn-mode-badge.query {
+        background: rgba(14, 165, 233, 0.15);
+        border: 1px solid rgba(56, 189, 248, 0.4);
+        color: #38bdf8;
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.35rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.775rem;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+    }
+
+    .status-pill-disliked {
+        background: rgba(244, 63, 94, 0.15);
+        border: 1px solid rgba(244, 63, 94, 0.45);
+        color: #fb7185;
+    }
+
+    .status-pill-liked {
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.45);
+        color: #34d399;
+    }
+
+    .meta-tags-container {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.65rem;
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 0.35rem 0.9rem;
+        font-size: 0.825rem;
+        color: #94a3b8;
+    }
+
+    .meta-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        color: #cbd5e1;
+    }
+
+    .meta-divider {
+        color: rgba(255, 255, 255, 0.2);
+        font-size: 0.75rem;
+    }
+
+    .duration-pill {
+        font-size: 0.775rem;
+        font-family: monospace;
+        color: #94a3b8;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 0.3rem 0.65rem;
+        border-radius: 7px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .date-chip {
+        font-size: 0.825rem;
+        color: #94a3b8;
+        font-family: monospace;
+    }
+
+    /* Go To Chat Button */
+    .btn-goto-chat {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.18) 0%, rgba(99, 102, 241, 0.25) 100%);
+        border: 1px solid rgba(96, 165, 250, 0.45);
+        color: #bfdbfe;
+        padding: 0.4rem 1.05rem;
+        border-radius: 8px;
+        font-size: 0.825rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-goto-chat:hover {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.4) 0%, rgba(99, 102, 241, 0.55) 100%);
+        border-color: #60a5fa;
+        color: #ffffff;
+        box-shadow: 0 0 16px rgba(59, 130, 246, 0.45);
+        transform: translateY(-1px);
+    }
+
+    /* Customer Voice Quote Box */
+    .customer-quote-box {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.14) 0%, rgba(245, 158, 11, 0.07) 100%);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        border-radius: 10px;
+        padding: 0.9rem 1.15rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .quote-header {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        margin-bottom: 0.4rem;
+    }
+
+    .quote-icon {
+        font-size: 1.15rem;
+        color: #f87171;
+    }
+
+    .quote-title {
+        font-size: 0.725rem;
+        font-weight: 800;
+        letter-spacing: 0.6px;
+        color: #fca5a5;
+        text-transform: uppercase;
+    }
+
+    .quote-body {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #f8fafc;
+        padding-left: 1.6rem;
+        line-height: 1.55;
+    }
+
+    /* Prompt Flow Block */
+    .prompt-flow-block {
+        background: rgba(15, 23, 42, 0.45);
+        border: 1px solid rgba(6, 182, 212, 0.25);
+        border-radius: 10px;
+        padding: 0.85rem 1.15rem;
+        margin-bottom: 1rem;
+    }
+
+    .prompt-flow-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .prompt-icon-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 6px;
+        background: rgba(6, 182, 212, 0.18);
+        border: 1px solid rgba(6, 182, 212, 0.4);
+        color: #38bdf8;
+        font-size: 0.85rem;
+        font-weight: bold;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .prompt-flow-content {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .prompt-flow-label {
+        font-size: 0.725rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        color: #38bdf8;
+        text-transform: uppercase;
+    }
+
+    .prompt-flow-text {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #f1f5f9;
+        line-height: 1.55;
+    }
+
+    /* SQL Flow Terminal Box */
+    .sql-flow-card {
+        background: rgba(8, 12, 22, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .sql-flow-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 0.85rem;
+        background: rgba(15, 23, 42, 0.8);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .terminal-dots {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-right: 4px;
+    }
+
+    .terminal-dots .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .terminal-dots .dot.red { background: #ff5f56; }
+    .terminal-dots .dot.yellow { background: #ffbd2e; }
+    .terminal-dots .dot.green { background: #27c93f; }
+
+    .sql-tag-title {
+        font-size: 0.775rem;
+        font-weight: 700;
+        color: #94a3b8;
+        letter-spacing: 0.4px;
+    }
+
+    .compliance-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 9999px;
+        padding: 0.2rem 0.65rem;
+        font-size: 0.75rem;
+        color: #e2e8f0;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .compliance-chip:hover {
+        border-color: #60a5fa;
+        background: rgba(30, 41, 59, 0.95);
+        transform: scale(1.02);
+    }
+
+    .compliance-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .sql-status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.2rem 0.55rem;
+        border-radius: 6px;
+        font-size: 0.725rem;
+        font-weight: 600;
+    }
+
+    .sql-status-badge.success {
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.35);
+        color: #34d399;
+    }
+
+    .sql-status-badge.error {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #f87171;
+    }
+
+    .btn-copy-sql {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #94a3b8;
+        padding: 0.2rem 0.6rem;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        transition: all 0.2s;
+    }
+
+    .btn-copy-sql:hover {
+        background: rgba(255, 255, 255, 0.12);
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    .sql-desc-text {
+        padding: 0.5rem 0.85rem 0.2rem 0.85rem;
+        font-size: 0.825rem;
+        color: #94a3b8;
+        font-weight: 500;
+    }
+
+    .sql-code-wrapper {
+        padding: 0.65rem 0.85rem;
+        max-height: 180px;
+        overflow-y: auto;
+    }
+
+    .sql-code-wrapper code {
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 0.825rem;
+        color: #e2e8f0;
+        line-height: 1.5;
+        white-space: pre-wrap;
+    }
+
+    /* Error Alert */
+    .error-alert-box {
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+    }
+</style>
 
