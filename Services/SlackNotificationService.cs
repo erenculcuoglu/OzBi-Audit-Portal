@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using OzBiPortalCRM.Models;
 
 namespace OzBiPortalCRM.Services
 {
@@ -25,6 +27,7 @@ namespace OzBiPortalCRM.Services
         }
 
         private const string DefaultBase64WebhookUrl = "aHR0cHM6Ly9ob29rcy5zbGFjay5jb20vc2VydmljZXMvVDM3R0xSSlRGL0IwQk40UDczQzc5L0NKNE9vcjVSaXZxbzZkZnYwOEJxQ1NNMA==";
+        private const string DefaultFeedbackBase64WebhookUrl = "aHR0cHM6Ly9ob29rcy5zbGFjay5jb20vc2VydmljZXMvVDM3R0xSSlRGL0IwQlI3VFlRUTNZLzVjNldKNnBRd0lHRGNEcnJhaVJEOG5vVQ==";
 
         private string GetEffectiveWebhookUrl()
         {
@@ -53,23 +56,58 @@ namespace OzBiPortalCRM.Services
             return webhookUrl ?? string.Empty;
         }
 
-        private static DateTime GetTurkeyTime()
+        private string GetEffectiveFeedbackWebhookUrl()
         {
+            // 1. Özel Feedback Webhook URL (appsettings.json)
+            var webhookUrl = _configuration["Slack:FeedbackWebhookUrl"] ?? _configuration["Slack:CustomerFeedbackWebhookUrl"];
+
+            // 2. Ortam değişkeni fallback
+            if (string.IsNullOrWhiteSpace(webhookUrl))
+            {
+                webhookUrl = Environment.GetEnvironmentVariable("SLACK_FEEDBACK_WEBHOOK_URL") 
+                             ?? Environment.GetEnvironmentVariable("SLACK_CUSTOMER_FEEDBACK_WEBHOOK_URL");
+            }
+
+            // 3. Base64 varsayılan Feedback Webhook URL fallback (#customer-feedback kanalı)
+            if (string.IsNullOrWhiteSpace(webhookUrl))
+            {
+                try
+                {
+                    webhookUrl = Encoding.UTF8.GetString(Convert.FromBase64String(DefaultFeedbackBase64WebhookUrl));
+                }
+                catch
+                {
+                    webhookUrl = string.Empty;
+                }
+            }
+
+            // 4. Genel Webhook URL fallback
+            if (string.IsNullOrWhiteSpace(webhookUrl))
+            {
+                webhookUrl = GetEffectiveWebhookUrl();
+            }
+
+            return webhookUrl ?? string.Empty;
+        }
+
+        private static DateTime GetTurkeyTime(DateTime? sourceTime = null)
+        {
+            var utcTime = sourceTime?.ToUniversalTime() ?? DateTime.UtcNow;
             try
             {
                 var turkeyZone = TimeZoneInfo.FindSystemTimeZoneById("Turkey Standard Time");
-                return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, turkeyZone);
+                return TimeZoneInfo.ConvertTimeFromUtc(utcTime, turkeyZone);
             }
             catch
             {
                 try
                 {
                     var europeIstanbul = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
-                    return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, europeIstanbul);
+                    return TimeZoneInfo.ConvertTimeFromUtc(utcTime, europeIstanbul);
                 }
                 catch
                 {
-                    return DateTime.UtcNow.AddHours(3);
+                    return utcTime.AddHours(3);
                 }
             }
         }
@@ -222,6 +260,119 @@ namespace OzBiPortalCRM.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Slack tenant bildirimi gönderilirken beklenmeyen bir hata oluştu.");
+            }
+        }
+
+        public async Task<bool> SendCustomerFeedbackNotificationAsync(CustomerFeedbackSlackPayload p)
+        {
+            try
+            {
+                var enabled = _configuration.GetValue<bool>("Slack:Enabled", true);
+                if (!enabled)
+                {
+                    _logger.LogInformation("Slack bildirimleri yapılandırmada kapalı tutuluyor.");
+                    return false;
+                }
+
+                var webhookUrl = GetEffectiveFeedbackWebhookUrl();
+                if (string.IsNullOrWhiteSpace(webhookUrl))
+                {
+                    _logger.LogWarning("Slack Feedback Webhook URL yapılandırılmamış.");
+                    return false;
+                }
+
+                var formattedTime = GetTurkeyTime(p.DateCreated).ToString("dd.MM.yyyy HH:mm:ss");
+
+                var blocks = new List<object>();
+
+                // 1. Header / Başlık
+                blocks.Add(new
+                {
+                    type = "header",
+                    text = new
+                    {
+                        type = "plain_text",
+                        text = "🔴 OzBI - Müşteri Geri Bildirimi",
+                        emoji = true
+                    }
+                });
+
+                // 2. Firma & Kullanıcı (Fields)
+                var userDisplay = !string.IsNullOrWhiteSpace(p.UserName) ? p.UserName : "Kullanıcı";
+                if (!string.IsNullOrWhiteSpace(p.UserEmail) && p.UserEmail != "E-posta yok" && !userDisplay.Contains(p.UserEmail))
+                {
+                    userDisplay += $" ({p.UserEmail})";
+                }
+
+                blocks.Add(new
+                {
+                    type = "section",
+                    fields = new object[]
+                    {
+                        new { type = "mrkdwn", text = $"*🏢 Firma:*\n*{p.TenantName}*" },
+                        new { type = "mrkdwn", text = $"*👤 Kullanıcı:*\n{userDisplay}" }
+                    }
+                });
+
+                // 3. Müşteri Eleştirisi / Yorumu
+                var criticismText = !string.IsNullOrWhiteSpace(p.FeedbackReason) 
+                    ? p.FeedbackReason.Trim() 
+                    : "Beğenilmedi (Yazılı yorum girilmedi)";
+
+                blocks.Add(new
+                {
+                    type = "section",
+                    text = new
+                    {
+                        type = "mrkdwn",
+                        text = $"💬 *Müşteri Eleştirisi:*\n> *“{criticismText}”*"
+                    }
+                });
+
+                // 4. Kullanıcı Sorusu
+                if (!string.IsNullOrWhiteSpace(p.Prompt))
+                {
+                    blocks.Add(new
+                    {
+                        type = "section",
+                        text = new
+                        {
+                            type = "mrkdwn",
+                            text = $"❓ *Kullanıcı Sorusu:*\n{p.Prompt.Trim()}"
+                        }
+                    });
+                }
+
+                var fallbackText = $"🔴 *OzBI Geri Bildirim:* {p.TenantName} ({userDisplay}) - {criticismText}";
+
+                var payload = new
+                {
+                    text = fallbackText,
+                    blocks = blocks.ToArray()
+                };
+
+                var jsonPayload = JsonSerializer.Serialize(payload);
+                var client = _httpClientFactory.CreateClient("SlackClient");
+
+                using var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                var response = await client.PostAsync(webhookUrl, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Slack müşteri geri bildirim bildirimi başarıyla gönderildi: MessageId={Id}, Tenant={Tenant}", p.MessageId, p.TenantName);
+                    return true;
+                }
+                else
+                {
+                    var responseBody = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Slack müşteri geri bildirimi gönderilemedi. Kod: {StatusCode}, Yanıt: {ResponseBody}", response.StatusCode, responseBody);
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Slack müşteri geri bildirimi gönderilirken beklenmeyen bir hata oluştu.");
+                return false;
             }
         }
     }

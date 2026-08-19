@@ -160,11 +160,6 @@ else
                             <span>Login Sayısı</span> @GetSortIcon("TotalLogins")
                         </div>
                     </th>
-                    <th style="cursor: pointer; white-space: nowrap; text-align: center;" @onclick='() => SortBy("ComplianceScore")'>
-                        <div class="d-inline-flex align-items-center justify-content-center gap-1">
-                            <span>ERP Uyumu</span> @GetSortIcon("ComplianceScore")
-                        </div>
-                    </th>
                     <th class="col-sticky-action" style="white-space: nowrap; text-align: center;">İşlem</th>
                 </tr>
             </thead>
@@ -207,23 +202,6 @@ else
                         <td class="text-center">
                             <span class="badge-status badge-success"><i class="bi bi-box-arrow-in-right me-1"></i>@item.TotalLogins</span>
                         </td>
-                        <td class="text-center">
-                            @if (complianceSnapshots.TryGetValue(t.Id, out var compSnap))
-                            {
-                                <button type="button" class="btn btn-sm p-0 border-0 bg-transparent text-decoration-none" @onclick="() => SelectTenant(t.Id)">
-                                    <span class="badge-status" style="background: rgba(15, 23, 42, 0.85); border: 1px solid @GetScoreColor(compSnap.OverallScore); color: @GetScoreColor(compSnap.OverallScore); cursor: pointer;"
-                                          title="@compSnap.ErpTypeName Uyum Skoru: @compSnap.OverallScore/100 (@compSnap.GradeLabel)">
-                                        @compSnap.OverallScore/100 <strong>@compSnap.Grade</strong>
-                                    </span>
-                                </button>
-                            }
-                            else
-                            {
-                                <span class="badge bg-secondary bg-opacity-20 text-muted" style="font-size: 0.7rem;" title="Uyum skoru henüz taranmadı">
-                                    -
-                                </span>
-                            }
-                        </td>
                         <td class="text-end" style="padding-right: 1.25rem;">
                             <button class="btn btn-sm btn-primary-custom" @onclick="() => SelectTenant(t.Id)">
                                 <i class="bi bi-eye me-1"></i> İncele
@@ -239,7 +217,6 @@ else
 @code {
     private List<TenantAuditSummary>? rawTenantsList;
     private List<TenantAuditSummary>? tenantsList;
-    private Dictionary<string, TenantComplianceSnapshot> complianceSnapshots = new();
     private bool isLoading = true;
     private string? errorMessage;
     private string searchTerm = string.Empty;
@@ -264,7 +241,6 @@ else
         try
         {
             rawTenantsList = await AuditService.GetTenantsSummaryAsync(searchTerm: null, portalUserId: 1);
-            complianceSnapshots = await AuditService.GetAllTenantComplianceSnapshotsAsync();
             ApplyFiltersAndSorting();
         }
         catch (Exception ex)
@@ -315,9 +291,6 @@ else
             "TotalQueries" => sortAscending ? list.OrderBy(t => t.TotalQueries) : list.OrderByDescending(t => t.TotalQueries),
             "LastActivityDate" => sortAscending ? list.OrderBy(t => t.LastActivityDate ?? DateTime.MinValue) : list.OrderByDescending(t => t.LastActivityDate ?? DateTime.MinValue),
             "TotalLogins" => sortAscending ? list.OrderBy(t => t.TotalLogins) : list.OrderByDescending(t => t.TotalLogins),
-            "ComplianceScore" => sortAscending ?
-                list.OrderBy(t => complianceSnapshots.TryGetValue(t.Tenant.Id, out var s) ? s.OverallScore : -1) :
-                list.OrderByDescending(t => complianceSnapshots.TryGetValue(t.Tenant.Id, out var s) ? s.OverallScore : -1),
             _ => list.OrderByDescending(t => t.LastActivityDate ?? DateTime.MinValue)
         };
 
@@ -377,13 +350,5 @@ else
     private void SelectTenant(string tenantId)
     {
         Navigation.NavigateTo($"/tenant/{tenantId}/chats");
-    }
-
-    private string GetScoreColor(int score)
-    {
-        if (score >= 90) return "#10b981"; // emerald green
-        if (score >= 75) return "#38bdf8"; // sky blue
-        if (score >= 60) return "#f59e0b"; // amber
-        return "#ef4444"; // red
     }
 }

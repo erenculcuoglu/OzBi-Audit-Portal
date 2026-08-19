@@ -99,6 +99,17 @@ builder.Services.AddScoped<IOzBiAuditService, OzBiAuditService>();
 builder.Services.AddScoped<ITenantSchemaProvider, TenantSchemaProvider>();
 builder.Services.AddScoped<IErpAuditEngine, ErpAuditEngine>();
 builder.Services.AddScoped<IMikroAuditEngine, ErpAuditEngine>();
+builder.Services.AddSingleton<LogoAuditEvaluator>();
+builder.Services.AddScoped<IPromptTemplateService, PromptTemplateService>();
+
+// Register MariaDB Live Monitors as Singletons & Background Hosted Services
+builder.Services.AddSingleton<OzBiLoginMonitorService>();
+builder.Services.AddSingleton<IOzBiLoginMonitorService>(sp => sp.GetRequiredService<OzBiLoginMonitorService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<OzBiLoginMonitorService>());
+
+builder.Services.AddSingleton<OzBiFeedbackMonitorService>();
+builder.Services.AddSingleton<IOzBiFeedbackMonitorService>(sp => sp.GetRequiredService<OzBiFeedbackMonitorService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<OzBiFeedbackMonitorService>());
 
 var app = builder.Build();
 
@@ -165,6 +176,25 @@ app.MapGet("/api/auth/logout", async (HttpContext httpContext) =>
 {
     await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.Redirect("/login");
+});
+
+app.MapGet("/api/cron/check-logins", async (IOzBiLoginMonitorService loginMonitor) =>
+{
+    await loginMonitor.CheckForNewLoginsAsync();
+    return Results.Ok(new { status = "success", message = "MariaDB login check triggered successfully." });
+});
+
+app.MapGet("/api/cron/check-feedbacks", async (IOzBiFeedbackMonitorService feedbackMonitor, [FromQuery] bool? pushAll) =>
+{
+    var count = await feedbackMonitor.CheckAndPushNewFeedbacksAsync(pushAllUnpushed: pushAll == true, triggeredBy: "CronEndpoint");
+    return Results.Ok(new { status = "success", pushedCount = count, message = $"MariaDB feedback check completed. {count} items pushed to Slack #customer-feedback." });
+});
+
+app.MapPost("/api/feedback/push/{messageId}", async (IOzBiFeedbackMonitorService feedbackMonitor, string messageId, HttpContext httpContext) =>
+{
+    var userName = httpContext.User.Identity?.Name ?? "PortalAdmin";
+    var result = await feedbackMonitor.PushFeedbackByIdAsync(messageId, userName);
+    return Results.Ok(new { success = result, messageId });
 });
 
 app.MapGet("/api/inspect-chat/{chatId}", async (IOzBiAuditService auditService, string chatId) =>

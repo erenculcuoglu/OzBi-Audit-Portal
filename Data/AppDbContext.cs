@@ -15,6 +15,8 @@ namespace OzBiPortalCRM.Data
         public DbSet<UserLoginSnapshot> UserLoginSnapshots { get; set; } = null!;
         public DbSet<TenantSubscription> TenantSubscriptions { get; set; } = null!;
         public DbSet<TenantComplianceSnapshot> TenantComplianceSnapshots { get; set; } = null!;
+        public DbSet<CustomPromptTemplateItem> CustomPromptTemplates { get; set; } = null!;
+        public DbSet<FeedbackPushSnapshot> FeedbackPushSnapshots { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -36,6 +38,12 @@ namespace OzBiPortalCRM.Data
 
             modelBuilder.Entity<TenantComplianceSnapshot>()
                 .HasKey(tc => tc.TenantId);
+
+            modelBuilder.Entity<CustomPromptTemplateItem>()
+                .HasKey(cp => cp.Id);
+
+            modelBuilder.Entity<FeedbackPushSnapshot>()
+                .HasKey(fp => fp.MessageId);
         }
 
         public async Task EnsureTablesCreatedAsync()
@@ -103,6 +111,86 @@ namespace OzBiPortalCRM.Data
                         LastEvaluatedAt TEXT NOT NULL
                     );";
                 await cmd4.ExecuteNonQueryAsync();
+
+                using var cmd5 = Database.GetDbConnection().CreateCommand();
+                cmd5.CommandText = @"
+                    CREATE TABLE IF NOT EXISTS CustomPromptTemplates (
+                        Id TEXT PRIMARY KEY,
+                        Title TEXT NOT NULL,
+                        Prompt TEXT NOT NULL,
+                        CategoryId INTEGER NOT NULL,
+                        OriginTypeId INTEGER NOT NULL DEFAULT 2,
+                        TargetRole TEXT,
+                        Complexity TEXT,
+                        BusinessImpact TEXT,
+                        ExpectedDecision TEXT,
+                        ErpCompatibility TEXT,
+                        AlternativePhrasingsJson TEXT,
+                        CreatedByPortalUserId INTEGER NOT NULL,
+                        CreatedAt TEXT NOT NULL
+                    );";
+                await cmd5.ExecuteNonQueryAsync();
+
+                // Ensure newly added columns exist in case table was created previously
+                try
+                {
+                    using var alterCmd = Database.GetDbConnection().CreateCommand();
+                    alterCmd.CommandText = "ALTER TABLE CustomPromptTemplates ADD COLUMN AlternativePhrasingsJson TEXT;";
+                    await alterCmd.ExecuteNonQueryAsync();
+                }
+                catch { }
+
+                try
+                {
+                    using var alterCmd = Database.GetDbConnection().CreateCommand();
+                    alterCmd.CommandText = "ALTER TABLE CustomPromptTemplates ADD COLUMN OriginTypeId INTEGER NOT NULL DEFAULT 2;";
+                    await alterCmd.ExecuteNonQueryAsync();
+                }
+                catch { }
+
+                try
+                {
+                    using var alterCmd = Database.GetDbConnection().CreateCommand();
+                    alterCmd.CommandText = "ALTER TABLE CustomPromptTemplates ADD COLUMN BusinessImpact TEXT;";
+                    await alterCmd.ExecuteNonQueryAsync();
+                }
+                catch { }
+
+                try
+                {
+                    using var alterCmd = Database.GetDbConnection().CreateCommand();
+                    alterCmd.CommandText = "ALTER TABLE CustomPromptTemplates ADD COLUMN ExpectedDecision TEXT;";
+                    await alterCmd.ExecuteNonQueryAsync();
+                }
+                catch { }
+
+                try
+                {
+                    using var alterCmd = Database.GetDbConnection().CreateCommand();
+                    alterCmd.CommandText = "ALTER TABLE CustomPromptTemplates ADD COLUMN ErpCompatibility TEXT;";
+                    await alterCmd.ExecuteNonQueryAsync();
+                }
+                catch { }
+
+                try
+                {
+                    using var cmd6 = Database.GetDbConnection().CreateCommand();
+                    cmd6.CommandText = @"
+                        CREATE TABLE IF NOT EXISTS FeedbackPushSnapshots (
+                            MessageId TEXT PRIMARY KEY,
+                            ChatId TEXT,
+                            TenantName TEXT,
+                            UserName TEXT,
+                            UserEmail TEXT,
+                            FeedbackReason TEXT,
+                            IsLiked INTEGER,
+                            PushedAt TEXT NOT NULL,
+                            PushedBy TEXT,
+                            Status TEXT NOT NULL
+                        );";
+                    await cmd6.ExecuteNonQueryAsync();
+                }
+                catch { }
             }
             catch { }
         }

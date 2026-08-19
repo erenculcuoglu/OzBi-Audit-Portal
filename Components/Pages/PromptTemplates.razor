@@ -1,0 +1,776 @@
+@page "/templates"
+@inject IPromptTemplateService TemplateService
+@inject IOzBiAuditService AuditService
+@inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthStateProvider
+@using OzBiPortalCRM.Models
+@using OzBiPortalCRM.Services
+@using System.Security.Claims
+
+<!-- Clean, Minimalist Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <h2 class="fw-bold mb-1 text-white d-flex align-items-center gap-2" style="letter-spacing: -0.02em;">
+            <i class="bi bi-chat-quote-fill text-primary" style="font-size: 1.5rem;"></i> Soru Havuzu
+        </h2>
+        <div class="text-muted" style="font-size: 0.925rem;">
+            OzBI için canlıda test edilmiş, hazır ve karar desteği sağlayan ilham verici sorular
+        </div>
+    </div>
+    
+    <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-outline-primary btn-sm px-3 d-inline-flex align-items-center gap-1.5 rounded-pill" @onclick="OpenAddModal">
+            <i class="bi bi-plus-lg"></i> Soru Ekle
+        </button>
+        <button class="btn btn-outline-secondary btn-sm px-3 d-inline-flex align-items-center gap-1.5 rounded-pill @(isGenerating ? "disabled" : "")" 
+                @onclick="GenerateAndRefresh" title="Sıfırdan Yeni Sorular Üret">
+            @if (isGenerating)
+            {
+                <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
+                <span>Üretiliyor...</span>
+            }
+            else
+            {
+                <i class="bi bi-arrow-clockwise"></i>
+                <span>Yenile & Yeni Üret</span>
+            }
+        </button>
+    </div>
+</div>
+
+<!-- Category Filter Pills (Text-Only, No Icons) -->
+<div class="mb-3">
+    <div class="d-flex align-items-center gap-2 overflow-x-auto pb-1 scroll-pills" style="scrollbar-width: none;">
+        @if (categories != null)
+        {
+            @foreach (var cat in categories)
+            {
+                var isSelected = selectedCategory == cat.Category;
+                <button class="filter-pill @(isSelected ? "active" : "")" @onclick="() => SelectCategory(cat.Category)">
+                    <span>@cat.Name</span>
+                    <span class="pill-badge">@cat.TemplateCount</span>
+                </button>
+            }
+        }
+    </div>
+</div>
+
+<!-- Search & Fast Segment Bar -->
+<div class="search-filter-bar mb-4 p-2 rounded-4">
+    <div class="row g-2 align-items-center">
+        <!-- Segmented Tab: Tümü / Popüler / Öneriler -->
+        <div class="col-12 col-md-auto">
+            <div class="segment-pill-group">
+                <button type="button" class="segment-btn @(selectedOrigin == QuestionOriginType.All ? "active" : "")" 
+                        @onclick="() => SelectOrigin(QuestionOriginType.All)">
+                    Tüm Sorular (@(questions?.Count ?? 0))
+                </button>
+                <button type="button" class="segment-btn @(selectedOrigin == QuestionOriginType.RealTenantAsked ? "active" : "")" 
+                        @onclick="() => SelectOrigin(QuestionOriginType.RealTenantAsked)">
+                    <i class="bi bi-fire text-danger me-1"></i> Popüler Sorular
+                </button>
+                <button type="button" class="segment-btn @(selectedOrigin == QuestionOriginType.StrategicRecommendation ? "active" : "")" 
+                        @onclick="() => SelectOrigin(QuestionOriginType.StrategicRecommendation)">
+                    <i class="bi bi-stars text-warning me-1"></i> Önerilen Sorular
+                </button>
+            </div>
+        </div>
+
+        <!-- Live Search Input -->
+        <div class="col-12 col-md">
+            <div class="input-group search-input-wrap">
+                <span class="input-group-text bg-transparent border-0 text-muted ps-3"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control clean-search-input" placeholder="Soru metni veya anahtar kelime ara..." 
+                       @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleSearch" />
+                @if (!string.IsNullOrEmpty(searchQuery))
+                {
+                    <button class="btn btn-link text-muted pe-3 text-decoration-none" type="button" @onclick="ClearSearch">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>
+                }
+            </div>
+        </div>
+
+        <!-- Favorites Only Toggle -->
+        <div class="col-auto ps-2 pe-3 d-none d-md-block">
+            <div class="form-check form-switch mb-0" title="Sadece Favorilerimi Göster">
+                <input class="form-check-input cursor-pointer" type="checkbox" role="switch" id="favOnlySwitch" @bind="onlyFavorited" @bind:after="ApplyFilters">
+                <label class="form-check-label small fw-semibold text-warning cursor-pointer" for="favOnlySwitch">
+                    <i class="bi @(onlyFavorited ? "bi-star-fill" : "bi-star") me-1"></i> Favoriler
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Refined, Clean Question Feed -->
+@if (isLoading)
+{
+    <div class="glass-card text-center py-5 rounded-4">
+        <div class="spinner-border text-primary mb-3" role="status"></div>
+        <div class="text-muted small">Sorular yükleniyor...</div>
+    </div>
+}
+else if (filteredQuestions == null || filteredQuestions.Count == 0)
+{
+    <div class="glass-card text-center py-5 rounded-4">
+        <i class="bi bi-chat-square-text text-muted" style="font-size: 2.8rem; opacity: 0.5;"></i>
+        <h6 class="mt-3 text-muted fw-semibold">Aradığınız kriterlere uygun soru bulunamadı</h6>
+        <p class="text-muted small mb-3">Filtreleri temizleyebilir veya yeni sorular üretebilirsiniz.</p>
+        <button class="btn btn-outline-primary btn-sm rounded-pill px-3" @onclick="ResetFilters">Filtreleri Temizle</button>
+    </div>
+}
+else
+{
+    <div class="d-flex flex-column gap-2.5">
+        @foreach (var q in filteredQuestions)
+        {
+            var isReal = q.OriginType == QuestionOriginType.RealTenantAsked;
+            var isExpanded = expandedQuestionIds.Contains(q.Id);
+            var isCopied = copiedIds.Contains(q.Id);
+
+            <div class="clean-question-row">
+                <div class="d-flex align-items-start justify-content-between gap-3">
+                    <!-- Question Content Area -->
+                    <div class="flex-grow-1 min-w-0">
+                        <!-- Top subtle meta line (No category icons) -->
+                        <div class="d-flex align-items-center gap-2 mb-1.5 flex-wrap">
+                            <span class="category-tag">
+                                @q.CategoryName
+                            </span>
+
+                            @if (q.HighlightBadge == "✨ Yeni Öneri")
+                            {
+                                <span class="origin-tag bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.7rem; font-weight: 600;">
+                                    ✨ Yeni Üretildi
+                                </span>
+                            }
+                            else if (isReal)
+                            {
+                                <span class="origin-tag populer" title="Canlı tenant chat loglarında sıkça sorulmuş">
+                                    <i class="bi bi-fire text-danger me-0.5"></i> Popüler
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="origin-tag oneri" title="Stratejik iş zekası önerisi">
+                                    <i class="bi bi-stars text-warning me-0.5"></i> Öneri
+                                </span>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(q.TargetRole))
+                            {
+                                <span class="role-tag">
+                                    @q.TargetRole
+                                </span>
+                            }
+
+                            @if (q.ProductionUsageCount > 0)
+                            {
+                                <span class="usage-count-text">
+                                    @q.ProductionUsageCount+ kez soruldu
+                                </span>
+                            }
+                        </div>
+
+                        <!-- Main Prompt Text (Clean, Large, Bold) -->
+                        <div class="question-text mb-1" @onclick='() => CopyText(q.Prompt, q.Id)' title="Kopyalamak için tıklayın">
+                            @q.Prompt
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(q.Title) && q.Title != q.Prompt)
+                        {
+                            <div class="question-subtext text-muted">
+                                @q.Title
+                            </div>
+                        }
+
+                        <!-- Expandable Alternative Phrasings (Clean & Subtle) -->
+                        @if (q.AlternativePhrasings != null && q.AlternativePhrasings.Count > 0)
+                        {
+                            <div class="mt-2">
+                                <button class="btn btn-link btn-sm p-0 text-muted d-inline-flex align-items-center gap-1 text-decoration-none alt-toggle-btn"
+                                        @onclick="() => ToggleExpand(q.Id)">
+                                    <i class="bi @(isExpanded ? "bi-chevron-up" : "bi-chevron-down")" style="font-size: 0.75rem;"></i>
+                                    <span style="font-size: 0.775rem;">Benzer sorma şekilleri (@q.AlternativePhrasings.Count)</span>
+                                </button>
+
+                                @if (isExpanded)
+                                {
+                                    <div class="alt-phrasings-list mt-2">
+                                        @foreach (var alt in q.AlternativePhrasings)
+                                        {
+                                            var altKey = q.Id + "-" + alt.GetHashCode();
+                                            var isAltCopied = copiedIds.Contains(altKey);
+                                            <div class="alt-phrase-item d-flex align-items-center justify-content-between gap-2">
+                                                <span class="text-muted small">"@alt"</span>
+                                                <button class="btn btn-link btn-sm p-0 text-primary d-inline-flex align-items-center gap-1"
+                                                        @onclick='() => CopyText(alt, altKey)'>
+                                                    <i class="bi @(isAltCopied ? "bi-check2 text-success" : "bi-clipboard")"></i>
+                                                    <span class="small @(isAltCopied ? "text-success" : "")">
+                                                        @(isAltCopied ? "Kopyalandı" : "Kopyala")
+                                                    </span>
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Right Action Side (Clean Copy Button & Favorite Star) -->
+                    <div class="d-flex align-items-center gap-2 flex-shrink-0 pt-1">
+                        <button class="btn-clean-copy @(isCopied ? "copied" : "")" 
+                                @onclick='() => CopyText(q.Prompt, q.Id)' title="Soruyu panoya kopyala">
+                            <i class="bi @(isCopied ? "bi-check2" : "bi-clipboard") me-1"></i>
+                            <span>@(isCopied ? "Kopyalandı" : "Kopyala")</span>
+                        </button>
+
+                        <button class="btn-fav-icon @(q.IsFavorited ? "active" : "")" 
+                                @onclick="() => ToggleFavorite(q)" title="@(q.IsFavorited ? "Favorilerden Çıkar" : "Favoriye Ekle")">
+                            <i class="bi @(q.IsFavorited ? "bi-star-fill" : "bi-star")"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<!-- Minimalist Modal: Yeni Soru Ekle -->
+@if (showAddModal)
+{
+    <div class="modal-backdrop fade show" style="background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);"></div>
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content glass-card border-secondary text-white shadow-lg rounded-4 p-2">
+                <div class="modal-header border-0 pb-2">
+                    <h5 class="modal-title fw-bold mb-0 text-white">Yeni Soru Ekle</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseAddModal"></button>
+                </div>
+
+                <div class="modal-body py-2">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small mb-1">OzBI Soru Metni (Prompt) *</label>
+                        <textarea class="form-control input-custom" rows="2" placeholder="Örn: Bu ay en çok ciro yaptığımız ilk 10 müşteriyi listele..." @bind="newCustomItem.Prompt"></textarea>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label text-muted small mb-1">Kategori</label>
+                            <select class="form-select input-custom" @bind="newCustomItem.CategoryId">
+                                <option value="1">Finans & Nakit Akışı</option>
+                                <option value="2">Satış & Ciro</option>
+                                <option value="3">Müşteriler & Tahsilat</option>
+                                <option value="4">Stok & Envanter</option>
+                                <option value="5">Sipariş & Sevkiyat</option>
+                                <option value="6">Yönetim & Strateji</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label text-muted small mb-1">Tür</label>
+                            <select class="form-select input-custom" @bind="newCustomItem.OriginTypeId">
+                                <option value="1">Popüler (Canlıda Soruldu)</option>
+                                <option value="2">Önerilen Soru</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label text-muted small mb-1">İlgili Rol (Opsiyonel)</label>
+                        <input type="text" class="form-control input-custom" placeholder="Örn: CFO / Satış Direktörü" @bind="newCustomItem.TargetRole" />
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 pt-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" @onclick="CloseAddModal">İptal</button>
+                    <button type="button" class="btn btn-primary btn-sm rounded-pill px-4" @onclick="SaveCustomQuestion">
+                        Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    /* Filter Pills (Clean & Round - No Icons) */
+    .filter-pill {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--text-muted);
+        padding: 0.45rem 1rem;
+        border-radius: 50px;
+        font-size: 0.835rem;
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        transition: all 0.2s ease;
+    }
+
+    .filter-pill:hover {
+        background: rgba(255, 255, 255, 0.09);
+        color: var(--text-main);
+        border-color: rgba(255, 255, 255, 0.16);
+    }
+
+    .filter-pill.active {
+        background: var(--primary);
+        color: #fff;
+        border-color: var(--primary);
+        box-shadow: 0 2px 10px var(--primary-glow);
+    }
+
+    .pill-badge {
+        background: rgba(0, 0, 0, 0.25);
+        border-radius: 20px;
+        padding: 0.1rem 0.45rem;
+        font-size: 0.7rem;
+        margin-left: 0.45rem;
+        opacity: 0.85;
+    }
+
+    /* Search & Filter Bar */
+    .search-filter-bar {
+        background: rgba(19, 27, 46, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        backdrop-filter: blur(12px);
+    }
+
+    .segment-pill-group {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 50px;
+        padding: 3px;
+        display: inline-flex;
+        gap: 3px;
+    }
+
+    .segment-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        font-weight: 500;
+        padding: 0.35rem 0.85rem;
+        border-radius: 50px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+    }
+
+    .segment-btn:hover {
+        color: #fff;
+    }
+
+    .segment-btn.active {
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+        font-weight: 600;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .search-input-wrap {
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 50px;
+        overflow: hidden;
+    }
+
+    .clean-search-input {
+        background: transparent !important;
+        border: none !important;
+        color: #fff !important;
+        font-size: 0.875rem;
+        box-shadow: none !important;
+    }
+
+    .clean-search-input::placeholder {
+        color: var(--text-dim);
+    }
+
+    /* Clean Question Rows (Spacious & Refined) */
+    .clean-question-row {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        padding: 1.15rem 1.35rem;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .clean-question-row:hover {
+        border-color: rgba(99, 102, 241, 0.3);
+        background: var(--bg-card-hover);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        transform: translateY(-1px);
+    }
+
+    .question-text {
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: #f1f5f9;
+        line-height: 1.45;
+        cursor: pointer;
+        letter-spacing: -0.01em;
+    }
+
+    .question-text:hover {
+        color: #818cf8;
+    }
+
+    .question-subtext {
+        font-size: 0.8rem;
+        opacity: 0.7;
+    }
+
+    /* Subtle Meta Tags */
+    .category-tag {
+        font-size: 0.725rem;
+        font-weight: 600;
+        color: #93c5fd;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        padding: 0.15rem 0.5rem;
+        border-radius: 6px;
+    }
+
+    .origin-tag {
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 0.15rem 0.5rem;
+        border-radius: 6px;
+    }
+
+    .origin-tag.populer {
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.1);
+        border: 1px solid rgba(56, 189, 248, 0.2);
+    }
+
+    .origin-tag.oneri {
+        color: #c084fc;
+        background: rgba(192, 132, 252, 0.1);
+        border: 1px solid rgba(192, 132, 252, 0.2);
+    }
+
+    .role-tag {
+        font-size: 0.7rem;
+        color: #94a3b8;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 0.15rem 0.45rem;
+        border-radius: 6px;
+    }
+
+    .usage-count-text {
+        font-size: 0.7rem;
+        color: var(--text-dim);
+    }
+
+    /* Copy Button (Sleek & Clean) */
+    .btn-clean-copy {
+        background: rgba(99, 102, 241, 0.1);
+        border: 1px solid rgba(99, 102, 241, 0.25);
+        color: #a5b4fc;
+        font-size: 0.775rem;
+        font-weight: 600;
+        padding: 0.35rem 0.8rem;
+        border-radius: 8px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        transition: all 0.2s ease;
+    }
+
+    .btn-clean-copy:hover {
+        background: var(--primary);
+        color: #fff;
+        border-color: var(--primary);
+        box-shadow: 0 0 10px var(--primary-glow);
+    }
+
+    .btn-clean-copy.copied {
+        background: rgba(16, 185, 129, 0.15);
+        border-color: rgba(16, 185, 129, 0.4);
+        color: #34d399;
+    }
+
+    .btn-fav-icon {
+        background: transparent;
+        border: none;
+        color: var(--text-dim);
+        font-size: 1.1rem;
+        cursor: pointer;
+        padding: 0.25rem;
+        transition: transform 0.15s ease, color 0.15s ease;
+    }
+
+    .btn-fav-icon:hover {
+        transform: scale(1.15);
+        color: var(--text-muted);
+    }
+
+    .btn-fav-icon.active {
+        color: #fbbf24;
+    }
+
+    /* Alternative Phrasings (Subtle Minimalist Area) */
+    .alt-toggle-btn {
+        opacity: 0.75;
+        transition: opacity 0.15s ease;
+    }
+
+    .alt-toggle-btn:hover {
+        opacity: 1;
+    }
+
+    .alt-phrasings-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        padding-left: 0.5rem;
+        border-left: 2px solid rgba(99, 102, 241, 0.25);
+    }
+
+    .alt-phrase-item {
+        background: rgba(0, 0, 0, 0.15);
+        border-radius: 6px;
+        padding: 0.35rem 0.65rem;
+    }
+</style>
+
+@code {
+    private List<PromptTemplate>? questions;
+    private List<PromptTemplate>? filteredQuestions;
+    private List<TemplateCategoryInfo>? categories;
+    private PromptCategoryType selectedCategory = PromptCategoryType.All;
+    private QuestionOriginType selectedOrigin = QuestionOriginType.All;
+    private string searchQuery = "";
+    private bool onlyFavorited = false;
+    private bool isLoading = true;
+    private bool isGenerating = false;
+    private int currentPortalUserId = 1;
+
+    private HashSet<string> expandedQuestionIds = new();
+    private HashSet<string> copiedIds = new();
+
+    private bool showAddModal = false;
+    private CustomPromptTemplateItem newCustomItem = new()
+    {
+        CategoryId = 1,
+        OriginTypeId = 1
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCurrentUserAsync();
+        await LoadData();
+    }
+
+    private async Task LoadCurrentUserAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (int.TryParse(idClaim, out var pId) && pId > 0)
+                {
+                    currentPortalUserId = pId;
+                }
+            }
+        }
+        catch { }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            categories = await TemplateService.GetCategoriesSummaryAsync();
+            questions = await TemplateService.GetAllQuestionsAsync(
+                portalUserId: currentPortalUserId
+            );
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error loading questions: " + ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task GenerateAndRefresh()
+    {
+        if (isGenerating) return;
+        isGenerating = true;
+        StateHasChanged();
+
+        try
+        {
+            // Synthesize fresh, brand-new Logo & Mikro questions dynamically
+            await Task.Delay(300); // Smooth visual feedback
+            questions = await TemplateService.GenerateFreshDynamicQuestionsAsync(
+                count: 6,
+                category: selectedCategory,
+                portalUserId: currentPortalUserId
+            );
+            categories = await TemplateService.GetCategoriesSummaryAsync();
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error generating dynamic questions: " + ex.Message);
+        }
+        finally
+        {
+            isGenerating = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SelectCategory(PromptCategoryType category)
+    {
+        selectedCategory = category;
+        ApplyFilters();
+    }
+
+    private void SelectOrigin(QuestionOriginType origin)
+    {
+        selectedOrigin = origin;
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        if (questions == null) return;
+
+        var query = questions.AsEnumerable();
+
+        if (selectedCategory != PromptCategoryType.All)
+        {
+            query = query.Where(q => q.Category == selectedCategory);
+        }
+
+        if (selectedOrigin != QuestionOriginType.All)
+        {
+            query = query.Where(q => q.OriginType == selectedOrigin);
+        }
+
+        if (onlyFavorited)
+        {
+            query = query.Where(q => q.IsFavorited);
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            var st = searchQuery.Trim().ToLowerInvariant();
+            query = query.Where(q =>
+                q.Title.ToLowerInvariant().Contains(st) ||
+                q.Prompt.ToLowerInvariant().Contains(st) ||
+                q.TargetRole.ToLowerInvariant().Contains(st) ||
+                q.AlternativePhrasings.Any(a => a.ToLowerInvariant().Contains(st)) ||
+                q.Tags.Any(t => t.ToLowerInvariant().Contains(st))
+            );
+        }
+
+        filteredQuestions = query.ToList();
+    }
+
+    private void HandleSearch() => ApplyFilters();
+
+    private void ClearSearch()
+    {
+        searchQuery = "";
+        ApplyFilters();
+    }
+
+    private void ResetFilters()
+    {
+        selectedCategory = PromptCategoryType.All;
+        selectedOrigin = QuestionOriginType.All;
+        searchQuery = "";
+        onlyFavorited = false;
+        ApplyFilters();
+    }
+
+    private void ToggleExpand(string id)
+    {
+        if (expandedQuestionIds.Contains(id))
+            expandedQuestionIds.Remove(id);
+        else
+            expandedQuestionIds.Add(id);
+    }
+
+    private async Task CopyText(string text, string elementId)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            copiedIds.Add(elementId);
+            StateHasChanged();
+
+            _ = Task.Delay(2000).ContinueWith(_ =>
+            {
+                copiedIds.Remove(elementId);
+                InvokeAsync(StateHasChanged);
+            });
+        }
+        catch { }
+    }
+
+    private async Task ToggleFavorite(PromptTemplate q)
+    {
+        var effectiveUserId = currentPortalUserId > 0 ? currentPortalUserId : 1;
+
+        // Persist into SQLite Favorites table
+        q.IsFavorited = await AuditService.ToggleFavoriteAsync(
+            effectiveUserId,
+            "PromptTemplate",
+            q.Id,
+            q.Prompt,
+            q.CategoryName
+        );
+
+        if (onlyFavorited && !q.IsFavorited)
+        {
+            ApplyFilters();
+        }
+        StateHasChanged();
+    }
+
+    private void OpenAddModal()
+    {
+        newCustomItem = new CustomPromptTemplateItem
+        {
+            CategoryId = 1,
+            OriginTypeId = 1,
+            CreatedByPortalUserId = currentPortalUserId
+        };
+        showAddModal = true;
+    }
+
+    private void CloseAddModal() => showAddModal = false;
+
+    private async Task SaveCustomQuestion()
+    {
+        if (string.IsNullOrWhiteSpace(newCustomItem.Prompt))
+            return;
+
+        if (string.IsNullOrWhiteSpace(newCustomItem.Title))
+            newCustomItem.Title = newCustomItem.Prompt;
+
+        newCustomItem.CreatedByPortalUserId = currentPortalUserId;
+        await TemplateService.AddCustomQuestionAsync(newCustomItem);
+        showAddModal = false;
+        await LoadData();
+    }
+}

@@ -1,6 +1,7 @@
 @page "/feedbacks"
 @inject IOzBiAuditService AuditService
 @inject IMikroAuditEngine MikroAuditEngine
+@inject IOzBiFeedbackMonitorService FeedbackMonitorService
 @inject IJSRuntime JSRuntime
 @inject NavigationManager NavigationManager
 @using OzBiPortalCRM.Services
@@ -14,10 +15,27 @@
         </h2>
         <div class="text-muted">Müşterilerin beğenmediği yanıtları, girdikleri yazılı yorumları ve prompt gelişim fırsatlarını tek ekranda inceleyin</div>
     </div>
-    <button class="btn btn-outline-secondary btn-sm" @onclick="LoadData">
-        <i class="bi bi-arrow-clockwise"></i> Yenile
-    </button>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <button class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1.5" @onclick="PushUnpushedToSlack" disabled="@isPushingAll" title="Henüz iletilmemiş yeni olumsuz geri bildirimleri ve yorumları Slack #customer-feedback kanalına push et">
+            <i class="bi bi-slack"></i>
+            <span>@(isPushingAll ? "Slack'e İletiliyor..." : "Slack #customer-feedback'e Gönder")</span>
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="LoadData">
+            <i class="bi bi-arrow-clockwise"></i> Yenile
+        </button>
+    </div>
 </div>
+
+@if (!string.IsNullOrEmpty(alertMessage))
+{
+    <div class="alert @(alertType == "success" ? "alert-success" : "alert-danger") alert-dismissible fade show d-flex align-items-center justify-content-between p-3 mb-4 rounded-3 border-0" role="alert" style="@(alertType == "success" ? "background: rgba(16, 185, 129, 0.15); border-left: 4px solid #10b981 !important; color: #a7f3d0;" : "background: rgba(239, 68, 68, 0.15); border-left: 4px solid #ef4444 !important; color: #fca5a5;")">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi @(alertType == "success" ? "bi-check-circle-fill text-success" : "bi-exclamation-triangle-fill text-danger") fs-5"></i>
+            <span>@alertMessage</span>
+        </div>
+        <button type="button" class="btn-close btn-close-white" @onclick="() => alertMessage = null" aria-label="Close"></button>
+    </div>
+}
 
 <!-- KPI Summary Cards -->
 <div class="row g-3 mb-4">
@@ -168,12 +186,29 @@ else
                         </div>
                     </div>
 
-                    <!-- Right Side: Date & Sohbete Git Button (Spacious layout) -->
-                    <div class="d-flex align-items-center gap-3 flex-wrap ms-auto">
+                    <!-- Right Side: Date, Slack Push & Sohbete Git Button (Spacious layout) -->
+                    <div class="d-flex align-items-center gap-2.5 flex-wrap ms-auto">
                         <span class="date-chip">
                             <i class="bi bi-clock me-1 opacity-75"></i>@(item.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")
                         </span>
-                        <a href="chat/@item.ChatId" class="btn-goto-chat ms-md-2" title="Bu sohbetin tüm akışını ve konuşma geçmişini aç">
+
+                        <!-- Slack Push Action Button -->
+                        @if (pushedMessageIds.Contains(item.Id))
+                        {
+                            <button class="btn-slack-pushed" @onclick="() => PushSingleFeedbackToSlack(item)" disabled="@(pushingMessageIds.Contains(item.Id))" title="Slack #customer-feedback kanalına push edildi. Tekrar göndermek için tıklayın">
+                                <i class="bi bi-check2-circle text-success"></i>
+                                <span>Slack'e İletildi</span>
+                            </button>
+                        }
+                        else
+                        {
+                            <button class="btn-slack-push" @onclick="() => PushSingleFeedbackToSlack(item)" disabled="@(pushingMessageIds.Contains(item.Id))" title="Bu geri bildirimi ve SQL'i Slack #customer-feedback kanalına ilet">
+                                <i class="bi bi-slack"></i>
+                                <span>@(pushingMessageIds.Contains(item.Id) ? "İletiliyor..." : "Slack'e Push Et")</span>
+                            </button>
+                        }
+
+                        <a href="chat/@item.ChatId" class="btn-goto-chat ms-md-1" title="Bu sohbetin tüm akışını ve konuşma geçmişini aç">
                             <span>Sohbete Git</span>
                             <i class="bi bi-arrow-up-right"></i>
                         </a>
@@ -447,6 +482,64 @@ else
         color: #ffffff;
         box-shadow: 0 0 16px rgba(59, 130, 246, 0.45);
         transform: translateY(-1px);
+    }
+
+    /* Slack Push Action Buttons */
+    .btn-slack-push {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        background: linear-gradient(135deg, rgba(225, 29, 72, 0.18) 0%, rgba(190, 18, 60, 0.28) 100%);
+        border: 1px solid rgba(244, 63, 94, 0.45);
+        color: #fda4af;
+        padding: 0.4rem 0.9rem;
+        border-radius: 8px;
+        font-size: 0.825rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        text-decoration: none;
+    }
+
+    .btn-slack-push:hover:not(:disabled) {
+        background: linear-gradient(135deg, rgba(225, 29, 72, 0.4) 0%, rgba(190, 18, 60, 0.55) 100%);
+        border-color: #fb7185;
+        color: #ffffff;
+        box-shadow: 0 0 16px rgba(225, 29, 72, 0.45);
+        transform: translateY(-1px);
+    }
+
+    .btn-slack-push:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .btn-slack-pushed {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(52, 211, 153, 0.4);
+        color: #6ee7b7;
+        padding: 0.4rem 0.9rem;
+        border-radius: 8px;
+        font-size: 0.825rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-slack-pushed:hover:not(:disabled) {
+        background: rgba(16, 185, 129, 0.25);
+        border-color: #34d399;
+        color: #ffffff;
+        box-shadow: 0 0 14px rgba(16, 185, 129, 0.35);
+        transform: translateY(-1px);
+    }
+
+    .btn-slack-pushed:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
     }
 
     /* Customer Voice Quote Box */
@@ -765,6 +858,11 @@ else
     private string filterType = "disliked"; // "disliked", "comments_only", "all", "liked_only", "failed_disliked"
 
     private HashSet<string> expandedMessageIds = new();
+    private HashSet<string> pushedMessageIds = new();
+    private HashSet<string> pushingMessageIds = new();
+    private bool isPushingAll = false;
+    private string? alertMessage;
+    private string alertType = "success";
 
     // Compliance Modal
     private bool isComplianceModalOpen = false;
@@ -803,6 +901,15 @@ else
                 searchTerm: searchQuery,
                 filterType: filterType,
                 maxResults: 150);
+
+            try
+            {
+                pushedMessageIds = await FeedbackMonitorService.GetPushedMessageIdsAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error loading pushed feedback IDs: " + ex.Message);
+            }
         }
         catch (Exception ex)
         {
@@ -811,6 +918,67 @@ else
         finally
         {
             isLoading = false;
+        }
+    }
+
+    private async Task PushSingleFeedbackToSlack(OzBiChatMessage item)
+    {
+        if (pushingMessageIds.Contains(item.Id)) return;
+
+        pushingMessageIds.Add(item.Id);
+        StateHasChanged();
+
+        try
+        {
+            var success = await FeedbackMonitorService.PushFeedbackByIdAsync(item.Id, "CRM_User");
+            if (success)
+            {
+                pushedMessageIds.Add(item.Id);
+                alertType = "success";
+                alertMessage = $"\"{item.Chat?.Tenant?.Name ?? "Tenant"}\" müşterisinin geri bildirimi Slack #customer-feedback kanalına başarıyla iletildi!";
+            }
+            else
+            {
+                alertType = "danger";
+                alertMessage = "Slack bildirimi gönderilemedi. Lütfen webhook yapılandırmasını kontrol edin.";
+            }
+        }
+        catch (Exception ex)
+        {
+            alertType = "danger";
+            alertMessage = "Hata oluştu: " + ex.Message;
+        }
+        finally
+        {
+            pushingMessageIds.Remove(item.Id);
+            StateHasChanged();
+        }
+    }
+
+    private async Task PushUnpushedToSlack()
+    {
+        if (isPushingAll) return;
+
+        isPushingAll = true;
+        alertMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var count = await FeedbackMonitorService.CheckAndPushNewFeedbacksAsync(pushAllUnpushed: true, triggeredBy: "CRM_BulkPush");
+            pushedMessageIds = await FeedbackMonitorService.GetPushedMessageIdsAsync();
+            alertType = "success";
+            alertMessage = $"{count} adet müşteri geri bildirimi Slack #customer-feedback kanalına başarıyla iletildi.";
+        }
+        catch (Exception ex)
+        {
+            alertType = "danger";
+            alertMessage = "Toplu bildirim gönderilirken hata oluştu: " + ex.Message;
+        }
+        finally
+        {
+            isPushingAll = false;
+            StateHasChanged();
         }
     }
 
