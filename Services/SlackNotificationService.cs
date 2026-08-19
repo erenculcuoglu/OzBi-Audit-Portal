@@ -503,7 +503,22 @@ namespace OzBiPortalCRM.Services
                     });
                 }
 
-                // 6. Context footer
+                // 6. AI Çözüm & Düzeltme Önerisi (Logo / Mikro ERP Özelinde)
+                var fixSuggestion = GenerateAiFixSuggestion(p.ErrorMessage, p.SqlQuery, p.AssistantName, p.TenantName);
+                if (!string.IsNullOrWhiteSpace(fixSuggestion))
+                {
+                    blocks.Add(new
+                    {
+                        type = "section",
+                        text = new
+                        {
+                            type = "mrkdwn",
+                            text = fixSuggestion
+                        }
+                    });
+                }
+
+                // 7. Context footer
                 blocks.Add(new
                 {
                     type = "context",
@@ -544,6 +559,128 @@ namespace OzBiPortalCRM.Services
                 _logger.LogError(ex, "Slack SQL hata bildirimi gönderilirken beklenmeyen bir hata oluştu.");
                 return false;
             }
+        }
+
+        private static string GenerateAiFixSuggestion(string? errorMessage, string? sqlQuery, string? assistantName, string? tenantName)
+        {
+            var err = errorMessage ?? string.Empty;
+            var sql = sqlQuery ?? string.Empty;
+            var upperErr = err.ToUpperInvariant();
+            var upperSql = sql.ToUpperInvariant();
+            var upperAsst = (assistantName ?? string.Empty).ToUpperInvariant();
+            var upperTenant = (tenantName ?? string.Empty).ToUpperInvariant();
+
+            // Determine ERP Type
+            string erpName = "Genel";
+            if (upperAsst.Contains("MIKRO") || upperTenant.Contains("MEVLANA") || upperTenant.Contains("TTS") || upperSql.Contains("CARI_HESAP") || upperSql.Contains("STOKLAR"))
+            {
+                erpName = "Mikro ERP";
+            }
+            else if (upperAsst.Contains("LOGO") || upperTenant.Contains("Q BILGI") || upperSql.Contains("LG_") || upperSql.Contains("CLCARD") || upperSql.Contains("STLINE"))
+            {
+                erpName = "Logo ERP";
+            }
+            else if (upperAsst.Contains("NETSIS") || upperSql.Contains("TBLCASABIT") || upperSql.Contains("TBLFATUIRS"))
+            {
+                erpName = "Netsis ERP";
+            }
+
+            // 1. Nested Aggregate Hatası
+            if (upperErr.Contains("CANNOT PERFORM AN AGGREGATE FUNCTION ON AN EXPRESSION CONTAINING AN AGGREGATE") || 
+                upperErr.Contains("CONTAINING AN AGGREGATE"))
+            {
+                if (erpName == "Mikro ERP")
+                {
+                    return "💡 *AI Çözüm & Düzeltme Önerisi (Mikro ERP):*\n> T-SQL'de `MAX(MIN(...))` veya aggregate içinde aggregate kullanılamaz. Vade/tarih farkı hesaplamasını (`DATEDIFF`) CTE (`WITH FaturaBazinda`) içinde satır bazında yapıp, ana sorguda sadece `MAX(tanimli_vade_gunu)` olarak toplayın.";
+                }
+                else if (erpName == "Logo ERP")
+                {
+                    return "💡 *AI Çözüm & Düzeltme Önerisi (Logo ERP):*\n> T-SQL'de aggregate içinde aggregate kullanılamaz. Fatura satırları veya vade hesaplamasını alt sorguda (CTE/Subquery) yapıp, dış sorguda `SUM` veya `MAX` uygulayın.";
+                }
+                else
+                {
+                    return "💡 *AI Çözüm & Düzeltme Önerisi:*\n> T-SQL kuralları gereği aggregate (SUM/MAX/MIN) içinde başka bir aggregate kullanılamaz. Hesaplamayı CTE veya alt sorgu içinde yapıp dışarıda toplayın.";
+                }
+            }
+
+            // 2. Tablo Bulunamadı (Invalid Object Name)
+            if (upperErr.Contains("INVALID OBJECT NAME"))
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(err, @"'([^']+)'");
+                var objName = match.Success ? match.Groups[1].Value : "tablo";
+
+                if (erpName == "Logo ERP")
+                {
+                    return $"💡 *AI Çözüm & Düzeltme Önerisi (Logo ERP):*\n> `{objName}` tablosu bulunamadı. Logo ERP'de tablo adları firma ve dönem numarası içerir (Örn: `LG_FFF_DD_STLINE` veya `LG_FFF_CLCARD`). Modelin kullandığı firma/dönem kodu `{objName}` tenant'ın güncel ERP veritabanı ön ekiyle uyuşmuyor; şema eşleştirmesini kontrol edin.";
+                }
+                else if (erpName == "Mikro ERP")
+                {
+                    return $"💡 *AI Çözüm & Düzeltme Önerisi (Mikro ERP):*\n> `{objName}` tablosu bulunamadı. Mikro ERP standart tablolarını (`CARI_HESAPLAR`, `CARI_HESAP_HAREKETLERI`, `STOKLAR`, `STOK_HAREKETLERI`) ve tenant veritabanındaki görünürlük izinlerini kontrol edin.";
+                }
+                else
+                {
+                    return $"💡 *AI Çözüm & Düzeltme Önerisi:*\n> `{objName}` tablosu veritabanında bulunamadı. Modelin sorguladığı tablo ismini ve tenant şemasını kontrol edin.";
+                }
+            }
+
+            // 3. Kolon Bulunamadı (Invalid Column Name)
+            if (upperErr.Contains("INVALID COLUMN NAME"))
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(err, @"'([^']+)'");
+                var colName = match.Success ? match.Groups[1].Value : "kolon";
+
+                if (erpName == "Mikro ERP")
+                {
+                    return $"💡 *AI Çözüm & Düzeltme Önerisi (Mikro ERP):*\n> `{colName}` kolonu bulunamadı. Mikro ERP standart alanlarını (`cha_kod`, `cha_tarihi`, `cha_meblag`, `msg_S_...`) veya özel kullanıcı tanımlı alanları kontrol edin.";
+                }
+                else if (erpName == "Logo ERP")
+                {
+                    return $"💡 *AI Çözüm & Düzeltme Önerisi (Logo ERP):*\n> `{colName}` kolonu bulunamadı. Logo ERP standart kolonlarını (`CODE`, `DEFINITION_`, `DATE_`, `TOTAL`, `AMOUNT`, `LOGICALREF`) kontrol edin.";
+                }
+                else
+                {
+                    return $"💡 *AI Çözüm & Düzeltme Önerisi:*\n> `{colName}` kolonu tabloda bulunamadı. İlgili tablonun şemasını ve kolon adını doğrulayın.";
+                }
+            }
+
+            // 4. Zaman Aşımı (Timeout)
+            if (upperErr.Contains("ZAMAN AŞIMI") || upperErr.Contains("TIMEOUT") || upperErr.Contains("TIME OUT"))
+            {
+                if (erpName == "Mikro ERP")
+                {
+                    return "💡 *AI Performans Önerisi (Mikro ERP):*\n> Sorgu zaman aşımına uğradı. `CARI_HESAP_HAREKETLERI` veya `STOK_HAREKETLERI` tablosunda `cha_tarihi`/`sth_tarihi` tarih filtresi eksik veya indeks taranmamış. Sorguya tarih aralığı ve `TOP 100` ekleyin.";
+                }
+                else if (erpName == "Logo ERP")
+                {
+                    return "💡 *AI Performans Önerisi (Logo ERP):*\n> `LG_xxx_xx_STLINE` veya `CLFLINE` tablosu taranırken zaman aşımı oluştu. `DATE_` filtresi ve `LOGICALREF` indekslerini optimize edin, `TOP 100` ekleyin.";
+                }
+                else
+                {
+                    return "💡 *AI Performans Önerisi:*\n> Sorgu zaman aşımına uğradı. Tablo boyutunu sınırlamak için tarih filtresi ve `TOP 100` limiti ekleyin.";
+                }
+            }
+
+            // 5. Veri Tipi Dönüşüm Hatası (Conversion / Data Type Error)
+            if (upperErr.Contains("CONVERT") || upperErr.Contains("CAST") || upperErr.Contains("CONVERSION FAILED"))
+            {
+                if (erpName == "Mikro ERP")
+                {
+                    return "💡 *AI Çözüm & Düzeltme Önerisi (Mikro ERP):*\n> Tip dönüşüm hatası. Mikro ERP'de tarihler int (YYYYMMDD) veya float olarak saklanabilir. Hata almamak için `TRY_CONVERT(date, CONVERT(varchar(8), [kolon]), 112)` güvenli dönüşümünü kullanın.";
+                }
+                else
+                {
+                    return "💡 *AI Çözüm & Düzeltme Önerisi:*\n> Veri tipi dönüşüm hatası. `CONVERT`/`CAST` yerine hata vermeyen `TRY_CONVERT`/`TRY_CAST` fonksiyonlarını tercih edin.";
+                }
+            }
+
+            // 6. Sıfıra Bölme Hatası (Divide by Zero)
+            if (upperErr.Contains("DIVIDE BY ZERO"))
+            {
+                return "💡 *AI Çözüm & Düzeltme Önerisi:*\n> Sıfıra bölme hatası. Oran ve birim fiyat hesaplamalarında paydayı `NULLIF(payda, 0)` ile korumaya alın.";
+            }
+
+            // 7. Genel / Varsayılan İyileştirme
+            return $"💡 *AI İyileştirme Önerisi ({erpName}):*\n> Bu hata kalıbını önlemek için portaldeki **Prompt Şablonları (PromptTemplates)** modülüne bu soru için doğru T-SQL kalıbını (Golden Query) ekleyebilirsiniz.";
         }
     }
 }

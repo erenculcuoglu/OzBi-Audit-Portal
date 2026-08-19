@@ -86,7 +86,67 @@ def format_sql(raw_query):
                 return "\n\n-- ----------------------------\n\n".join(sqls)
         except:
             pass
-    return raw
+def generate_ai_fix_suggestion(error_msg, sql_query, tenant_name):
+    err = (error_msg or "").upper()
+    sql = (sql_query or "").upper()
+    tenant = (tenant_name or "").upper()
+
+    erp_name = "Genel ERP"
+    if "MIKRO" in tenant or "MEVLANA" in tenant or "TTS" in tenant or "CARI_HESAP" in sql or "STOKLAR" in sql:
+        erp_name = "Mikro ERP"
+    elif "LOGO" in tenant or "Q BILGI" in tenant or "LG_" in sql or "CLCARD" in sql or "STLINE" in sql:
+        erp_name = "Logo ERP"
+    elif "NETSIS" in tenant or "TBLCASABIT" in sql:
+        erp_name = "Netsis ERP"
+
+    if "CANNOT PERFORM AN AGGREGATE FUNCTION ON AN EXPRESSION CONTAINING AN AGGREGATE" in err or "CONTAINING AN AGGREGATE" in err:
+        if erp_name == "Mikro ERP":
+            return "💡 *AI Çözüm & Düzeltme Önerisi (Mikro ERP):*\n> T-SQL'de `MAX(MIN(...))` veya aggregate içinde aggregate kullanılamaz. Vade/tarih farkı hesaplamasını (`DATEDIFF`) CTE (`WITH FaturaBazinda`) içinde satır bazında yapıp, ana sorguda sadece `MAX(tanimli_vade_gunu)` olarak toplayın."
+        elif erp_name == "Logo ERP":
+            return "💡 *AI Çözüm & Düzeltme Önerisi (Logo ERP):*\n> T-SQL'de aggregate içinde aggregate kullanılamaz. Fatura satırları veya vade hesaplamasını alt sorguda (CTE/Subquery) yapıp, dış sorguda `SUM` veya `MAX` uygulayın."
+        else:
+            return "💡 *AI Çözüm & Düzeltme Önerisi:*\n> T-SQL kuralları gereği aggregate (SUM/MAX/MIN) içinde başka bir aggregate kullanılamaz. Hesaplamayı CTE veya alt sorgu içinde yapıp dışarıda toplayın."
+
+    if "INVALID OBJECT NAME" in err:
+        import re
+        match = re.search(r"'([^']+)'", error_msg or "")
+        obj_name = match.group(1) if match else "tablo"
+        if erp_name == "Logo ERP":
+            return f"💡 *AI Çözüm & Düzeltme Önerisi (Logo ERP):*\n> `{obj_name}` tablosu bulunamadı. Logo ERP'de tablo adları firma ve dönem numarası içerir (Örn: `LG_FFF_DD_STLINE`). Modelin kullandığı `{obj_name}` kodu tenant'ın güncel veritabanı ön ekiyle uyuşmuyor; şema eşleştirmesini kontrol edin."
+        elif erp_name == "Mikro ERP":
+            return f"💡 *AI Çözüm & Düzeltme Önerisi (Mikro ERP):*\n> `{obj_name}` tablosu bulunamadı. Mikro ERP standart tablolarını (`CARI_HESAPLAR`, `STOKLAR`) ve tenant veritabanındaki görünürlük izinlerini kontrol edin."
+        else:
+            return f"💡 *AI Çözüm & Düzeltme Önerisi:*\n> `{obj_name}` tablosu veritabanında bulunamadı. Modelin sorguladığı tablo ismini kontrol edin."
+
+    if "INVALID COLUMN NAME" in err:
+        import re
+        match = re.search(r"'([^']+)'", error_msg or "")
+        col_name = match.group(1) if match else "kolon"
+        if erp_name == "Mikro ERP":
+            return f"💡 *AI Çözüm & Düzeltme Önerisi (Mikro ERP):*\n> `{col_name}` kolonu bulunamadı. Mikro ERP standart alanlarını (`cha_kod`, `cha_tarihi`, `cha_meblag`, `msg_S_...`) kontrol edin."
+        elif erp_name == "Logo ERP":
+            return f"💡 *AI Çözüm & Düzeltme Önerisi (Logo ERP):*\n> `{col_name}` kolonu bulunamadı. Logo ERP standart kolonlarını (`CODE`, `DEFINITION_`, `DATE_`, `TOTAL`, `LOGICALREF`) kontrol edin."
+        else:
+            return f"💡 *AI Çözüm & Düzeltme Önerisi:*\n> `{col_name}` kolonu tabloda bulunamadı."
+
+    if "ZAMAN AŞIMI" in err or "TIMEOUT" in err or "TIME OUT" in err:
+        if erp_name == "Mikro ERP":
+            return "💡 *AI Performans Önerisi (Mikro ERP):*\n> Sorgu zaman aşımına uğradı. `CARI_HESAP_HAREKETLERI` veya `STOK_HAREKETLERI` tablosunda `cha_tarihi`/`sth_tarihi` tarih filtresi eksik. Tarih filtresi ve `TOP 100` ekleyin."
+        elif erp_name == "Logo ERP":
+            return "💡 *AI Performans Önerisi (Logo ERP):*\n> `LG_xxx_xx_STLINE` tablosu taranırken zaman aşımı oluştu. `DATE_` filtresi ve `LOGICALREF` indekslerini optimize edin, `TOP 100` ekleyin."
+        else:
+            return "💡 *AI Performans Önerisi:*\n> Sorgu zaman aşımına uğradı. Tablo boyutunu sınırlamak için tarih filtresi ve `TOP 100` ekleyin."
+
+    if "CONVERT" in err or "CAST" in err or "CONVERSION FAILED" in err:
+        if erp_name == "Mikro ERP":
+            return "💡 *AI Çözüm & Düzeltme Önerisi (Mikro ERP):*\n> Tip dönüşüm hatası. Mikro ERP'de tarihler int (YYYYMMDD) veya float olarak tutulabilir. `TRY_CONVERT(date, CONVERT(varchar(8), [kolon]), 112)` güvenli dönüşümünü kullanın."
+        else:
+            return "💡 *AI Çözüm & Düzeltme Önerisi:*\n> Veri tipi dönüşüm hatası. `CONVERT` yerine `TRY_CONVERT` / `TRY_CAST` fonksiyonlarını tercih edin."
+
+    if "DIVIDE BY ZERO" in err:
+        return "💡 *AI Çözüm & Düzeltme Önerisi:*\n> Sıfıra bölme hatası. Oran hesaplamalarında paydayı `NULLIF(payda, 0)` ile korumaya alın."
+
+    return f"💡 *AI İyileştirme Önerisi ({erp_name}):*\n> Bu hata kalıbını önlemek için portaldeki **Prompt Şablonları (PromptTemplates)** modülüne doğru T-SQL kalıbını (Golden Query) ekleyebilirsiniz."
 
 def send_slack_sql_error_notification(msg_id, chat_id, tenant_name, display_name, email_str, date_created_str, error_msg, prompt_text, sql_text):
     turkey_time = datetime.now(timezone(timedelta(hours=3))).strftime("%d.%m.%Y %H:%M:%S")
@@ -128,6 +188,14 @@ def send_slack_sql_error_notification(msg_id, chat_id, tenant_name, display_name
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"💻 *Hatalı SQL / Query:*\n```sql\n{short_sql}\n```"}
+        })
+
+    # AI Çözüm & Düzeltme Önerisi (ERP Özelinde)
+    suggestion = generate_ai_fix_suggestion(error_msg, sql_text, tenant_name)
+    if suggestion:
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": suggestion}
         })
 
     blocks.append({
