@@ -17,6 +17,7 @@ namespace OzBiPortalCRM.Data
         public DbSet<TenantComplianceSnapshot> TenantComplianceSnapshots { get; set; } = null!;
         public DbSet<CustomPromptTemplateItem> CustomPromptTemplates { get; set; } = null!;
         public DbSet<FeedbackPushSnapshot> FeedbackPushSnapshots { get; set; } = null!;
+        public DbSet<SqlErrorPushSnapshot> SqlErrorPushSnapshots { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -44,6 +45,9 @@ namespace OzBiPortalCRM.Data
 
             modelBuilder.Entity<FeedbackPushSnapshot>()
                 .HasKey(fp => fp.MessageId);
+
+            modelBuilder.Entity<SqlErrorPushSnapshot>()
+                .HasKey(se => se.MessageId);
         }
 
         public async Task EnsureTablesCreatedAsync()
@@ -189,6 +193,27 @@ namespace OzBiPortalCRM.Data
                             Status TEXT NOT NULL
                         );";
                     await cmd6.ExecuteNonQueryAsync();
+                }
+                catch { }
+
+                try
+                {
+                    using var cmd7 = Database.GetDbConnection().CreateCommand();
+                    cmd7.CommandText = @"
+                        CREATE TABLE IF NOT EXISTS SqlErrorPushSnapshots (
+                            MessageId TEXT PRIMARY KEY,
+                            ChatId TEXT,
+                            TenantName TEXT,
+                            UserName TEXT,
+                            UserEmail TEXT,
+                            ErrorMessage TEXT,
+                            Prompt TEXT,
+                            SqlQuery TEXT,
+                            PushedAt TEXT NOT NULL,
+                            PushedBy TEXT,
+                            Status TEXT NOT NULL
+                        );";
+                    await cmd7.ExecuteNonQueryAsync();
                 }
                 catch { }
             }

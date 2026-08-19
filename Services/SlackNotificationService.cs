@@ -28,6 +28,7 @@ namespace OzBiPortalCRM.Services
 
         private const string DefaultBase64WebhookUrl = "aHR0cHM6Ly9ob29rcy5zbGFjay5jb20vc2VydmljZXMvVDM3R0xSSlRGL0IwQk40UDczQzc5L0NKNE9vcjVSaXZxbzZkZnYwOEJxQ1NNMA==";
         private const string DefaultFeedbackBase64WebhookUrl = "aHR0cHM6Ly9ob29rcy5zbGFjay5jb20vc2VydmljZXMvVDM3R0xSSlRGL0IwQlI3VFlRUTNZLzVjNldKNnBRd0lHRGNEcnJhaVJEOG5vVQ==";
+        private const string DefaultSqlErrorBase64WebhookUrl = "aHR0cHM6Ly9ob29rcy5zbGFjay5jb20vc2VydmljZXMvVDM3R0xSSlRGL0IwQlJBMFNSUFJDL3lvR1JpOEVWNHdaUEVrbWV5ejFHVWltUw==";
 
         private string GetEffectiveWebhookUrl()
         {
@@ -74,6 +75,40 @@ namespace OzBiPortalCRM.Services
                 try
                 {
                     webhookUrl = Encoding.UTF8.GetString(Convert.FromBase64String(DefaultFeedbackBase64WebhookUrl));
+                }
+                catch
+                {
+                    webhookUrl = string.Empty;
+                }
+            }
+
+            // 4. Genel Webhook URL fallback
+            if (string.IsNullOrWhiteSpace(webhookUrl))
+            {
+                webhookUrl = GetEffectiveWebhookUrl();
+            }
+
+            return webhookUrl ?? string.Empty;
+        }
+
+        private string GetEffectiveSqlErrorWebhookUrl()
+        {
+            // 1. Özel SqlError Webhook URL (appsettings.json)
+            var webhookUrl = _configuration["Slack:SqlErrorWebhookUrl"] ?? _configuration["Slack:ErrorWebhookUrl"];
+
+            // 2. Ortam değişkeni fallback
+            if (string.IsNullOrWhiteSpace(webhookUrl))
+            {
+                webhookUrl = Environment.GetEnvironmentVariable("SLACK_SQL_ERROR_WEBHOOK_URL") 
+                             ?? Environment.GetEnvironmentVariable("SLACK_ERROR_WEBHOOK_URL");
+            }
+
+            // 3. Base64 varsayılan SQL Error Webhook URL fallback (#ozbi-sql-errors kanalı)
+            if (string.IsNullOrWhiteSpace(webhookUrl))
+            {
+                try
+                {
+                    webhookUrl = Encoding.UTF8.GetString(Convert.FromBase64String(DefaultSqlErrorBase64WebhookUrl));
                 }
                 catch
                 {
@@ -372,6 +407,141 @@ namespace OzBiPortalCRM.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Slack müşteri geri bildirimi gönderilirken beklenmeyen bir hata oluştu.");
+                return false;
+            }
+        }
+
+        public async Task<bool> SendSqlErrorNotificationAsync(SqlErrorSlackPayload payload)
+        {
+            try
+            {
+                var p = payload;
+                var webhookUrl = GetEffectiveSqlErrorWebhookUrl();
+
+                if (string.IsNullOrWhiteSpace(webhookUrl))
+                {
+                    _logger.LogWarning("Slack SQL Error Webhook URL yapılandırılmamış.");
+                    return false;
+                }
+
+                var formattedTime = GetTurkeyTime(p.DateCreated).ToString("dd.MM.yyyy HH:mm:ss");
+
+                var blocks = new List<object>();
+
+                // 1. Header / Başlık
+                blocks.Add(new
+                {
+                    type = "header",
+                    text = new
+                    {
+                        type = "plain_text",
+                        text = "⚠️ OzBI - SQL / Sistem Hatası Tespit Edildi",
+                        emoji = true
+                    }
+                });
+
+                // 2. Firma & Kullanıcı (Fields)
+                var userDisplay = !string.IsNullOrWhiteSpace(p.UserName) ? p.UserName : "Kullanıcı";
+                if (!string.IsNullOrWhiteSpace(p.UserEmail) && p.UserEmail != "E-posta yok" && !userDisplay.Contains(p.UserEmail))
+                {
+                    userDisplay += $" ({p.UserEmail})";
+                }
+
+                blocks.Add(new
+                {
+                    type = "section",
+                    fields = new object[]
+                    {
+                        new { type = "mrkdwn", text = $"*🏢 Firma:*\n*{p.TenantName}*" },
+                        new { type = "mrkdwn", text = $"*👤 Kullanıcı:*\n{userDisplay}" }
+                    }
+                });
+
+                // 3. Kullanıcı Sorusu
+                if (!string.IsNullOrWhiteSpace(p.Prompt))
+                {
+                    blocks.Add(new
+                    {
+                        type = "section",
+                        text = new
+                        {
+                            type = "mrkdwn",
+                            text = $"❓ *Kullanıcı Sorusu:*\n{p.Prompt.Trim()}"
+                        }
+                    });
+                }
+
+                // 4. Hata Detayı
+                var errText = !string.IsNullOrWhiteSpace(p.ErrorMessage) 
+                    ? p.ErrorMessage.Trim() 
+                    : "Bilinmeyen sistem hatası";
+                if (errText.Length > 800) errText = errText.Substring(0, 800) + "...";
+
+                blocks.Add(new
+                {
+                    type = "section",
+                    text = new
+                    {
+                        type = "mrkdwn",
+                        text = $"🔴 *Hata Detayı:*\n```{errText}```"
+                    }
+                });
+
+                // 5. Hatalı SQL Sorgusu (varsa)
+                if (!string.IsNullOrWhiteSpace(p.SqlQuery))
+                {
+                    var sqlText = p.SqlQuery.Trim();
+                    if (sqlText.Length > 1000) sqlText = sqlText.Substring(0, 1000) + "\n-- (...kesildi...)";
+                    blocks.Add(new
+                    {
+                        type = "section",
+                        text = new
+                        {
+                            type = "mrkdwn",
+                            text = $"💻 *Hatalı SQL / Query:*\n```sql\n{sqlText}\n```"
+                        }
+                    });
+                }
+
+                // 6. Context footer
+                blocks.Add(new
+                {
+                    type = "context",
+                    elements = new object[]
+                    {
+                        new { type = "mrkdwn", text = $"🔍 *Kayıt ID:* `{p.MessageId}` | *Sohbet ID:* `{p.ChatId}` | *Tarih (TSI):* {formattedTime}" }
+                    }
+                });
+
+                var fallbackText = $"⚠️ *OzBI SQL Hatası:* {p.TenantName} ({userDisplay}) - {errText}";
+
+                var slackObj = new
+                {
+                    text = fallbackText,
+                    blocks = blocks.ToArray()
+                };
+
+                var jsonPayload = JsonSerializer.Serialize(slackObj);
+                var client = _httpClientFactory.CreateClient("SlackClient");
+
+                using var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                var response = await client.PostAsync(webhookUrl, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Slack SQL hata bildirimi başarıyla gönderildi: MessageId={Id}, Tenant={Tenant}", p.MessageId, p.TenantName);
+                    return true;
+                }
+                else
+                {
+                    var responseBody = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Slack SQL hata bildirimi gönderilemedi. Kod: {StatusCode}, Yanıt: {ResponseBody}", response.StatusCode, responseBody);
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Slack SQL hata bildirimi gönderilirken beklenmeyen bir hata oluştu.");
                 return false;
             }
         }

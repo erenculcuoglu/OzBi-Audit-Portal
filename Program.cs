@@ -111,6 +111,10 @@ builder.Services.AddSingleton<OzBiFeedbackMonitorService>();
 builder.Services.AddSingleton<IOzBiFeedbackMonitorService>(sp => sp.GetRequiredService<OzBiFeedbackMonitorService>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<OzBiFeedbackMonitorService>());
 
+builder.Services.AddSingleton<OzBiSqlErrorMonitorService>();
+builder.Services.AddSingleton<IOzBiSqlErrorMonitorService>(sp => sp.GetRequiredService<OzBiSqlErrorMonitorService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<OzBiSqlErrorMonitorService>());
+
 var app = builder.Build();
 
 app.UseForwardedHeaders();
@@ -194,6 +198,19 @@ app.MapPost("/api/feedback/push/{messageId}", async (IOzBiFeedbackMonitorService
 {
     var userName = httpContext.User.Identity?.Name ?? "PortalAdmin";
     var result = await feedbackMonitor.PushFeedbackByIdAsync(messageId, userName);
+    return Results.Ok(new { success = result, messageId });
+});
+
+app.MapGet("/api/cron/check-sql-errors", async (IOzBiSqlErrorMonitorService sqlErrorMonitor, [FromQuery] bool? pushAll) =>
+{
+    var count = await sqlErrorMonitor.CheckAndPushNewSqlErrorsAsync(pushAllUnpushed: pushAll == true, triggeredBy: "CronEndpoint");
+    return Results.Ok(new { status = "success", pushedCount = count, message = $"MariaDB SQL error check completed. {count} items pushed to Slack #ozbi-sql-errors." });
+});
+
+app.MapPost("/api/sql-error/push/{messageId}", async (IOzBiSqlErrorMonitorService sqlErrorMonitor, string messageId, HttpContext httpContext) =>
+{
+    var userName = httpContext.User.Identity?.Name ?? "PortalAdmin";
+    var result = await sqlErrorMonitor.PushSqlErrorByIdAsync(messageId, userName);
     return Results.Ok(new { success = result, messageId });
 });
 
