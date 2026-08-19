@@ -20,7 +20,6 @@ namespace OzBiPortalCRM.Services
         {
             try
             {
-                var schemaFileNames = new[] { "logo_assistant_schema_v7.1.json", "logo_assistant_schema_v7.json", "logo_assistant_schema.json" };
                 var searchDirs = new[]
                 {
                     Path.Combine(AppContext.BaseDirectory, "ERP", "Logo", "json"),
@@ -34,17 +33,23 @@ namespace OzBiPortalCRM.Services
                 };
 
                 string? schemaPath = null;
-                foreach (var fileName in schemaFileNames)
+                foreach (var dir in searchDirs)
                 {
-                    foreach (var dir in searchDirs)
+                    if (Directory.Exists(dir))
                     {
-                        var p = Path.Combine(dir, fileName);
-                        if (File.Exists(p)) { schemaPath = p; break; }
+                        var schemaFiles = Directory.GetFiles(dir, "logo_assistant_schema_*.json")
+                            .OrderByDescending(f => f)
+                            .ToList();
+
+                        if (schemaFiles.Any())
+                        {
+                            schemaPath = schemaFiles.First();
+                            break;
+                        }
                     }
-                    if (schemaPath != null) break;
                 }
 
-                if (File.Exists(schemaPath))
+                if (schemaPath != null && File.Exists(schemaPath))
                 {
                     var jsonContent = File.ReadAllText(schemaPath);
                     using var doc = JsonDocument.Parse(jsonContent);
@@ -74,7 +79,7 @@ namespace OzBiPortalCRM.Services
 
             if (_knownLogoTables.Count == 0)
             {
-                var defaultTables = new[] { "CLCARD", "ITEMS", "STLINE", "INVOICE", "CLFLINE", "BANKACC", "BNFLINE", "KSCARD", "KSLINES", "ORFICHE", "ORFLINE", "CSCARD" };
+                var defaultTables = new[] { "CLCARD", "ITEMS", "STLINE", "INVOICE", "CLFLINE", "BANKACC", "BNFLINE", "KSCARD", "KSLINES", "ORFICHE", "ORFLINE", "CSCARD", "PAYTRANS", "CSROLL", "CSTRANS", "EMFLINE", "SRVCARD", "EMUHACC", "PROJECT" };
                 foreach (var t in defaultTables) _knownLogoTables.Add(t);
             }
         }
@@ -295,6 +300,254 @@ namespace OzBiPortalCRM.Services
                 }
             }
 
+            // -------------------------------------------------------------
+            // RULE L-07: KSLINES SIGN DIRECTION CHECK - Penalty: -10 pts
+            // v7.4: SIGN = 0 = Giriş (Borç), SIGN = 1 = Çıkış (Alacak)
+            // Model bazen SIGN = 1'i giriş olarak yazar → ters nakit akışı
+            // -------------------------------------------------------------
+            if (upperSql.Contains("KSLINES"))
+            {
+                // Detect reversed SIGN pattern: SIGN = 1 THEN AMOUNT ... AS [cash_in/giris/nakit_giris]
+                bool hasReversedSign = Regex.IsMatch(sql, @"SIGN\s*=\s*1\s+THEN.*(?:GIRIS|CASH_IN|NAKIT_GIRIS|GELEN)", RegexOptions.IgnoreCase) ||
+                                      Regex.IsMatch(sql, @"SIGN\s*=\s*0\s+THEN.*(?:CIKIS|CASH_OUT|NAKIT_CIKIS|GIDEN|ODEME)", RegexOptions.IgnoreCase);
+                bool hasCorrectSign = Regex.IsMatch(sql, @"SIGN\s*=\s*0\s+THEN.*(?:GIRIS|CASH_IN|NAKIT_GIRIS|GELEN)", RegexOptions.IgnoreCase) ||
+                                     Regex.IsMatch(sql, @"SIGN\s*=\s*1\s+THEN.*(?:CIKIS|CASH_OUT|NAKIT_CIKIS|GIDEN|ODEME)", RegexOptions.IgnoreCase);
+
+                if (hasReversedSign && !hasCorrectSign)
+                {
+                    score -= 10;
+                    report.Violations.Add(new MikroRuleViolation
+                    {
+                        RuleId = "L-07",
+                        Title = "Ters Kasa SIGN Yön Kullanımı (KSLINES)",
+                        PenaltyPoints = 10,
+                        IssueDescription = "Kasa hareketlerinde SIGN = 1 giriş, SIGN = 0 çıkış olarak kullanılmış. Logo'da doğrusu: SIGN = 0 (Borç/Giriş), SIGN = 1 (Alacak/Çıkış).",
+                        V26RuleReference = "Logo v7.4 Madde 5: Hem BNFLINE hem KSLINES'da SIGN = 0 → Giriş, SIGN = 1 → Çıkış.",
+                        RecommendedFix = "Nakit giriş: `SUM(CASE WHEN [SIGN] = 0 THEN [AMOUNT] ELSE 0 END)`, Nakit çıkış: `SUM(CASE WHEN [SIGN] = 1 THEN [AMOUNT] ELSE 0 END)`."
+                    });
+                }
+                else if (hasCorrectSign)
+                {
+                    report.PassedChecks.Add(new MikroRuleCheck
+                    {
+                        RuleId = "L-07",
+                        Title = "Doğru Kasa SIGN Yönü (KSLINES)",
+                        Description = "Kasa nakit akışında SIGN = 0 (Giriş) ve SIGN = 1 (Çıkış) doğru uygulanmış."
+                    });
+                }
+            }
+
+            // -------------------------------------------------------------
+            // RULE L-08: INVOICE TRCODE PROFORMA CHECK - Penalty: -10 pts
+            // v7.4: TRCODE 10/13/14 = Proforma → gelir/gider yaratmaz
+            // Ciro/tutar hesabına dahil edilmemeli
+            // -------------------------------------------------------------
+            if (upperSql.Contains("INVOICE") && (upperSql.Contains("SUM(") || upperSql.Contains("NETTOTAL") || upperSql.Contains("GROSSTOTAL")))
+            {
+                bool includesProforma = Regex.IsMatch(sql, @"TRCODE\s+IN\s*\([^)]*\b14\b[^)]*\)", RegexOptions.IgnoreCase) ||
+                                        Regex.IsMatch(sql, @"TRCODE\s+IN\s*\([^)]*\b10\b[^)]*\)", RegexOptions.IgnoreCase) ||
+                                        Regex.IsMatch(sql, @"TRCODE\s+IN\s*\([^)]*\b13\b[^)]*\)", RegexOptions.IgnoreCase);
+                bool hasGrpCodeFilter = Regex.IsMatch(sql, @"GRPCODE\s*=\s*[12]", RegexOptions.IgnoreCase);
+
+                if (includesProforma && hasGrpCodeFilter)
+                {
+                    score -= 10;
+                    report.Violations.Add(new MikroRuleViolation
+                    {
+                        RuleId = "L-08",
+                        Title = "Proforma Fatura Ciro Hesabına Dahil (TRCODE 10/13/14)",
+                        PenaltyPoints = 10,
+                        IssueDescription = "Fatura ciro/tutar hesabında Proforma fatura kodları (TRCODE 10, 13 veya 14) dahil edilmiş. Proforma faturalar gerçek gelir/gider yaratmaz.",
+                        V26RuleReference = "Logo v7.4 Madde 6: Satış faturaları TRCODE IN (7,8,9), Alış TRCODE IN (1,4). Proforma TRCODE IN (10,13,14) ciro/maliyet hesabına dahil edilmez.",
+                        RecommendedFix = "Satış cirosu için: `GRPCODE = 2 AND TRCODE IN (7, 8, 9)`. Proforma kodları (10, 13, 14) çıkarın."
+                    });
+                }
+                else if (hasGrpCodeFilter && !includesProforma)
+                {
+                    report.PassedChecks.Add(new MikroRuleCheck
+                    {
+                        RuleId = "L-08",
+                        Title = "Doğru Fatura TRCODE Ayrımı",
+                        Description = "Fatura sorgusunda GRPCODE ve TRCODE filtresi uygulanmış; Proforma kodlar dahil edilmemiş."
+                    });
+                }
+            }
+
+            // -------------------------------------------------------------
+            // RULE L-09: LINEEXP ISNULL PROTECTION - Penalty: -5 pts
+            // v7.4: Faiz/ana para ayrımında ISNULL(LINEEXP, N'') zorunlu
+            // -------------------------------------------------------------
+            if (upperSql.Contains("LINEEXP") && (upperSql.Contains("FAIZ") || upperSql.Contains("FAİZ")))
+            {
+                bool hasIsnullProtection = upperSql.Contains("ISNULL(LINEEXP") || upperSql.Contains("ISNULL( LINEEXP") ||
+                                           Regex.IsMatch(sql, @"ISNULL\s*\(\s*\[?\w*\.?\[?LINEEXP", RegexOptions.IgnoreCase);
+                if (hasIsnullProtection)
+                {
+                    report.PassedChecks.Add(new MikroRuleCheck
+                    {
+                        RuleId = "L-09",
+                        Title = "LINEEXP NULL Koruması (Faiz Ayrımı)",
+                        Description = "Banka kredi faiz/ana para ayrımında ISNULL(LINEEXP, N'') koruması uygulanmış."
+                    });
+                }
+                else
+                {
+                    score -= 5;
+                    report.Violations.Add(new MikroRuleViolation
+                    {
+                        RuleId = "L-09",
+                        Title = "Eksik LINEEXP NULL Koruması",
+                        PenaltyPoints = 5,
+                        IssueDescription = "Banka kredi faiz ayrımında LINEEXP alanı ISNULL koruması olmadan kullanılmış. NULL satırlar yanlışlıkla ana paraya dahil edilebilir.",
+                        V26RuleReference = "Logo v7.4 Madde 5: Faiz ayrımı `UPPER(ISNULL(LINEEXP, N'')) LIKE UPPER(N'%faiz%')` şeklinde ISNULL korumalı olmalıdır.",
+                        RecommendedFix = "`UPPER(BFL.[LINEEXP]) LIKE ...` yerine `UPPER(ISNULL(BFL.[LINEEXP], N'')) LIKE ...` kullanın."
+                    });
+                }
+            }
+
+            // -------------------------------------------------------------
+            // RULE L-10: DATE RANGE OPEN INTERVAL - Penalty: -5 pts
+            // v7.4 Madde 3: Açık aralık >= ... AND < ... kullanılır
+            // BETWEEN ay sonu ile kullanılırsa son gün verileri kaçabilir
+            // -------------------------------------------------------------
+            if (upperSql.Contains("BETWEEN") && (upperSql.Contains("DATE_") || upperSql.Contains("PROCDATE")))
+            {
+                bool usesUnsafeBetween = Regex.IsMatch(sql, @"BETWEEN\s+'\d{4}-\d{2}-\d{2}'\s+AND\s+'\d{4}-\d{2}-(28|29|30|31)'", RegexOptions.IgnoreCase);
+                if (usesUnsafeBetween)
+                {
+                    score -= 5;
+                    report.Violations.Add(new MikroRuleViolation
+                    {
+                        RuleId = "L-10",
+                        Title = "Riskli Tarih Aralığı Filtresi (BETWEEN)",
+                        PenaltyPoints = 5,
+                        IssueDescription = "Tarih filtrelerinde ayın son günü BETWEEN ile kısıtlandığında saat/zaman bileşeni nedeniyle son gün verileri kaçabilir.",
+                        V26RuleReference = "Logo v7.4 Madde 3: Tarih filtreleme açık aralık kullanılır: `WHERE DATE_ >= '2026-01-01' AND DATE_ < '2027-01-01'`.",
+                        RecommendedFix = "`BETWEEN '2026-01-01' AND '2026-01-31'` yerine `>= '2026-01-01' AND < '2026-02-01'` yazın."
+                    });
+                }
+            }
+
+            // -------------------------------------------------------------
+            // RULE L-11: BNFLINE SIGN DIRECTION CHECK - Penalty: -10 pts
+            // v7.4 Madde 5: Banka için de SIGN = 0 = Giriş, SIGN = 1 = Çıkış
+            // L-07 ile aynı mantık, farklı tablo
+            // -------------------------------------------------------------
+            if (upperSql.Contains("BNFLINE"))
+            {
+                bool hasReversedSign = Regex.IsMatch(sql, @"SIGN\s*=\s*1\s+THEN.*(?:GIRIS|CASH_IN|NAKIT_GIRIS|GELEN|TAHSILAT)", RegexOptions.IgnoreCase) ||
+                                      Regex.IsMatch(sql, @"SIGN\s*=\s*0\s+THEN.*(?:CIKIS|CASH_OUT|NAKIT_CIKIS|GIDEN|ODEME)", RegexOptions.IgnoreCase);
+                bool hasCorrectSign = Regex.IsMatch(sql, @"SIGN\s*=\s*0\s+THEN.*(?:GIRIS|CASH_IN|NAKIT_GIRIS|GELEN|TAHSILAT)", RegexOptions.IgnoreCase) ||
+                                     Regex.IsMatch(sql, @"SIGN\s*=\s*1\s+THEN.*(?:CIKIS|CASH_OUT|NAKIT_CIKIS|GIDEN|ODEME)", RegexOptions.IgnoreCase);
+
+                if (hasReversedSign && !hasCorrectSign)
+                {
+                    score -= 10;
+                    report.Violations.Add(new MikroRuleViolation
+                    {
+                        RuleId = "L-11",
+                        Title = "Ters Banka SIGN Yön Kullanımı (BNFLINE)",
+                        PenaltyPoints = 10,
+                        IssueDescription = "Banka hareketlerinde SIGN = 1 giriş, SIGN = 0 çıkış olarak kullanılmış. Logo'da doğrusu: SIGN = 0 (Borç/Giriş), SIGN = 1 (Alacak/Çıkış).",
+                        V26RuleReference = "Logo v7.4 Madde 5: Hem BNFLINE hem KSLINES'da SIGN = 0 → Giriş, SIGN = 1 → Çıkış.",
+                        RecommendedFix = "Banka giriş: `SUM(CASE WHEN [SIGN] = 0 THEN [AMOUNT] ELSE 0 END)`, Banka çıkış: `SUM(CASE WHEN [SIGN] = 1 THEN [AMOUNT] ELSE 0 END)`."
+                    });
+                }
+                else if (hasCorrectSign)
+                {
+                    report.PassedChecks.Add(new MikroRuleCheck
+                    {
+                        RuleId = "L-11",
+                        Title = "Doğru Banka SIGN Yönü (BNFLINE)",
+                        Description = "Banka nakit akışında SIGN = 0 (Giriş) ve SIGN = 1 (Çıkış) doğru uygulanmış."
+                    });
+                }
+            }
+
+            // -------------------------------------------------------------
+            // RULE L-12: CLFLINE TRCODE <> 41 CHECK - Penalty: -10 pts
+            // v7.4 Madde 2: Net bakiye kümülasyonunda TRCODE <> 41 zorunlu
+            // Özel Fiş (TRCODE = 41) bakiye hesabını bozar
+            // -------------------------------------------------------------
+            if (upperSql.Contains("CLFLINE") && (upperSql.Contains("SUM(") || upperSql.Contains("AMOUNT")))
+            {
+                bool hasOzelFisExclusion = Regex.IsMatch(sql, @"TRCODE\s*<>\s*41", RegexOptions.IgnoreCase) ||
+                                           Regex.IsMatch(sql, @"TRCODE\s*!=\s*41", RegexOptions.IgnoreCase) ||
+                                           Regex.IsMatch(sql, @"TRCODE\s+NOT\s+IN\s*\([^)]*41[^)]*\)", RegexOptions.IgnoreCase);
+                bool usesView = upperSql.Contains("LV_") && upperSql.Contains("CLFLINE");
+
+                if (usesView)
+                {
+                    // View (LV_XXX_YY_CLFLINE) already has DEBIT/CREDIT columns, no need for TRCODE filter
+                    report.PassedChecks.Add(new MikroRuleCheck
+                    {
+                        RuleId = "L-12",
+                        Title = "Cari Hareket View Kullanımı (Özel Fiş N/A)",
+                        Description = "LV_XXX_YY_CLFLINE view'ı kullanıldığı için DEBIT/CREDIT hazır — TRCODE <> 41 filtresi gerekmez."
+                    });
+                }
+                else if (hasOzelFisExclusion)
+                {
+                    report.PassedChecks.Add(new MikroRuleCheck
+                    {
+                        RuleId = "L-12",
+                        Title = "Özel Fiş Hariç Tutulmuş (TRCODE <> 41)",
+                        Description = "Cari hareket bakiye hesabında Özel Fiş (TRCODE = 41) doğru şekilde hariç tutulmuş."
+                    });
+                }
+                else
+                {
+                    score -= 10;
+                    report.Violations.Add(new MikroRuleViolation
+                    {
+                        RuleId = "L-12",
+                        Title = "Özel Fiş Dahil Net Bakiye Riski (TRCODE <> 41)",
+                        PenaltyPoints = 10,
+                        IssueDescription = "CLFLINE tablosunda bakiye/tutar hesaplanırken TRCODE <> 41 filtresi uygulanmamış. Özel Fiş (TRCODE = 41) bakiye kümülasyonunu bozabilir.",
+                        V26RuleReference = "Logo v7.4 Şema: CLFLINE.TRCODE [Koşul: Net bakiye kümülasyonunda WHERE TRCODE <> 41 zorunludur (Özel Fiş hariç)].",
+                        RecommendedFix = "WHERE koşuluna `AND TRCODE <> 41` ekleyin veya LV_XXX_YY_CLFLINE view'ını kullanın."
+                    });
+                }
+            }
+
+            // -------------------------------------------------------------
+            // RULE L-13: PAYTRANS OVERDUE FILTER SET - Penalty: -10 pts
+            // v7.4 Madde 4: CLOSED=0, CANCELLED=0, SIGN=0, PROCDATE < GETDATE()
+            // Vadesi geçmiş açık fatura sorgusunda tam filtre seti zorunlu
+            // -------------------------------------------------------------
+            if (upperSql.Contains("PAYTRANS"))
+            {
+                bool hasClosedFilter = Regex.IsMatch(sql, @"CLOSED\s*=\s*0", RegexOptions.IgnoreCase);
+                bool hasCancelledFilter = Regex.IsMatch(sql, @"CANCELLED\s*=\s*0", RegexOptions.IgnoreCase);
+                bool hasSignFilter = Regex.IsMatch(sql, @"SIGN\s*=\s*0", RegexOptions.IgnoreCase);
+                bool hasProcDateFilter = upperSql.Contains("PROCDATE");
+
+                int filterCount = (hasClosedFilter ? 1 : 0) + (hasCancelledFilter ? 1 : 0) + (hasSignFilter ? 1 : 0) + (hasProcDateFilter ? 1 : 0);
+
+                if (filterCount >= 3)
+                {
+                    report.PassedChecks.Add(new MikroRuleCheck
+                    {
+                        RuleId = "L-13",
+                        Title = "PAYTRANS Vadesi Geçmiş Filtre Seti",
+                        Description = "Ödeme/tahsilat hareketlerinde CLOSED, CANCELLED, SIGN ve PROCDATE filtrelerinin çoğunluğu uygulanmış."
+                    });
+                }
+                else
+                {
+                    score -= 10;
+                    report.Violations.Add(new MikroRuleViolation
+                    {
+                        RuleId = "L-13",
+                        Title = "Eksik PAYTRANS Filtre Seti",
+                        PenaltyPoints = 10,
+                        IssueDescription = $"PAYTRANS tablosunda vadesi geçmiş alacak filtre setinden yalnızca {filterCount}/4 filtre uygulanmış. Tam set: CLOSED=0, CANCELLED=0, SIGN=0, PROCDATE < GETDATE().",
+                        V26RuleReference = "Logo v7.4 Madde 4: `WHERE CLOSED = 0 AND CANCELLED = 0 AND SIGN = 0 AND PROCDATE < CAST(GETDATE() AS date)`.",
+                        RecommendedFix = "Eksik filtreleri ekleyin: CLOSED=0 (açık fatura), CANCELLED=0 (aktif), SIGN=0 (borç/satış faturası), PROCDATE < GETDATE() (vadesi geçmiş)."
+                    });
+                }
+            }
+
             // Final score calculations
             score = Math.Max(0, Math.Min(100, score));
             report.Score = score;
@@ -303,31 +556,31 @@ namespace OzBiPortalCRM.Services
             {
                 report.Grade = "A+";
                 report.GradeLabel = "Kusursuz Uyum (A+)";
-                report.SummaryText = "T-SQL sorgusu Logo ERP v1.0 standartlarına ve şemasına %100 kusursuz uyum sağlamaktadır.";
+                report.SummaryText = "T-SQL sorgusu Logo ERP v7.4 standartlarına ve şemasına %100 kusursuz uyum sağlamaktadır.";
             }
             else if (score >= 85)
             {
                 report.Grade = "A";
                 report.GradeLabel = "Yüksek Uyum (A)";
-                report.SummaryText = "T-SQL sorgusu Logo ERP v1.0 kurallarına yüksek oranda uymaktadır.";
+                report.SummaryText = "T-SQL sorgusu Logo ERP v7.4 kurallarına yüksek oranda uymaktadır.";
             }
             else if (score >= 70)
             {
                 report.Grade = "B";
                 report.GradeLabel = "Orta Uyum (B)";
-                report.SummaryText = "Logo sorgusunda bazı v1.0 standart filtreleri (CANCELLED, ACTIVE veya NOLOCK) eksiktir.";
+                report.SummaryText = "Logo sorgusunda bazı v7.4 standart filtreleri (CANCELLED, ACTIVE, NOLOCK veya SIGN yönü) eksiktir.";
             }
             else if (score >= 50)
             {
                 report.Grade = "C";
                 report.GradeLabel = "Zayıf Uyum (C)";
-                report.SummaryText = "Sorguda önemli Logo ERP v1.0 standart ihlalleri tespit edilmiştir.";
+                report.SummaryText = "Sorguda önemli Logo ERP v7.4 standart ihlalleri tespit edilmiştir.";
             }
             else
             {
                 report.Grade = "F";
                 report.GradeLabel = "Uyumsuz / Riskli (F)";
-                report.SummaryText = "Sorgu Logo ERP v1.0 mimarisinden ciddi sapmalar göstermektedir.";
+                report.SummaryText = "Sorgu Logo ERP v7.4 mimarisinden ciddi sapmalar göstermektedir.";
             }
 
             return report;

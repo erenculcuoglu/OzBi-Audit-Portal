@@ -445,6 +445,160 @@ namespace OzBiPortalCRM.Services
                 }
             }
 
+            // -------------------------------------------------------------
+            // RULE M-12: cha_evrak_tip INVOICE TYPE CHECK - Penalty: -10 pts
+            // v27.2: Satış faturası = cha_evrak_tip = 63, Alış = 0
+            // Fatura türü belirtilmezse alış + satış karışır
+            // -------------------------------------------------------------
+            if (IsTableInSql(upperSql, "CARI_HESAP_HAREKETLERI") &&
+                (upperSql.Contains("SUM(") || upperSql.Contains("CHA_MEBLAG")) &&
+                (upperSql.Contains("FATURA") || upperSql.Contains("CIRO") ||
+                 (userPrompt != null && (userPrompt.ToLowerInvariant().Contains("fatura") ||
+                                          userPrompt.ToLowerInvariant().Contains("ciro") ||
+                                          userPrompt.ToLowerInvariant().Contains("satış") ||
+                                          userPrompt.ToLowerInvariant().Contains("alış")))))
+            {
+                bool hasEvrakTipFilter = Regex.IsMatch(sql, @"cha_evrak_tip\s*=\s*(0|63)", RegexOptions.IgnoreCase) ||
+                                          Regex.IsMatch(sql, @"cha_evrak_tip\s+IN", RegexOptions.IgnoreCase);
+                if (hasEvrakTipFilter)
+                {
+                    report.PassedChecks.Add(new MikroRuleCheck
+                    {
+                        RuleId = "M-12",
+                        Title = "Fatura Türü Ayrımı (cha_evrak_tip)",
+                        Description = "Cari hareket sorgusunda fatura türü (cha_evrak_tip = 63: Satış, 0: Alış) doğru filtrelenmiş."
+                    });
+                }
+                else
+                {
+                    score -= 10;
+                    report.Violations.Add(new MikroRuleViolation
+                    {
+                        RuleId = "M-12",
+                        Title = "Eksik Fatura Türü Filtresi (cha_evrak_tip)",
+                        PenaltyPoints = 10,
+                        IssueDescription = "CARI_HESAP_HAREKETLERI tablosunda fatura ciro/bakiye hesaplanırken cha_evrak_tip filtresi eksik. Alış ve satış faturaları birbirine karışabilir.",
+                        V26RuleReference = "Mikro v27.2 Madde 2: Satış faturası `cha_evrak_tip = 63 AND cha_tip = 0`, Alış faturası `cha_evrak_tip = 0 AND cha_tip = 1` olarak filtrelenmelidir.",
+                        RecommendedFix = "Satış cirosu için: `AND cha.cha_evrak_tip = 63 AND cha.cha_tip = 0` ekleyin.",
+                        Severity = "Error"
+                    });
+                }
+            }
+
+            // -------------------------------------------------------------
+            // RULE M-13: sck_sonpoz PROBLEMATIC PORTFOLIO CHECK - Penalty: -5 pts
+            // v27.2: Karşılıksız/protestolu çek analizi sck_sonpoz IN (5,6) gerektirir
+            // -------------------------------------------------------------
+            if ((IsTableInSql(upperSql, "ODEME_EMIRLERI") || upperSql.Contains("ODEME_EMIRLERI_YONETIM")) &&
+                userPrompt != null &&
+                (userPrompt.ToLowerInvariant().Contains("karşılıksız") ||
+                 userPrompt.ToLowerInvariant().Contains("protestolu") ||
+                 userPrompt.ToLowerInvariant().Contains("sorunlu") ||
+                 userPrompt.ToLowerInvariant().Contains("riskli çek") ||
+                 userPrompt.ToLowerInvariant().Contains("riskli portföy")))
+            {
+                bool hasSonpozFilter = Regex.IsMatch(sql, @"sck_sonpoz\s+IN\s*\(\s*5\s*,\s*6\s*\)", RegexOptions.IgnoreCase) ||
+                                       Regex.IsMatch(sql, @"sck_sonpoz\s*=\s*(5|6)", RegexOptions.IgnoreCase) ||
+                                       Regex.IsMatch(sql, @"msg_S_0297.*(?:Karşılıksız|Protestolu)", RegexOptions.IgnoreCase);
+                if (hasSonpozFilter)
+                {
+                    report.PassedChecks.Add(new MikroRuleCheck
+                    {
+                        RuleId = "M-13",
+                        Title = "Sorunlu Portföy Filtresi (sck_sonpoz)",
+                        Description = "Karşılıksız/protestolu çek analizinde sck_sonpoz IN (5, 6) filtresi doğru uygulanmış."
+                    });
+                }
+                else
+                {
+                    score -= 5;
+                    report.Violations.Add(new MikroRuleViolation
+                    {
+                        RuleId = "M-13",
+                        Title = "Eksik Sorunlu Portföy Filtresi (sck_sonpoz)",
+                        PenaltyPoints = 5,
+                        IssueDescription = "Karşılıksız/protestolu çek analizi istendiğinde sck_sonpoz IN (5, 6) filtresi uygulanmamış. Tüm çekler sonuca dahil olur.",
+                        V26RuleReference = "Mikro v27.2 Madde 7: Sorunlu portföy `sck_sonpoz IN (5, 6)` (5: Karşılıksız, 6: Protestolu) ile filtrelenir.",
+                        RecommendedFix = "WHERE koşuluna `AND oe.sck_sonpoz IN (5, 6)` ekleyin.",
+                        Severity = "Warning"
+                    });
+                }
+            }
+            // -------------------------------------------------------------
+            // RULE M-14: cha_vade TRY_CONVERT PROTECTION - Penalty: -10 pts
+            // v27.2 Madde 8: cha_vade INT→DATE dönüşümünde TRY_CONVERT zorunlu
+            // CAST(cha_vade AS date) hata verir çünkü cha_vade INTEGER tipinde
+            // -------------------------------------------------------------
+            if (upperSql.Contains("CHA_VADE"))
+            {
+                bool usesTryConvert = Regex.IsMatch(sql, @"TRY_CONVERT\s*\(\s*date\s*,\s*CONVERT\s*\(\s*(?:char|varchar)\s*\(\s*8\s*\)\s*,\s*\[?(?:\w+\.)?cha_vade", RegexOptions.IgnoreCase);
+                bool usesUnsafeCast = Regex.IsMatch(sql, @"CAST\s*\(\s*\[?(?:\w+\.)?cha_vade\]?\s+AS\s+date\s*\)", RegexOptions.IgnoreCase);
+
+                if (usesTryConvert)
+                {
+                    report.PassedChecks.Add(new MikroRuleCheck
+                    {
+                        RuleId = "M-14",
+                        Title = "Güvenli Vade Tarihi Dönüşümü (TRY_CONVERT)",
+                        Description = "cha_vade INTEGER alanı TRY_CONVERT(date, CONVERT(char(8), cha_vade), 112) ile güvenli şekilde dönüştürülmüş."
+                    });
+                }
+                else if (usesUnsafeCast)
+                {
+                    score -= 10;
+                    report.Violations.Add(new MikroRuleViolation
+                    {
+                        RuleId = "M-14",
+                        Title = "Güvensiz Vade Tarihi Dönüşümü (CAST)",
+                        PenaltyPoints = 10,
+                        IssueDescription = "cha_vade INTEGER alanı CAST(...AS date) ile doğrudan dönüştürülmüş. cha_vade INT olduğundan bu dönüşüm hata verir.",
+                        V26RuleReference = "Mikro v27.2 Madde 8: `TRY_CONVERT(date, CONVERT(char(8), cha_vade), 112)` kullanılmalıdır.",
+                        RecommendedFix = "`CAST(cha_vade AS date)` yerine `TRY_CONVERT(date, CONVERT(char(8), cha.cha_vade), 112)` kullanın.",
+                        Severity = "Error"
+                    });
+                }
+            }
+
+            // -------------------------------------------------------------
+            // RULE M-15: sth_normal_iade RETURN DISTINCTION - Penalty: -5 pts
+            // v27.2: Satış cirosu hesabında iade satırları düşülmeli
+            // sth_normal_iade = 1 ise tutar negatif uygulanmalı
+            // -------------------------------------------------------------
+            if (IsTableInSql(upperSql, "STOK_HAREKETLERI") &&
+                (upperSql.Contains("SUM(") || upperSql.Contains("STH_TUTAR")) &&
+                userPrompt != null &&
+                (userPrompt.ToLowerInvariant().Contains("ciro") ||
+                 userPrompt.ToLowerInvariant().Contains("satış gelir") ||
+                 userPrompt.ToLowerInvariant().Contains("net satış")))
+            {
+                bool hasIadeFilter = Regex.IsMatch(sql, @"sth_normal_iade\s*=\s*[01]", RegexOptions.IgnoreCase) ||
+                                     Regex.IsMatch(sql, @"CASE\s+WHEN\s+.*sth_normal_iade\s*=\s*1\s+THEN\s+-", RegexOptions.IgnoreCase) ||
+                                     Regex.IsMatch(sql, @"CASE\s+WHEN\s+.*normal_iade.*THEN\s+-", RegexOptions.IgnoreCase);
+                if (hasIadeFilter)
+                {
+                    report.PassedChecks.Add(new MikroRuleCheck
+                    {
+                        RuleId = "M-15",
+                        Title = "Satış İade Ayrımı (sth_normal_iade)",
+                        Description = "Satış cirosu hesabında iade satırları (sth_normal_iade = 1) doğru şekilde negatif olarak düşülmüş."
+                    });
+                }
+                else
+                {
+                    score -= 5;
+                    report.Violations.Add(new MikroRuleViolation
+                    {
+                        RuleId = "M-15",
+                        Title = "Eksik Satış İade Ayrımı (sth_normal_iade)",
+                        PenaltyPoints = 5,
+                        IssueDescription = "Satış cirosu hesaplanırken sth_normal_iade = 1 (iade) satırları ayrıştırılmamış. İadeler ciroyu şişirebilir.",
+                        V26RuleReference = "Mikro v27.2 Agent Prompt: `sth_normal_iade = 1` iade satırları cirodan düşülmelidir.",
+                        RecommendedFix = "Ciro formülünü `SUM(CASE WHEN sth_normal_iade = 1 THEN -sth_tutar ELSE sth_tutar END)` olarak güncelleyin.",
+                        Severity = "Warning"
+                    });
+                }
+            }
+
             // Final Score Calculations & Grading
             score = Math.Max(0, Math.Min(100, score));
             report.Score = score;
