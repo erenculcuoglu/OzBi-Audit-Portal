@@ -92,7 +92,7 @@
         </div>
 
         <!-- Favorites Only Toggle -->
-        <div class="col-auto ps-2 pe-3 d-none d-md-block">
+        <div class="col-auto ps-2 pe-3">
             <div class="form-check form-switch mb-0" title="Sadece Favorilerimi Göster">
                 <input class="form-check-input cursor-pointer" type="checkbox" role="switch" id="favOnlySwitch" @bind="onlyFavorited" @bind:after="ApplyFilters">
                 <label class="form-check-label small fw-semibold text-warning cursor-pointer" for="favOnlySwitch">
@@ -219,13 +219,21 @@ else
                         }
                     </div>
 
-                    <!-- Right Action Side (Clean Copy Button & Favorite Star) -->
+                    <!-- Right Action Side (Clean Copy Button, Delete & Favorite Star) -->
                     <div class="d-flex align-items-center gap-2 flex-shrink-0 pt-1">
                         <button class="btn-clean-copy @(isCopied ? "copied" : "")" 
                                 @onclick='() => CopyText(q.Prompt, q.Id)' title="Soruyu panoya kopyala">
                             <i class="bi @(isCopied ? "bi-check2" : "bi-clipboard") me-1"></i>
                             <span>@(isCopied ? "Kopyalandı" : "Kopyala")</span>
                         </button>
+
+                        @if (q.IsCustom)
+                        {
+                            <button class="btn-fav-icon text-danger" style="font-size: 0.9rem;"
+                                    @onclick="() => DeleteCustomQuestion(q)" title="Bu özel soruyu sil">
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                        }
 
                         <button class="btn-fav-icon @(q.IsFavorited ? "active" : "")" 
                                 @onclick="() => ToggleFavorite(q)" title="@(q.IsFavorited ? "Favorilerden Çıkar" : "Favoriye Ekle")">
@@ -592,10 +600,11 @@ else
         isLoading = true;
         try
         {
-            categories = await TemplateService.GetCategoriesSummaryAsync();
+            // Single DB call: get all questions, then derive category summary from same data
             questions = await TemplateService.GetAllQuestionsAsync(
                 portalUserId: currentPortalUserId
             );
+            categories = TemplateService.GetCategoriesSummary(questions);
             ApplyFilters();
         }
         catch (Exception ex)
@@ -772,5 +781,15 @@ else
         await TemplateService.AddCustomQuestionAsync(newCustomItem);
         showAddModal = false;
         await LoadData();
+    }
+
+    private async Task DeleteCustomQuestion(PromptTemplate q)
+    {
+        if (!q.IsCustom) return;
+        var deleted = await TemplateService.DeleteCustomQuestionAsync(q.Id, currentPortalUserId);
+        if (deleted)
+        {
+            await LoadData();
+        }
     }
 }

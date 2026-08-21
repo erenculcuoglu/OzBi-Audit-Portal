@@ -249,13 +249,19 @@ namespace OzBiPortalCRM.Services
                 var primaryModel = msgList.FirstOrDefault(m => m.AIModel != null)?.AIModel?.Name ?? "Standart AI";
                 var assistantName = msgList.FirstOrDefault(m => m.Assistant != null)?.Assistant?.Name;
 
-                var userQuestions = msgList
-                    .Where(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt) || (!string.IsNullOrEmpty(m.Message) && !m.Message.StartsWith("##") && !m.Message.StartsWith("SELECT") && !m.Message.StartsWith("|")))
-                    .Select(m => !string.IsNullOrWhiteSpace(m.Message) && m.Role?.ToLower() == "user" ? m.Message : m.Prompt)
-                    .Where(q => !string.IsNullOrWhiteSpace(q))
-                    .Select(q => q!.Trim())
-                    .Distinct()
-                    .ToList();
+                // Turn-based question counting (same logic as ChatDetail.razor GetConversationTurns)
+                var userQuestions = new List<string>();
+                foreach (var m in msgList.OrderBy(m => m.DateCreated))
+                {
+                    bool isUser = m.Role?.ToLower() == "user";
+                    var promptText = !string.IsNullOrWhiteSpace(m.Prompt)
+                        ? m.Prompt
+                        : (isUser ? m.Message : null);
+                    if (!string.IsNullOrWhiteSpace(promptText) && !userQuestions.Contains(promptText.Trim()))
+                    {
+                        userQuestions.Add(promptText.Trim());
+                    }
+                }
 
                 if (term != null)
                 {
@@ -269,8 +275,8 @@ namespace OzBiPortalCRM.Services
                     }
                 }
 
-                var userQuestionCount = userQuestions.Count > 0 ? userQuestions.Count : msgList.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt));
-                if (userQuestionCount == 0 && msgList.Count > 0) userQuestionCount = msgList.Count;
+                var userQuestionCount = userQuestions.Count;
+                if (userQuestionCount == 0 && msgList.Count > 0) userQuestionCount = 1;
 
                 var firstTurnMsg = msgList.OrderBy(m => m.DateCreated).FirstOrDefault(m => m.Role?.ToLower() != "user");
                 bool isAssistantMode = firstTurnMsg != null ? firstTurnMsg.IsAssistantModeEffective : msgList.Any(m => m.IsAssistantModeEffective);
@@ -279,7 +285,7 @@ namespace OzBiPortalCRM.Services
                 {
                     Chat = c,
                     MessageCount = userQuestionCount,
-                    QueryCount = msgList.Count(m => !string.IsNullOrEmpty(m.Query)),
+                    QueryCount = CountSqlItems(msgList),
                     TotalDurationMs = msgList.Sum(m => m.TotalDurationMs ?? 0),
                     LastMessageDate = msgList.Count > 0 ? msgList.Max(m => m.DateCreated) : c.DateCreated,
                     PrimaryAiModelName = primaryModel,
@@ -339,13 +345,19 @@ namespace OzBiPortalCRM.Services
                 var primaryModel = msgList.FirstOrDefault(m => m.AIModel != null)?.AIModel?.Name ?? "Standart AI";
                 var assistantName = msgList.FirstOrDefault(m => m.Assistant != null)?.Assistant?.Name;
 
-                var userQuestions = msgList
-                    .Where(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt) || (!string.IsNullOrEmpty(m.Message) && !m.Message.StartsWith("##") && !m.Message.StartsWith("SELECT") && !m.Message.StartsWith("|")))
-                    .Select(m => !string.IsNullOrWhiteSpace(m.Message) && m.Role?.ToLower() == "user" ? m.Message : m.Prompt)
-                    .Where(q => !string.IsNullOrWhiteSpace(q))
-                    .Select(q => q!.Trim())
-                    .Distinct()
-                    .ToList();
+                // Turn-based question counting (same logic as ChatDetail.razor GetConversationTurns)
+                var userQuestions = new List<string>();
+                foreach (var m in msgList.OrderBy(m => m.DateCreated))
+                {
+                    bool isUser = m.Role?.ToLower() == "user";
+                    var promptText = !string.IsNullOrWhiteSpace(m.Prompt)
+                        ? m.Prompt
+                        : (isUser ? m.Message : null);
+                    if (!string.IsNullOrWhiteSpace(promptText) && !userQuestions.Contains(promptText.Trim()))
+                    {
+                        userQuestions.Add(promptText.Trim());
+                    }
+                }
 
                 if (term != null)
                 {
@@ -359,8 +371,8 @@ namespace OzBiPortalCRM.Services
                     }
                 }
 
-                var userQuestionCount = userQuestions.Count > 0 ? userQuestions.Count : msgList.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt));
-                if (userQuestionCount == 0 && msgList.Count > 0) userQuestionCount = msgList.Count;
+                var userQuestionCount = userQuestions.Count;
+                if (userQuestionCount == 0 && msgList.Count > 0) userQuestionCount = 1;
 
                 var firstTurnMsg = msgList.OrderBy(m => m.DateCreated).FirstOrDefault(m => m.Role?.ToLower() != "user");
                 bool isAssistantMode = firstTurnMsg != null ? firstTurnMsg.IsAssistantModeEffective : msgList.Any(m => m.IsAssistantModeEffective);
@@ -369,7 +381,7 @@ namespace OzBiPortalCRM.Services
                 {
                     Chat = c,
                     MessageCount = userQuestionCount,
-                    QueryCount = msgList.Count(m => !string.IsNullOrEmpty(m.Query)),
+                    QueryCount = CountSqlItems(msgList),
                     TotalDurationMs = msgList.Sum(m => m.TotalDurationMs ?? 0),
                     LastMessageDate = msgList.Count > 0 ? msgList.Max(m => m.DateCreated) : c.DateCreated,
                     PrimaryAiModelName = primaryModel,
@@ -380,6 +392,73 @@ namespace OzBiPortalCRM.Services
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Counts actual SQL items from message Query fields by parsing JSON arrays/objects.
+        /// Mirrors the ExtractSqlItemsFromQuery logic in ChatDetail.razor for consistent counts.
+        /// </summary>
+        private int CountSqlItems(List<OzBiChatMessage> messages)
+        {
+            int count = 0;
+            foreach (var m in messages)
+            {
+                if (string.IsNullOrWhiteSpace(m.Query)) continue;
+                var trimmed = m.Query.Trim();
+
+                if ((trimmed.StartsWith("[") && trimmed.EndsWith("]")) || (trimmed.StartsWith("{") && trimmed.EndsWith("}")))
+                {
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(trimmed);
+                        var root = doc.RootElement;
+                        if (root.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            foreach (var elem in root.EnumerateArray())
+                            {
+                                if (HasSqlContent(elem)) count++;
+                            }
+                        }
+                        else if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        {
+                            if (HasSqlContent(root)) count++;
+                        }
+                        continue;
+                    }
+                    catch
+                    {
+                        // Not valid JSON, fall through to raw count
+                    }
+                }
+
+                // Raw SQL string
+                count++;
+            }
+            return count;
+        }
+
+        private bool HasSqlContent(System.Text.Json.JsonElement elem)
+        {
+            string[] sqlKeys = { "sql", "Sql", "query", "Query", "tSql" };
+            if (elem.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                foreach (var key in sqlKeys)
+                {
+                    if (elem.TryGetProperty(key, out var prop) &&
+                        prop.ValueKind == System.Text.Json.JsonValueKind.String &&
+                        !string.IsNullOrWhiteSpace(prop.GetString()))
+                    {
+                        return true;
+                    }
+                }
+            }
+            // A plain string element in an array
+            if (elem.ValueKind == System.Text.Json.JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(elem.GetString()))
+            {
+                return true;
+            }
+            return false;
         }
 
         public async Task<OzBiChat?> GetChatByIdAsync(string chatId)
@@ -787,7 +866,7 @@ namespace OzBiPortalCRM.Services
                     .Take(6)
                     .ToList();
 
-                var erpTypeName = erpConfig.ErpType == ErpSystemType.Logo ? "Logo ERP (v1.0)" :
+                var erpTypeName = erpConfig.ErpType == ErpSystemType.Logo ? "Logo ERP (v8.0)" :
                                   erpConfig.ErpType == ErpSystemType.Mikro ? "Mikro ERP (v1.0)" : "Genel ERP";
 
                 bool isPromptSynced = lastReport?.IsPromptSynced ?? true;
@@ -1379,6 +1458,53 @@ namespace OzBiPortalCRM.Services
                 WithCommentCount = feedbacks.Count(f => !string.IsNullOrEmpty(f.FeedbackReason)),
                 FailedAndDislikedCount = feedbacks.Count(f => f.IsLiked == false && !string.IsNullOrEmpty(f.ErrorMessage))
             };
+        }
+
+        public async Task<List<OzBiAssistant>> GetAssistantsForTenantAsync(string tenantId)
+        {
+            if (string.IsNullOrWhiteSpace(tenantId)) return new List<OzBiAssistant>();
+
+            if (_useDemoMode)
+            {
+                return new List<OzBiAssistant>
+                {
+                    new OzBiAssistant
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        Name = "Logo ERP - Asistan",
+                        Description = "Logo Tiger / Go ERP Entegrasyon Asistanı",
+                        AIModelName = "GPT-5.6 Terra",
+                        SubModel = "gemini-2.5-flash",
+                        Temperature = 0.1,
+                        TopP = 0.95,
+                        TenantId = tenantId,
+                        IsActive = true,
+                        DateCreated = DateTime.UtcNow.AddMonths(-1),
+                        DateModified = DateTime.UtcNow.AddDays(-2),
+                        DatabaseDefinition = "[{\"TABLE_NAME\":\"LG_001_CLCARD\",\"Type\":\"TABLE\",\"Description\":\"Cari Hesap Kartları\",\"Columns\":[{\"Name\":\"LOGICALREF\",\"Type\":\"int\"},{\"Name\":\"CODE\",\"Type\":\"varchar\"},{\"Name\":\"DEFINITION_\",\"Type\":\"varchar\"}]}]",
+                        UserAdditionalPrompt = "# OzBI Logo ERP Ek Talimatı — v8.0\n\nPozitif kurallar...",
+                        UserAdditionalAgentPrompt = "# OzBI Kurumsal Analist Ek Prompt Yönergesi\n\nAnaliz kuralları..."
+                    }
+                };
+            }
+
+            try
+            {
+                await using var db = await _dbFactory.CreateDbContextAsync();
+                var assistants = await db.Assistants.AsNoTracking()
+                    .Include(a => a.DataConnection)
+                    .Where(a => a.TenantId == tenantId)
+                    .OrderByDescending(a => a.IsActive)
+                    .ThenByDescending(a => a.DateModified)
+                    .ToListAsync();
+
+                return assistants;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[OzBiAuditService] Error fetching assistants for tenant {tenantId}: {ex.Message}");
+                return new List<OzBiAssistant>();
+            }
         }
         #endregion
         #endregion

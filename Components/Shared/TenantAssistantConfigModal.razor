@@ -1,0 +1,1834 @@
+@using System.Text.Json
+@using OzBiPortalCRM.Models
+@using OzBiPortalCRM.Services
+@inject IJSRuntime JSRuntime
+
+@if (IsOpen)
+{
+    <div class="assistant-modal-overlay" @onclick="CloseModal">
+        <div class="assistant-modal-dialog" @onclick:stopPropagation>
+            
+            <!-- 🌟 Modal Top Header -->
+            <div class="assistant-modal-header">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <!-- ERP Type Badge -->
+                    <div class="erp-brand-badge @(DetectedErpType == "LOGO" ? "erp-logo" : (DetectedErpType == "MIKRO" ? "erp-mikro" : "erp-generic"))">
+                        @if (DetectedErpType == "LOGO")
+                        {
+                            <span class="erp-dot"></span>
+                            <i class="bi bi-layers-fill me-1"></i>
+                            <span>Logo Tiger / Go ERP</span>
+                        }
+                        else if (DetectedErpType == "MIKRO")
+                        {
+                            <span class="erp-dot"></span>
+                            <i class="bi bi-grid-3x3-gap-fill me-1"></i>
+                            <span>Mikro v16 / v17 ERP</span>
+                        }
+                        else
+                        {
+                            <span class="erp-dot"></span>
+                            <i class="bi bi-database me-1"></i>
+                            <span>Genel / Özel ERP</span>
+                        }
+                    </div>
+
+                    <div class="header-titles">
+                        <div class="d-flex align-items-center gap-2">
+                            <h3 class="tenant-title mb-0">@TenantName</h3>
+                            <span class="tenant-id-pill">ID: @TenantId</span>
+                        </div>
+                        <div class="header-subtitle">
+                            <i class="bi bi-shield-check text-emerald me-1"></i>
+                            MariaDB Canlı Şema & Asistan Prompt Denetim Paneli
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn-glass-close" @onclick="CloseModal" title="Kapat">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 🎛️ Assistant Switcher & Live Sync Strip -->
+            @if (Assistants != null && Assistants.Count > 0)
+            {
+                <div class="assistant-selector-strip">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="selector-label"><i class="bi bi-robot me-1 text-cyan"></i>Tanımlı Asistan:</span>
+                        <div class="assistant-pill-group">
+                            @foreach (var ast in Assistants)
+                            {
+                                var isSelected = SelectedAssistant?.Id == ast.Id;
+                                <button class="assistant-pill-btn @(isSelected ? "active" : "")"
+                                        @onclick="() => SelectAssistant(ast)">
+                                    <span class="assistant-name">@(string.IsNullOrWhiteSpace(ast.Name) ? "İsimsiz Asistan" : ast.Name)</span>
+                                    @if (ast.IsActive)
+                                    {
+                                        <span class="status-indicator-active" title="Aktif"></span>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    @if (SelectedAssistant != null)
+                    {
+                        <div class="sync-timestamp">
+                            <i class="bi bi-arrow-repeat text-cyan me-1"></i>
+                            <span>Son Güncelleme: </span>
+                            <strong>@(SelectedAssistant.DateModified?.ToString("dd.MM.yyyy HH:mm") ?? SelectedAssistant.DateCreated?.ToString("dd.MM.yyyy HH:mm") ?? "-")</strong>
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- 📜 Modal Body Content -->
+            <div class="assistant-modal-body">
+                @if (IsLoading)
+                {
+                    <div class="loading-state-box">
+                        <div class="spinner-glow mb-3"></div>
+                        <div class="loading-text">MariaDB üzerinden asistan ve şema verileri çekiliyor...</div>
+                    </div>
+                }
+                else if (SelectedAssistant == null)
+                {
+                    <div class="empty-state-box">
+                        <i class="bi bi-exclamation-octagon text-amber fs-1 mb-2"></i>
+                        <h5>Bu Tenant İçin Tanımlı Asistan Bulunamadı</h5>
+                        <p class="text-muted small">MariaDB `asistant` tablosunda bu tenant ID'ye bağlı bir kayıt yer almıyor.</p>
+                    </div>
+                }
+                else
+                {
+                    <!-- 💎 High-End KPI Stats Cards -->
+                    <div class="kpi-grid mb-4">
+                        <!-- KPI 1: AI Model -->
+                        <div class="kpi-card">
+                            <div class="kpi-icon-wrap icon-purple">
+                                <i class="bi bi-cpu-fill"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <div class="kpi-label">Yapay Zeka Modeli</div>
+                                <div class="kpi-value text-white" title="@SelectedAssistant.AIModelName">
+                                    @(SelectedAssistant.AIModelName ?? "GPT-5.6 Terra")
+                                </div>
+                                <div class="kpi-sub text-cyan">
+                                    <i class="bi bi-diagram-2 me-1"></i>@(SelectedAssistant.SubModel ?? "Varsayılan Sub-Model")
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- KPI 2: JSON Schema -->
+                        <div class="kpi-card">
+                            <div class="kpi-icon-wrap icon-emerald">
+                                <i class="bi bi-database-fill-check"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <div class="kpi-label">Yüklü JSON Şeması</div>
+                                <div class="kpi-value text-emerald">
+                                    @FormatBytes(SelectedAssistant.DatabaseDefinition?.Length ?? 0)
+                                </div>
+                                <div class="kpi-sub text-light">
+                                    <strong>@parsedTables.Count</strong> Tablo &bull; <strong>@TotalColumnCount</strong> Kolon
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- KPI 3: Prompt Version -->
+                        <div class="kpi-card">
+                            <div class="kpi-icon-wrap icon-cyan">
+                                <i class="bi bi-chat-quote-fill"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <div class="kpi-label">Asistan Promptu</div>
+                                <div class="kpi-value text-cyan">
+                                    @FormatBytes(SelectedAssistant.UserAdditionalPrompt?.Length ?? 0)
+                                </div>
+                                <div class="kpi-sub">
+                                    <span class="prompt-ver-badge @DetectedPromptVersionClass">@DetectedPromptVersion</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- KPI 4: Parameters -->
+                        <div class="kpi-card">
+                            <div class="kpi-icon-wrap icon-amber">
+                                <i class="bi bi-sliders2"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <div class="kpi-label">Model Parametreleri</div>
+                                <div class="kpi-value text-amber">
+                                    Temp: @(SelectedAssistant.Temperature?.ToString("0.0#") ?? "0.1")
+                                </div>
+                                <div class="kpi-sub text-muted">
+                                    TopP: @(SelectedAssistant.TopP?.ToString("0.0#") ?? "0.95") &bull; Limit: @(SelectedAssistant.LimitSize?.ToString() ?? "50") Satır
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 🚀 Modern 2-Row Segmented Navigation Bar -->
+                    <div class="segmented-tabs-wrapper mb-3">
+                        <!-- Row 1: Core Content (3 Tabs) -->
+                        <div class="segmented-row row-top">
+                            <button class="tab-item @(activeTab == "SCHEMA" ? "active" : "")" @onclick="@(() => activeTab = "SCHEMA")">
+                                <div class="d-flex align-items-center gap-2 text-truncate">
+                                    <i class="bi bi-filetype-json text-cyan fs-6"></i>
+                                    <span class="tab-title">1. JSON Veritabanı Şeması</span>
+                                </div>
+                                <span class="tab-counter">@parsedTables.Count Tablo</span>
+                            </button>
+
+                            <button class="tab-item @(activeTab == "PROMPT" ? "active" : "")" @onclick="@(() => activeTab = "PROMPT")">
+                                <div class="d-flex align-items-center gap-2 text-truncate">
+                                    <i class="bi bi-chat-square-text text-amber fs-6"></i>
+                                    <span class="tab-title">2. Asistan Promptu</span>
+                                </div>
+                                <span class="tab-counter">@FormatBytes(SelectedAssistant.UserAdditionalPrompt?.Length ?? 0)</span>
+                            </button>
+
+                            <button class="tab-item @(activeTab == "AGENT" ? "active" : "")" @onclick="@(() => activeTab = "AGENT")">
+                                <div class="d-flex align-items-center gap-2 text-truncate">
+                                    <i class="bi bi-person-workspace text-purple fs-6"></i>
+                                    <span class="tab-title">3. Analist Agent Promptu</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(SelectedAssistant.UserAdditionalAgentPrompt))
+                                {
+                                    <span class="tab-badge-active">Mevcut</span>
+                                }
+                                else
+                                {
+                                    <span class="tab-badge-muted">Varsayılan</span>
+                                }
+                            </button>
+                        </div>
+
+                        <!-- Row 2: Settings & Standards Health Audit (2 Tabs) -->
+                        <div class="segmented-row row-bottom">
+                            <button class="tab-item @(activeTab == "SETTINGS" ? "active" : "")" @onclick="@(() => activeTab = "SETTINGS")">
+                                <div class="d-flex align-items-center gap-2 text-truncate">
+                                    <i class="bi bi-gear-wide-connected text-light fs-6"></i>
+                                    <span class="tab-title">4. Sistem & Model Parametreleri</span>
+                                </div>
+                                <span class="tab-pill-hint">Limit, Temp, TopP</span>
+                            </button>
+
+                            <button class="tab-item tab-health @(activeTab == "DIFF" ? "active" : "")" @onclick="@(() => activeTab = "DIFF")">
+                                <div class="d-flex align-items-center gap-2 text-truncate">
+                                    <i class="bi bi-shield-check text-emerald fs-6"></i>
+                                    <span class="tab-title">5. @(DetectedErpType == "LOGO" ? "Logo v8.0" : (DetectedErpType == "MIKRO" ? "Mikro v27" : "ERP")) Sağlık & Fark Analizi</span>
+                                </div>
+                                @if (MissingStandardTables.Count > 0)
+                                {
+                                    <span class="tab-badge-warning">@MissingStandardTables.Count Eksik Tablo</span>
+                                }
+                                else
+                                {
+                                    <span class="tab-badge-success"><i class="bi bi-check-all me-1"></i>Tam Uyumlu</span>
+                                }
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 📄 TAB 1: JSON SCHEMA -->
+                    @if (activeTab == "SCHEMA")
+                    {
+                        <div class="tab-pane-content">
+                            <!-- Filter & Action Controls -->
+                            <div class="schema-toolbar">
+                                <div class="search-box-custom">
+                                    <i class="bi bi-search search-icon"></i>
+                                    <input type="text" class="search-input" 
+                                           placeholder="Tablo veya kolon adı ara (örn: @(DetectedErpType == "LOGO" ? "CLCARD, INVOICE, LOGICALREF" : "CARI_HESAPLAR, STOKLAR, evrak_no"))..." 
+                                           @bind="schemaSearchTerm" @bind:event="oninput" />
+                                    @if (!string.IsNullOrEmpty(schemaSearchTerm))
+                                    {
+                                        <button class="clear-search-btn" @onclick="() => schemaSearchTerm = string.Empty">
+                                            <i class="bi bi-x-circle-fill"></i>
+                                        </button>
+                                    }
+                                </div>
+
+                                <div class="toolbar-actions">
+                                    <div class="view-mode-toggle">
+                                        <button class="mode-btn @(schemaViewMode == "CATALOG" ? "active" : "")"
+                                                @onclick="@(() => schemaViewMode = "CATALOG")">
+                                            <i class="bi bi-grid-fill me-1"></i> Tablo Kataloğu
+                                        </button>
+                                        <button class="mode-btn @(schemaViewMode == "RAW" ? "active" : "")"
+                                                @onclick="@(() => schemaViewMode = "RAW")">
+                                            <i class="bi bi-code-slash me-1"></i> Formatlı JSON
+                                        </button>
+                                    </div>
+
+                                    <button class="btn-copy-action @(isJsonCopied ? "copied" : "")" @onclick="CopyJsonSchema">
+                                        <i class="bi @(isJsonCopied ? "bi-check-circle-fill text-emerald" : "bi-clipboard-fill")"></i>
+                                        <span>@(isJsonCopied ? "Panoya Kopyalandı!" : "JSON'ı Kopyala")</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            @if (string.IsNullOrWhiteSpace(SelectedAssistant.DatabaseDefinition))
+                            {
+                                <div class="empty-schema-notice">
+                                    <i class="bi bi-file-earmark-x text-amber fs-2 mb-2"></i>
+                                    <div>Bu asistan için `DatabaseDefinition` kolonu boş.</div>
+                                </div>
+                            }
+                            else if (schemaViewMode == "CATALOG")
+                            {
+                                var filtered = FilteredTables;
+                                <div class="catalog-summary-bar">
+                                    <span>Görüntülenen: <strong class="text-cyan">@filtered.Count</strong> / @parsedTables.Count Tablo</span>
+                                    <span>Filtrelenen Kolon: <strong class="text-white">@filtered.Sum(t => t.Columns.Count)</strong></span>
+                                </div>
+
+                                <div class="table-cards-list">
+                                    @foreach (var table in filtered)
+                                    {
+                                        var isExpanded = expandedTables.Contains(table.TableName);
+                                        <div class="table-accordion-card @(isExpanded ? "expanded" : "")">
+                                            <div class="table-card-header" @onclick="() => ToggleTableExpand(table.TableName)">
+                                                <div class="d-flex align-items-center gap-2.5 flex-wrap">
+                                                    <div class="accordion-chevron">
+                                                        <i class="bi @(isExpanded ? "bi-chevron-down" : "bi-chevron-right")"></i>
+                                                    </div>
+                                                    <span class="table-name-code">@table.TableName</span>
+                                                    <span class="table-type-tag">@table.Type</span>
+                                                    @if (!string.IsNullOrEmpty(table.Description))
+                                                    {
+                                                        <span class="table-desc-text">&bull; @table.Description</span>
+                                                    }
+                                                </div>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <span class="column-count-pill">
+                                                        <i class="bi bi-columns me-1"></i>@table.Columns.Count Kolon
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            @if (isExpanded)
+                                            {
+                                                <div class="table-card-body">
+                                                    <div class="table-responsive">
+                                                        <table class="columns-table">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th style="width: 28%;">Kolon Adı</th>
+                                                                    <th style="width: 16%;">Veri Tipi</th>
+                                                                    <th style="width: 56%;">Açıklama / Formül / İlişki Mantığı</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach (var col in table.Columns)
+                                                                {
+                                                                    <tr>
+                                                                        <td class="col-name-cell">@col.Name</td>
+                                                                        <td class="col-type-cell"><span class="type-pill">@col.Type</span></td>
+                                                                        <td class="col-desc-cell">
+                                                                            @if (!string.IsNullOrEmpty(col.Description))
+                                                                            {
+                                                                                <span>@col.Description</span>
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                <span class="text-muted">-</span>
+                                                                            }
+                                                                        </td>
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="raw-code-container">
+                                    <pre class="code-editor-viewport"><code>@FormattedJsonSchema</code></pre>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- 🧠 TAB 2: ASSISTANT PROMPT -->
+                    @if (activeTab == "PROMPT")
+                    {
+                        <div class="tab-pane-content">
+                            <div class="prompt-meta-toolbar">
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <span class="prompt-ver-badge-large @DetectedPromptVersionClass">
+                                        <i class="bi bi-patch-check-fill me-1.5"></i> @DetectedPromptVersion
+                                    </span>
+                                    <span class="prompt-stats-text">
+                                        (@(SelectedAssistant.UserAdditionalPrompt?.Length ?? 0) Karakter &bull; ~@((SelectedAssistant.UserAdditionalPrompt?.Length ?? 0) / 6) Kelime)
+                                    </span>
+                                </div>
+
+                                <button class="btn-copy-action @(isPromptCopied ? "copied" : "")" @onclick="CopyAssistantPrompt">
+                                    <i class="bi @(isPromptCopied ? "bi-check-circle-fill text-emerald" : "bi-clipboard-fill")"></i>
+                                    <span>@(isPromptCopied ? "Prompt Kopyalandı!" : "Asistan Promptunu Kopyala")</span>
+                                </button>
+                            </div>
+
+                            @if (string.IsNullOrWhiteSpace(SelectedAssistant.UserAdditionalPrompt))
+                            {
+                                <div class="empty-schema-notice">
+                                    <i class="bi bi-chat-square-dots text-amber fs-2 mb-2"></i>
+                                    <div>Bu asistan için `UserAdditionalPrompt` kolonu boş. Özel bir kural yönergesi bulunmuyor.</div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="prompt-editor-viewport">
+                                    <pre class="prompt-pre-text">@SelectedAssistant.UserAdditionalPrompt</pre>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- 🏛️ TAB 3: AGENT PROMPT -->
+                    @if (activeTab == "AGENT")
+                    {
+                        <div class="tab-pane-content">
+                            <div class="prompt-meta-toolbar">
+                                <div class="agent-info-text">
+                                    <i class="bi bi-info-circle-fill text-cyan me-1.5"></i>
+                                    SQL çıktısını kurumsal yönetim özetine dönüştüren <strong>McKinsey / Baş Kurumsal Analist</strong> yönergesi.
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(SelectedAssistant.UserAdditionalAgentPrompt))
+                                {
+                                    <button class="btn-copy-action @(isAgentPromptCopied ? "copied" : "")" @onclick="CopyAgentPrompt">
+                                        <i class="bi @(isAgentPromptCopied ? "bi-check-circle-fill text-emerald" : "bi-clipboard-fill")"></i>
+                                        <span>@(isAgentPromptCopied ? "Kopyalandı!" : "Agent Promptunu Kopyala")</span>
+                                    </button>
+                                }
+                            </div>
+
+                            @if (string.IsNullOrWhiteSpace(SelectedAssistant.UserAdditionalAgentPrompt))
+                            {
+                                <div class="empty-schema-notice">
+                                    <i class="bi bi-person-x text-secondary fs-2 mb-2"></i>
+                                    <div>Bu tenant için özel Kurumsal Analist promptu (`UserAdditionalAgentPrompt`) tanımlanmamış.</div>
+                                    <div class="text-muted small mt-1">Sistem genelindeki varsayılan analist promptu kullanılmaktadır.</div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="prompt-editor-viewport">
+                                    <pre class="prompt-pre-text">@SelectedAssistant.UserAdditionalAgentPrompt</pre>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- ⚙️ TAB 4: SYSTEM SETTINGS -->
+                    @if (activeTab == "SETTINGS")
+                    {
+                        <div class="tab-pane-content">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="settings-card">
+                                        <div class="settings-card-title">
+                                            <i class="bi bi-sliders text-cyan"></i>
+                                            <span>Model Çıktı & Davranış Ayarları</span>
+                                        </div>
+                                        
+                                        <div class="setting-row">
+                                            <span class="setting-label">Asistan Modu</span>
+                                            <span class="setting-value text-white">@(SelectedAssistant.AsistantMode == 1 ? "Sorgu Modu (SQL)" : "Asistan Modu")</span>
+                                        </div>
+                                        <div class="setting-row">
+                                            <span class="setting-label">Sıcaklık (Temperature)</span>
+                                            <span class="setting-value text-amber">@(SelectedAssistant.Temperature?.ToString("0.0#") ?? "0.1")</span>
+                                        </div>
+                                        <div class="setting-row">
+                                            <span class="setting-label">TopP Değeri</span>
+                                            <span class="setting-value text-amber">@(SelectedAssistant.TopP?.ToString("0.0#") ?? "0.95")</span>
+                                        </div>
+                                        <div class="setting-row">
+                                            <span class="setting-label">Satır Limiti (LimitSize)</span>
+                                            <span class="setting-value text-cyan">@(SelectedAssistant.LimitSize?.ToString() ?? "50") Satır</span>
+                                        </div>
+                                        <div class="setting-row border-0">
+                                            <span class="setting-label">Sürekli Sohbet (Continuous Chat)</span>
+                                            <span class="badge @(SelectedAssistant.IsContinuousChatEnabled ? "bg-success" : "bg-secondary")">
+                                                @(SelectedAssistant.IsContinuousChatEnabled ? "Açık" : "Kapalı")
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="settings-card">
+                                        <div class="settings-card-title">
+                                            <i class="bi bi-terminal-fill text-purple"></i>
+                                            <span>Özel Sistem Promptu (Custom System Prompt)</span>
+                                        </div>
+                                        
+                                        @if (!string.IsNullOrEmpty(SelectedAssistant.CustomSystemPrompt))
+                                        {
+                                            <div class="custom-sys-prompt-box">
+                                                <pre class="mb-0 text-light small">@SelectedAssistant.CustomSystemPrompt</pre>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="empty-setting-notice">
+                                                <i class="bi bi-dash-circle d-block mb-1 fs-4 text-muted"></i>
+                                                Özel sistem promptu tanımlı değil. (Global system prompt devrede)
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- 🛡️ TAB 5: HEALTH CHECK & DIFF -->
+                    @if (activeTab == "DIFF")
+                    {
+                        <div class="tab-pane-content">
+                            <!-- Hero Health Banner -->
+                            <div class="health-hero-banner">
+                                <div>
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <h5 class="fw-bold text-white mb-0">
+                                            <i class="bi bi-patch-check-fill text-emerald me-1.5"></i>
+                                            @(DetectedErpType == "LOGO" ? "Logo v8.0 Altın Standart Şema Analizi" : (DetectedErpType == "MIKRO" ? "Mikro v27 Altın Standart Şema Analizi" : "ERP Standart Şema Analizi"))
+                                        </h5>
+                                    </div>
+                                    <div class="text-muted small">
+                                        Bu tenant'ın yüklü şeması (@parsedTables.Count Tablo), OzBI'nin en güncel @(DetectedErpType == "LOGO" ? "Logo v8.0" : "Mikro v27") referans şeması (@CurrentStandardTables.Count Tablo) ile kıyaslanmaktadır.
+                                    </div>
+                                </div>
+
+                                <div class="health-counters-group">
+                                    <div class="health-counter-pill bg-success-glow">
+                                        <div class="counter-num text-emerald">@MatchingStandardTables.Count</div>
+                                        <div class="counter-lbl">Eşleşen Tablo</div>
+                                    </div>
+                                    <div class="health-counter-pill @(MissingStandardTables.Count > 0 ? "bg-warning-glow" : "bg-neutral-glow")">
+                                        <div class="counter-num @(MissingStandardTables.Count > 0 ? "text-amber" : "text-muted")">@MissingStandardTables.Count</div>
+                                        <div class="counter-lbl">Eksik Tablo</div>
+                                    </div>
+                                    <div class="health-counter-pill bg-info-glow">
+                                        <div class="counter-num text-cyan">@ExtraCustomTables.Count</div>
+                                        <div class="counter-lbl">Ek / Özel Tablo</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            @if (MissingStandardTables.Count > 0)
+                            {
+                                <div class="missing-tables-alert">
+                                    <div class="d-flex align-items-center gap-2 mb-2 text-amber fw-bold">
+                                        <i class="bi bi-exclamation-triangle-fill"></i>
+                                        <span>Altın Standart Şemada Olup Bu Tenant'ta Eksik Olan Tablolar:</span>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        @foreach (var missing in MissingStandardTables)
+                                        {
+                                            <span class="missing-table-tag">@missing</span>
+                                        }
+                                    </div>
+                                    <div class="alert-footnote">
+                                        @if (DetectedErpType == "LOGO")
+                                        {
+                                            <span>* <code>PAYTRANS</code> (Vadesi geçmiş borç/alacak), <code>KSLINES</code> (Kasa hareketleri) ve <code>EMUHACC</code> (Muhasebe hesapları) tablolarının eksikliği hatalı SQL üretimine neden olabilir.</span>
+                                        }
+                                        else
+                                        {
+                                            <span>* Bu tabloların eksik olması durumunda ilgili finansal ve stok raporlarında SQL hataları oluşabilir.</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            <!-- Matching Tables Tag Cloud -->
+                            <div class="mb-4">
+                                <div class="section-title-small">
+                                    <i class="bi bi-check-circle-fill text-emerald me-1.5"></i>
+                                    Mevcut ve Eşleşen Tablolar (@MatchingStandardTables.Count Tablo)
+                                </div>
+                                <div class="tables-tag-cloud">
+                                    @foreach (var t in MatchingStandardTables)
+                                    {
+                                        <span class="tag-table-match">@t</span>
+                                    }
+                                </div>
+                            </div>
+
+                            @if (ExtraCustomTables.Count > 0)
+                            {
+                                <div>
+                                    <div class="section-title-small">
+                                        <i class="bi bi-plus-circle-fill text-cyan me-1.5"></i>
+                                        Tenant'a Özel / Standart Dışı Tablolar (@ExtraCustomTables.Count Tablo)
+                                    </div>
+                                    <div class="tables-tag-cloud">
+                                        @foreach (var t in ExtraCustomTables)
+                                        {
+                                            <span class="tag-table-custom">@t</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+
+            <!-- 🚪 Modal Footer -->
+            <div class="assistant-modal-footer">
+                <div class="footer-security-note">
+                    <i class="bi bi-lock-fill text-emerald me-1"></i>
+                    MariaDB bağlantısı <strong>salt okunur (Read-Only)</strong> güvenlik modunda izole edilmiştir.
+                </div>
+                <button type="button" class="btn-footer-close" @onclick="CloseModal">Kapat</button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+/* =========================================================
+   ✨ ULTRA-PREMIUM ASISTANT & ŞEMA MODAL STYLES
+   ========================================================= */
+.assistant-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1060;
+    background: rgba(2, 6, 23, 0.82);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.assistant-modal-dialog {
+    width: 100%;
+    max-width: 1120px;
+    max-height: 92vh;
+    background: linear-gradient(180deg, #0b1120 0%, #070d19 100%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 1.25rem;
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.85), 0 0 50px rgba(56, 189, 248, 0.08);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    color: #f8fafc;
+    animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@@keyframes modalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@@keyframes modalSlideUp {
+    from { transform: translateY(20px) scale(0.98); opacity: 0; }
+    to { transform: translateY(0) scale(1); }
+}
+
+/* Header */
+.assistant-modal-header {
+    padding: 1.25rem 1.75rem;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.erp-brand-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 0.85rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.erp-brand-badge.erp-logo {
+    background: rgba(249, 115, 22, 0.15);
+    color: #fb923c;
+    border: 1px solid rgba(249, 115, 22, 0.4);
+    box-shadow: 0 0 15px rgba(249, 115, 22, 0.15);
+}
+
+.erp-brand-badge.erp-mikro {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.15);
+}
+
+.erp-brand-badge.erp-generic {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.4);
+}
+
+.erp-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    margin-right: 6px;
+    display: inline-block;
+}
+
+.tenant-title {
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+}
+
+.tenant-id-pill {
+    font-size: 0.7rem;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    background: rgba(255, 255, 255, 0.06);
+    color: #94a3b8;
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.header-subtitle {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    margin-top: 0.2rem;
+}
+
+.btn-glass-close {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.btn-glass-close:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #f87171;
+    transform: rotate(90deg);
+}
+
+/* Assistant Selector Strip */
+.assistant-selector-strip {
+    padding: 0.65rem 1.75rem;
+    background: rgba(15, 23, 42, 0.75);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: gap-2;
+}
+
+.selector-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #cbd5e1;
+}
+
+.assistant-pill-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.assistant-pill-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    padding: 0.3rem 0.85rem;
+    border-radius: 9999px;
+    font-size: 0.775rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.assistant-pill-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+.assistant-pill-btn.active {
+    background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+    border-color: #38bdf8;
+    color: #ffffff;
+    box-shadow: 0 0 15px rgba(37, 99, 235, 0.4);
+}
+
+.status-indicator-active {
+    width: 6px;
+    height: 6px;
+    background: #4ade80;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #4ade80;
+}
+
+.sync-timestamp {
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+/* Modal Body */
+.assistant-modal-body {
+    padding: 1.5rem 1.75rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* KPI Cards Grid */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.85rem;
+}
+
+@@media (max-width: 900px) {
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.kpi-card {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.85rem;
+    padding: 1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.kpi-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+.kpi-icon-wrap {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.icon-purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+.icon-emerald { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+.icon-cyan { background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
+.icon-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+
+.kpi-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.kpi-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+    margin-bottom: 0.2rem;
+    font-weight: 600;
+}
+
+.kpi-value {
+    font-size: 1.15rem;
+    font-weight: 800;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kpi-sub {
+    font-size: 0.725rem;
+    margin-top: 0.3rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.prompt-ver-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.675rem;
+    font-weight: 700;
+}
+
+.prompt-ver-badge.badge-v8 { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+.prompt-ver-badge.badge-v75 { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
+.prompt-ver-badge.badge-old { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+.prompt-ver-badge.badge-mikro { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); }
+.prompt-ver-badge.badge-custom { background: rgba(99, 102, 241, 0.2); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.4); }
+
+/* Segmented Navigation (2-Row Responsive Grid) */
+.segmented-tabs-wrapper {
+    background: rgba(15, 23, 42, 0.85);
+    padding: 0.45rem;
+    border-radius: 0.85rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.segmented-row {
+    display: grid;
+    gap: 0.4rem;
+    width: 100%;
+}
+
+.row-top {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.row-bottom {
+    grid-template-columns: 1fr 1.35fr;
+}
+
+@@media (max-width: 900px) {
+    .row-top, .row-bottom {
+        grid-template-columns: 1fr;
+    }
+}
+
+.tab-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    color: #94a3b8;
+    padding: 0.6rem 0.9rem;
+    border-radius: 0.6rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    text-align: left;
+}
+
+.tab-item:hover {
+    color: #f8fafc;
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.16);
+    transform: translateY(-1px);
+}
+
+.tab-item.active {
+    background: rgba(2, 132, 199, 0.18);
+    color: #38bdf8;
+    border-color: rgba(56, 189, 248, 0.4);
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.15);
+}
+
+.tab-item.tab-health.active {
+    background: rgba(16, 185, 129, 0.18);
+    color: #34d399;
+    border-color: rgba(16, 185, 129, 0.4);
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.15);
+}
+
+.tab-title {
+    font-size: 0.8rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tab-counter {
+    background: rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+    font-size: 0.675rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.tab-item.active .tab-counter {
+    background: #0284c7;
+    color: #ffffff;
+}
+
+.tab-pill-hint {
+    font-size: 0.675rem;
+    color: #64748b;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    flex-shrink: 0;
+}
+
+.tab-badge-active {
+    background: rgba(168, 85, 247, 0.2);
+    color: #c084fc;
+    font-size: 0.675rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.tab-badge-muted {
+    background: rgba(255, 255, 255, 0.05);
+    color: #64748b;
+    font-size: 0.675rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    flex-shrink: 0;
+}
+
+.tab-badge-warning {
+    background: rgba(245, 158, 11, 0.25);
+    color: #fbbf24;
+    font-size: 0.675rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    font-weight: 700;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    flex-shrink: 0;
+}
+
+.tab-badge-success {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    font-size: 0.675rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+/* Toolbar */
+.schema-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+}
+
+.search-box-custom {
+    position: relative;
+    width: 380px;
+    max-width: 100%;
+}
+
+.search-icon {
+    position: absolute;
+    left: 0.85rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #64748b;
+}
+
+.search-input {
+    width: 100%;
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #f8fafc;
+    border-radius: 0.6rem;
+    padding: 0.5rem 2.2rem 0.5rem 2.4rem;
+    font-size: 0.8rem;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.search-input:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+}
+
+.clear-search-btn {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    padding: 0;
+}
+
+.toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.view-mode-toggle {
+    display: inline-flex;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.5rem;
+    padding: 0.15rem;
+}
+
+.mode-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    padding: 0.35rem 0.75rem;
+    border-radius: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.mode-btn.active {
+    background: #0284c7;
+    color: #ffffff;
+}
+
+.btn-copy-action {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #34d399;
+    padding: 0.45rem 0.9rem;
+    border-radius: 0.5rem;
+    font-size: 0.775rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-copy-action:hover {
+    background: rgba(16, 185, 129, 0.25);
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+}
+
+.btn-copy-action.copied {
+    background: #10b981;
+    color: #ffffff;
+}
+
+/* Catalog Cards */
+.catalog-summary-bar {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+}
+
+.table-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.table-accordion-card {
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.65rem;
+    overflow: hidden;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.table-accordion-card:hover {
+    border-color: rgba(56, 189, 248, 0.3);
+    background: rgba(15, 23, 42, 0.75);
+}
+
+.table-card-header {
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+}
+
+.accordion-chevron {
+    color: #64748b;
+    font-size: 0.75rem;
+    width: 14px;
+}
+
+.table-name-code {
+    font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #38bdf8;
+    letter-spacing: 0.02em;
+}
+
+.table-type-tag {
+    font-size: 0.65rem;
+    background: rgba(255, 255, 255, 0.06);
+    color: #94a3b8;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.table-desc-text {
+    font-size: 0.775rem;
+    color: #e2e8f0;
+}
+
+.column-count-pill {
+    font-size: 0.7rem;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #38bdf8;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    font-weight: 600;
+}
+
+.table-card-body {
+    padding: 0.85rem 1rem;
+    background: #060a14;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.columns-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.775rem;
+}
+
+.columns-table th {
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.675rem;
+    letter-spacing: 0.05em;
+    padding: 0.4rem 0.6rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.columns-table td {
+    padding: 0.45rem 0.6rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.col-name-cell {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-weight: 700;
+    color: #fbbf24;
+}
+
+.type-pill {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 0.7rem;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.1);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+}
+
+.col-desc-cell {
+    color: #cbd5e1;
+}
+
+/* Prompt Viewport */
+.prompt-meta-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+}
+
+.prompt-ver-badge-large {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 0.85rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.prompt-stats-text {
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+.prompt-editor-viewport {
+    background: #050811;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    max-height: 480px;
+    overflow-y: auto;
+}
+
+.prompt-pre-text {
+    margin: 0;
+    color: #f1f5f9;
+    font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    font-size: 0.8rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+}
+
+.raw-code-container {
+    background: #050811;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    max-height: 480px;
+    overflow-y: auto;
+}
+
+.code-editor-viewport {
+    margin: 0;
+    color: #a5b4fc;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 0.775rem;
+}
+
+/* Health Banner */
+.health-hero-banner {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.85rem;
+    padding: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.health-counters-group {
+    display: flex;
+    gap: 0.6rem;
+}
+
+.health-counter-pill {
+    padding: 0.6rem 1.1rem;
+    border-radius: 0.65rem;
+    text-align: center;
+    border: 1px solid transparent;
+}
+
+.bg-success-glow { background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.3); }
+.bg-warning-glow { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); }
+.bg-info-glow { background: rgba(6, 182, 212, 0.12); border-color: rgba(6, 182, 212, 0.3); }
+.bg-neutral-glow { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.1); }
+
+.counter-num { font-size: 1.35rem; font-weight: 800; line-height: 1; }
+.counter-lbl { font-size: 0.675rem; color: #94a3b8; margin-top: 0.2rem; }
+
+.missing-tables-alert {
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: 0.75rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.missing-table-tag {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    padding: 0.25rem 0.65rem;
+    border-radius: 6px;
+}
+
+.alert-footnote {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-top: 0.65rem;
+}
+
+.section-title-small {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-bottom: 0.5rem;
+}
+
+.tables-tag-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.85rem;
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0.75rem;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.tag-table-match {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 0.7rem;
+    background: rgba(16, 185, 129, 0.1);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+}
+
+.tag-table-custom {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 0.7rem;
+    background: rgba(56, 189, 248, 0.1);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+}
+
+/* Settings Cards */
+.settings-card {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    height: 100%;
+}
+
+.settings-card-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #f8fafc;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 0.8rem;
+}
+
+.setting-label { color: #94a3b8; }
+.setting-value { font-weight: 600; }
+
+.custom-sys-prompt-box {
+    background: #050811;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.5rem;
+    padding: 0.85rem;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.empty-setting-notice {
+    text-align: center;
+    padding: 2.5rem 1rem;
+    color: #64748b;
+    font-size: 0.775rem;
+}
+
+/* Footer */
+.assistant-modal-footer {
+    padding: 1rem 1.75rem;
+    background: rgba(15, 23, 42, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.footer-security-note {
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+.btn-footer-close {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #f8fafc;
+    padding: 0.45rem 1.5rem;
+    border-radius: 0.55rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-footer-close:hover {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Colors */
+.text-emerald { color: #34d399 !important; }
+.text-cyan { color: #22d3ee !important; }
+.text-amber { color: #fbbf24 !important; }
+.text-purple { color: #c084fc !important; }
+</style>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string TenantName { get; set; } = string.Empty;
+    [Parameter] public string TenantId { get; set; } = string.Empty;
+    [Parameter] public List<OzBiAssistant>? Assistants { get; set; }
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private OzBiAssistant? SelectedAssistant;
+    private string activeTab = "SCHEMA";
+    private string schemaViewMode = "CATALOG";
+    private string schemaSearchTerm = string.Empty;
+    private HashSet<string> expandedTables = new();
+    private List<ParsedTableInfo> parsedTables = new();
+
+    private bool isJsonCopied = false;
+    private bool isPromptCopied = false;
+    private bool isAgentPromptCopied = false;
+
+    // 🌟 Logo v8.0 Golden Standard Table Catalog (44 Tables)
+    private static readonly HashSet<string> StandardLogoV8Tables = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CLCARD", "INVOICE", "STLINE", "PAYTRANS", "KSLINES", "CSROLL", "ORFICHE", "ORFLINE",
+        "ITEMS", "GNTOTST", "EMUHACC", "EMFLINE", "EMFICHE", "SRVCARD", "PURCHOFFER", "SALESOFFER",
+        "BNKACCREF", "BNFLINE", "BNFICHE", "CSHIST", "CLFLINE", "SPECODES", "UNITSETF", "UNITSETL",
+        "PRCLIST", "PAYPLANS", "SLSCLREL", "SLSMAN", "SHIPINFO", "DISTTEMP", "DISTLINE", "PROJECT",
+        "KASCARD", "BANKACC", "BNCARD", "ITMCLSF", "CRDREF", "STFICHE", "INVDEF", "EMUHACCREF",
+        "L_CAPIFIRM", "L_CAPIWHOUSE", "L_DAILYEXCHANGES", "LG_SLSMAN"
+    };
+
+    // 🌟 Mikro v27 Golden Standard Table Catalog (47 Tables)
+    private static readonly HashSet<string> StandardMikroV27Tables = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CARI_HESAPLAR", "CARI_HESAP_HAREKETLERI", "STOKLAR", "STOK_HAREKETLERI", "SIPARISLER",
+        "ODEME_EMIRLERI", "BANKALAR", "KASALAR", "DEPOLAR", "STOK_DEPO_DETAYLARI", "STOK_SATIS_FIYAT_LISTELERI",
+        "PERSONELLER", "VERILEN_TEKLIFLER", "STOK_HAREKETLERI_GIRIS_CIKIS", "BANKALAR_YONETIM",
+        "MUHASEBE_HESAP_KODLARI", "MUHASEBE_FISLERI", "MUHASEBE_FIS_DETAYLARI", "HIZMET_KARTLARI",
+        "MASRAF_KARTLARI", "ODEME_PLANLARI", "SEKTORLER", "BOLGELER", "CARI_HESAP_GRUP_KODLARI",
+        "STOK_ANA_GRUPLARI", "STOK_ALT_GRUPLARI", "STOK_URETICILERI", "STOK_SEKTORLERI", "BIRIMLER",
+        "ISEM_KARTLARI", "ISEM_HAREKETLERI", "ISEM_ROTA_HAREKETLERI", "ISEM_KAYNAK_HAREKETLERI",
+        "KULLANICILAR", "FIRMALAR", "SUBELER", "PROJELER", "SORUMLULUK_MERKEZLERI"
+    };
+
+    private string DetectedErpType
+    {
+        get
+        {
+            var assistantName = (SelectedAssistant?.Name ?? "").ToUpperInvariant();
+            var prompt = (SelectedAssistant?.UserAdditionalPrompt ?? "").ToUpperInvariant();
+            var schemaText = (SelectedAssistant?.DatabaseDefinition ?? "").ToUpperInvariant();
+
+            if (assistantName.Contains("LOGO") || prompt.Contains("LOGO") || schemaText.Contains("LG_") || schemaText.Contains("L_CAPI"))
+                return "LOGO";
+
+            if (assistantName.Contains("MIKRO") || prompt.Contains("MIKRO") || schemaText.Contains("CARI_HESAPLAR") || schemaText.Contains("STOKLAR"))
+                return "MIKRO";
+
+            return "GENERIC";
+        }
+    }
+
+    private HashSet<string> CurrentStandardTables => DetectedErpType == "MIKRO" ? StandardMikroV27Tables : StandardLogoV8Tables;
+
+    protected override void OnParametersSet()
+    {
+        if (Assistants != null && Assistants.Count > 0)
+        {
+            if (SelectedAssistant == null || !Assistants.Any(a => a.Id == SelectedAssistant.Id))
+            {
+                SelectedAssistant = Assistants.FirstOrDefault(a => a.IsActive) ?? Assistants.First();
+                ParseSchema();
+            }
+        }
+    }
+
+    private void SelectAssistant(OzBiAssistant assistant)
+    {
+        SelectedAssistant = assistant;
+        schemaSearchTerm = string.Empty;
+        expandedTables.Clear();
+        ParseSchema();
+    }
+
+    private void ToggleTableExpand(string tableName)
+    {
+        if (expandedTables.Contains(tableName))
+            expandedTables.Remove(tableName);
+        else
+            expandedTables.Add(tableName);
+    }
+
+    private void ParseSchema()
+    {
+        parsedTables.Clear();
+        if (SelectedAssistant == null || string.IsNullOrWhiteSpace(SelectedAssistant.DatabaseDefinition))
+            return;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(SelectedAssistant.DatabaseDefinition);
+            if (doc.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var el in doc.RootElement.EnumerateArray())
+                {
+                    var tableName = el.TryGetProperty("TABLE_NAME", out var tn) ? tn.GetString() ?? "" : "";
+                    var type = el.TryGetProperty("Type", out var tp) ? tp.GetString() ?? "TABLE" : "TABLE";
+                    var desc = el.TryGetProperty("Description", out var ds) ? ds.GetString() ?? "" : "";
+                    
+                    var tableInfo = new ParsedTableInfo
+                    {
+                        TableName = tableName,
+                        Type = type,
+                        Description = desc
+                    };
+
+                    if (el.TryGetProperty("Columns", out var cols) && cols.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var col in cols.EnumerateArray())
+                        {
+                            var cName = col.TryGetProperty("Name", out var cn) ? cn.GetString() ?? "" : "";
+                            var cType = col.TryGetProperty("Type", out var ct) ? ct.GetString() ?? "" : "";
+                            var cDesc = col.TryGetProperty("Description", out var cd) ? cd.GetString() ?? "" : "";
+
+                            tableInfo.Columns.Add(new ParsedColumnInfo
+                            {
+                                Name = cName,
+                                Type = cType,
+                                Description = cDesc
+                            });
+                        }
+                    }
+
+                    parsedTables.Add(tableInfo);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("[TenantAssistantConfigModal] Error parsing DatabaseDefinition JSON: " + ex.Message);
+        }
+    }
+
+    private int TotalColumnCount => parsedTables.Sum(t => t.Columns.Count);
+
+    private List<ParsedTableInfo> FilteredTables
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(schemaSearchTerm))
+                return parsedTables;
+
+            var term = schemaSearchTerm.Trim().ToLowerInvariant();
+            return parsedTables.Where(t =>
+                t.TableName.ToLowerInvariant().Contains(term) ||
+                t.Description.ToLowerInvariant().Contains(term) ||
+                t.Columns.Any(c => c.Name.ToLowerInvariant().Contains(term) || c.Description.ToLowerInvariant().Contains(term))
+            ).ToList();
+        }
+    }
+
+    private string FormattedJsonSchema
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(SelectedAssistant?.DatabaseDefinition))
+                return "{}";
+
+            try
+            {
+                using var doc = JsonDocument.Parse(SelectedAssistant.DatabaseDefinition);
+                return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true });
+            }
+            catch
+            {
+                return SelectedAssistant.DatabaseDefinition;
+            }
+        }
+    }
+
+    private string DetectedPromptVersion
+    {
+        get
+        {
+            var prompt = SelectedAssistant?.UserAdditionalPrompt ?? "";
+            if (prompt.Contains("v8.0") || prompt.Contains("Yalın & Pozitif Mimari") || prompt.Contains("v8"))
+                return "Logo v8.0 Uyumlu (Pozitif Mimari)";
+            if (prompt.Contains("v7.5"))
+                return "Logo v7.5 Şema Uyumlu";
+            if (prompt.Contains("v7.3") || prompt.Contains("v7.0"))
+                return "Logo v7.x (Eski Sürüm)";
+            if (prompt.Contains("v27") || prompt.Contains("v27.1"))
+                return "Mikro v27 Altın Prompt";
+            if (prompt.Contains("Mikro") || prompt.Contains("MIKRO"))
+                return "Mikro ERP Standart Prompt";
+            if (!string.IsNullOrWhiteSpace(prompt))
+                return "Özel Yapılandırılmış Prompt";
+            return "Prompt Atanmamış";
+        }
+    }
+
+    private string DetectedPromptVersionClass
+    {
+        get
+        {
+            var v = DetectedPromptVersion;
+            if (v.Contains("v8.0")) return "badge-v8";
+            if (v.Contains("v7.5")) return "badge-v75";
+            if (v.Contains("v7.x")) return "badge-old";
+            if (v.Contains("Mikro") || v.Contains("v27")) return "badge-mikro";
+            if (v.Contains("Özel")) return "badge-custom";
+            return "badge-old";
+        }
+    }
+
+    private List<string> MatchingStandardTables
+    {
+        get
+        {
+            var cleanNames = parsedTables.Select(GetCleanTableName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return cleanNames.Where(n => CurrentStandardTables.Contains(n)).OrderBy(n => n).ToList();
+        }
+    }
+
+    private List<string> MissingStandardTables
+    {
+        get
+        {
+            var cleanNames = parsedTables.Select(GetCleanTableName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            
+            if (DetectedErpType == "MIKRO")
+            {
+                var essentialMikro = new[] { "CARI_HESAPLAR", "CARI_HESAP_HAREKETLERI", "STOKLAR", "STOK_HAREKETLERI", "SIPARISLER", "ODEME_EMIRLERI", "BANKALAR", "KASALAR", "DEPOLAR", "MUHASEBE_HESAP_KODLARI" };
+                return essentialMikro.Where(n => !cleanNames.Contains(n)).ToList();
+            }
+            else
+            {
+                var essentialLogo = new[] { "CLCARD", "INVOICE", "STLINE", "PAYTRANS", "KSLINES", "CSROLL", "ORFICHE", "ITEMS", "GNTOTST", "EMUHACC" };
+                return essentialLogo.Where(n => !cleanNames.Contains(n)).ToList();
+            }
+        }
+    }
+
+    private List<string> ExtraCustomTables
+    {
+        get
+        {
+            var cleanNames = parsedTables.Select(GetCleanTableName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return cleanNames.Where(n => !CurrentStandardTables.Contains(n)).OrderBy(n => n).ToList();
+        }
+    }
+
+    private string GetCleanTableName(ParsedTableInfo t)
+    {
+        var name = t.TableName;
+        if (name.StartsWith("LG_") || name.StartsWith("lg_"))
+        {
+            var parts = name.Split('_');
+            if (parts.Length >= 3)
+            {
+                return string.Join("_", parts.Skip(2));
+            }
+        }
+        return name;
+    }
+
+    private async Task CopyJsonSchema()
+    {
+        if (string.IsNullOrEmpty(FormattedJsonSchema)) return;
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", FormattedJsonSchema);
+        isJsonCopied = true;
+        StateHasChanged();
+        _ = Task.Delay(2000).ContinueWith(_ => { isJsonCopied = false; InvokeAsync(StateHasChanged); });
+    }
+
+    private async Task CopyAssistantPrompt()
+    {
+        var text = SelectedAssistant?.UserAdditionalPrompt ?? "";
+        if (string.IsNullOrEmpty(text)) return;
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+        isPromptCopied = true;
+        StateHasChanged();
+        _ = Task.Delay(2000).ContinueWith(_ => { isPromptCopied = false; InvokeAsync(StateHasChanged); });
+    }
+
+    private async Task CopyAgentPrompt()
+    {
+        var text = SelectedAssistant?.UserAdditionalAgentPrompt ?? "";
+        if (string.IsNullOrEmpty(text)) return;
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+        isAgentPromptCopied = true;
+        StateHasChanged();
+        _ = Task.Delay(2000).ContinueWith(_ => { isAgentPromptCopied = false; InvokeAsync(StateHasChanged); });
+    }
+
+    private string FormatBytes(int bytes)
+    {
+        if (bytes <= 0) return "0 B";
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{(bytes / 1024.0):0.0} KB";
+        return $"{(bytes / (1024.0 * 1024.0)):0.0} MB";
+    }
+
+    private async Task CloseModal()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    public class ParsedTableInfo
+    {
+        public string TableName { get; set; } = string.Empty;
+        public string Type { get; set; } = "TABLE";
+        public string Description { get; set; } = string.Empty;
+        public List<ParsedColumnInfo> Columns { get; set; } = new();
+    }
+
+    public class ParsedColumnInfo
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+    }
+}

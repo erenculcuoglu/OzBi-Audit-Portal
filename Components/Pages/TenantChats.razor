@@ -97,6 +97,10 @@
 
                     <!-- Right: Action Buttons -->
                     <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <button class="btn btn-sm btn-outline-primary fw-semibold d-inline-flex align-items-center gap-1.5" @onclick="OpenAssistantConfigModal" title="Tenant'ın Yüklü JSON Şeması ve Promptlarını İncele">
+                            <i class="bi bi-cpu-fill text-cyan"></i> Asistan & Şema
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">@(tenantAssistants?.Count ?? 0)</span>
+                        </button>
                         <button class="btn btn-sm btn-outline-info" @onclick="() => isComplianceModalOpen = true" title="Detaylı ERP Uyum Analizini Görüntüle">
                             <i class="bi bi-shield-check me-1"></i> Detaylı Uyum Analizi
                         </button>
@@ -286,6 +290,13 @@ else
                        OnClose="@(() => isComplianceModalOpen = false)"
                        OnRefresh="@RefreshScorecardLive" />
 
+<TenantAssistantConfigModal IsOpen="@isAssistantModalOpen"
+                            TenantName="@(tenant?.Name ?? "Tenant")"
+                            TenantId="@TenantId"
+                            Assistants="@tenantAssistants"
+                            IsLoading="@isLoadingAssistants"
+                            OnClose="@(() => isAssistantModalOpen = false)" />
+
 @code {
     [Parameter]
     public string TenantId { get; set; } = string.Empty;
@@ -293,6 +304,7 @@ else
     private OzBiTenant? tenant;
     private List<OzBiUser>? tenantUsers;
     private List<ChatAuditSummary>? chatsList;
+    private List<OzBiAssistant>? tenantAssistants;
     private TenantSubscription? subscription;
     private TenantComplianceScorecard? scorecard;
     private DateTime? mariaDbStartDate;
@@ -301,6 +313,8 @@ else
     private string selectedUserId = string.Empty;
     private bool isLoading = true;
     private bool isComplianceModalOpen = false;
+    private bool isAssistantModalOpen = false;
+    private bool isLoadingAssistants = false;
     private bool isCalculatingScore = false;
 
     private int TotalQueries => chatsList?.Sum(c => c.QueryCount) ?? 0;
@@ -331,6 +345,7 @@ else
             tenant = await AuditService.GetTenantByIdAsync(TenantId);
             tenantUsers = await AuditService.GetUsersForTenantAsync(TenantId);
             chatsList = await AuditService.GetChatsForTenantAsync(TenantId, searchTerm, selectedUserId);
+            tenantAssistants = await AuditService.GetAssistantsForTenantAsync(TenantId);
             subscription = await AuditService.GetTenantSubscriptionAsync(TenantId);
             scorecard = await AuditService.GetTenantComplianceScorecardAsync(TenantId);
 
@@ -345,6 +360,27 @@ else
         finally
         {
             isLoading = false;
+        }
+    }
+
+    private async Task OpenAssistantConfigModal()
+    {
+        isAssistantModalOpen = true;
+        if (tenantAssistants == null || tenantAssistants.Count == 0)
+        {
+            isLoadingAssistants = true;
+            try
+            {
+                tenantAssistants = await AuditService.GetAssistantsForTenantAsync(TenantId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error loading assistants: " + ex.Message);
+            }
+            finally
+            {
+                isLoadingAssistants = false;
+            }
         }
     }
 

@@ -15,6 +15,7 @@ namespace OzBiPortalCRM.Services
             int portalUserId = 0);
 
         Task<List<TemplateCategoryInfo>> GetCategoriesSummaryAsync();
+        List<TemplateCategoryInfo> GetCategoriesSummary(List<PromptTemplate> preloaded);
 
         Task<PromptTemplate?> GetQuestionByIdAsync(string id, int portalUserId = 0);
 

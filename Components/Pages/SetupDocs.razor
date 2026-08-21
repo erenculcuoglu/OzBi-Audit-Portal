@@ -1,0 +1,1230 @@
+@page "/docs"
+@page "/setup-docs"
+@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
+
+<!-- Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <h3 class="fw-bold mb-0 text-white d-flex align-items-center gap-2">
+                <i class="bi bi-shield-check text-cyan"></i>
+                <span>OzBI Kurulum & Hızlı Hata Teşhis Merkezi</span>
+            </h3>
+            <span class="badge bg-cyan-subtle text-cyan border border-cyan-subtle px-2.5 py-1 rounded-pill small fw-semibold">
+                v8.0 Teşhis Akışı
+            </span>
+        </div>
+        <div class="text-muted small">
+            Müşteri sunucusunda nereden ne yapılacağını adım adım takip edin, ekrandaki sonuca göre tek tıkla çözün.
+        </div>
+    </div>
+    
+    <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-outline-cyan btn-sm px-3.5 py-2 rounded-pill d-inline-flex align-items-center gap-2 shadow-sm" 
+                @onclick="CopyQuickDiagnosticScript" title="Tüm kontrolleri tek satırda yapıp masaüstüne rapor çıkaran script">
+            <i class="bi @(isDiagCopied ? "bi-check-circle-fill text-success" : "bi-magic text-warning")"></i>
+            <span class="fw-medium">@(isDiagCopied ? "Otomatik Tanı Script'i Kopyalandı!" : "⚡ Tek Satırlık Otomatik Tanı Script'i")</span>
+        </button>
+        <a href="https://dotnet.microsoft.com/en-us/download/dotnet/8.0" target="_blank" 
+           class="btn btn-primary-gradient btn-sm px-3.5 py-2 rounded-pill text-decoration-none d-inline-flex align-items-center gap-1.5 shadow-sm">
+            <i class="bi bi-cloud-arrow-down-fill"></i>
+            <span class="fw-medium">.NET 8 Hosting Bundle</span>
+        </a>
+    </div>
+</div>
+
+<!-- 2-Mode Segmented Switcher -->
+<div class="d-flex justify-content-center mb-4">
+    <div class="segmented-control p-1 rounded-pill">
+        <button class="segment-btn @(currentMode == "DIAGNOSE" ? "active" : "")" @onclick='() => currentMode = "DIAGNOSE"'>
+            <i class="bi bi-search-heart-fill me-2 text-warning"></i>
+            <span>Adım Adım Hata Teşhisi (Sorun Çöz)</span>
+        </button>
+        <button class="segment-btn @(currentMode == "INSTALL" ? "active" : "")" @onclick='() => currentMode = "INSTALL"'>
+            <i class="bi bi-rocket-takeoff-fill me-2 text-cyan"></i>
+            <span>Sıfırdan Kurulum & Ayarlar</span>
+        </button>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════════ -->
+<!-- MOD 1: ADIM ADIM HATA TEŞHİS AKIŞI -->
+<!-- ═══════════════════════════════════════════════════════════════════════════════ -->
+@if (currentMode == "DIAGNOSE")
+{
+    <!-- Altın Kural Callout -->
+    <div class="golden-rule-banner p-4 rounded-4 mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <div class="golden-badge">
+                <i class="bi bi-lightning-charge-fill fs-4 text-warning"></i>
+            </div>
+            <div>
+                <div class="fw-bold text-white small text-uppercase" style="letter-spacing: 0.05em;">
+                    ⚡ En Hızlı Teşhis (Altın Kural — 5 Saniyede Kök Neden):
+                </div>
+                <div class="text-muted small">
+                    Sunucuda <strong>PowerShell</strong> açıp programı elle çalıştırın. Ekrana düşen kırmızı yazı hatanın kesin sebebidir:
+                </div>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <code class="text-cyan small bg-dark px-3 py-2 rounded-3 border border-secondary font-monospace">cd "C:\Program Files\OzBi" ; .\AgentBi.exe</code>
+            <button class="btn btn-outline-cyan btn-sm rounded-pill px-3 py-1.5 d-inline-flex align-items-center gap-1.5" @onclick='() => CopyCode("cd \"C:\\Program Files\\OzBi\"\n.\\AgentBi.exe", "golden-cmd")'>
+                <i class="bi @(IsCopied("golden-cmd") ? "bi-check2 text-success" : "bi-clipboard")"></i>
+                <span class="fw-semibold">@(IsCopied("golden-cmd") ? "Kopyalandı" : "Kopyala")</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Senaryo Seçim Kartları (Grid) -->
+    <div class="glass-card p-4 rounded-4 mb-4">
+        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+            <div>
+                <h5 class="fw-bold text-white mb-1">Müşteri Ne Yaşıyor? (Senaryo Seçin):</h5>
+                <div class="text-muted small">Müşterinin belirttiği duruma tıklayın, sırayla neyi nereden yapacağınız açılsın:</div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            @foreach (var s in diagnosticScenarios)
+            {
+                var isSelected = selectedScenarioId == s.Id;
+                <div class="col-12 col-md-6 col-lg-4">
+                    <div class="diagnostic-nav-card @(isSelected ? "selected" : "")" @onclick="() => selectedScenarioId = s.Id">
+                        <div class="d-flex align-items-center gap-2.5 mb-2">
+                            <div class="scenario-icon @s.ThemeClass">
+                                <i class="bi @s.Icon"></i>
+                            </div>
+                            <div>
+                                <div class="fw-bold text-white" style="font-size: 0.95rem;">@s.Title</div>
+                                <div class="badge @s.BadgeClass" style="font-size: 0.675rem;">@s.ErrorCode</div>
+                            </div>
+                        </div>
+                        <div class="text-muted small mb-2" style="font-size: 0.825rem; line-height: 1.45;">
+                            @s.Description
+                        </div>
+                        <div class="mt-auto pt-2 border-top border-secondary-subtle d-flex align-items-center justify-content-between text-muted" style="font-size: 0.75rem;">
+                            <span class="text-cyan fw-semibold">@s.StepCount Adımda Teşhis &rarr;</span>
+                            <span class="badge bg-dark border border-secondary text-muted">@s.EstimatedTime</span>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Seçilen Senaryonun Sıralı Kontrol Akışı -->
+        @if (selectedScenario != null)
+        {
+            <div class="scenario-detail-box p-4 p-md-5 rounded-4 border">
+                <!-- Header -->
+                <div class="d-flex align-items-start justify-content-between mb-4 flex-wrap gap-3 pb-3 border-bottom border-secondary-subtle">
+                    <div class="d-flex align-items-center gap-3.5">
+                        <div class="scenario-icon @selectedScenario.ThemeClass" style="width: 52px; height: 52px; font-size: 1.5rem;">
+                            <i class="bi @selectedScenario.Icon"></i>
+                        </div>
+                        <div>
+                            <div class="badge @selectedScenario.BadgeClass mb-1 px-2.5 py-1">@selectedScenario.ErrorCode</div>
+                            <h4 class="fw-bold text-white mb-1">@selectedScenario.Title</h4>
+                            <div class="text-muted small">Olası Kök Neden: <span class="text-white fw-semibold">@selectedScenario.ProbableCauses</span></div>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-success px-4 py-2.5 rounded-pill fw-bold d-inline-flex align-items-center gap-2 shadow"
+                            @onclick='() => CopyCode(selectedScenario.OneClickFix, "one-click-fix")'>
+                        <i class="bi @(IsCopied("one-click-fix") ? "bi-check2-circle" : "bi-lightning-fill") fs-5"></i>
+                        <span>@(IsCopied("one-click-fix") ? "Çözüm Komutu Kopyalandı!" : "⚡ Tek Tıkla Tamir Komutu")</span>
+                    </button>
+                </div>
+
+                <!-- Sıralı Teşhis Adımları (İlkokul Düzeyinde Yönlendirme) -->
+                <div class="d-flex align-items-center justify-content-between mb-3.5">
+                    <h6 class="fw-bold text-white mb-0 d-flex align-items-center gap-2">
+                        <i class="bi bi-diagram-3-fill text-cyan"></i> Müşteri Sunucusunda Sırayla Uygulayın (@selectedScenario.Steps.Count Adım):
+                    </h6>
+                    <span class="text-muted small">Adımları 1'den başlayarak sırayla yapın</span>
+                </div>
+
+                <div class="step-flow-container d-flex flex-column gap-4">
+                    @foreach (var step in selectedScenario.Steps)
+                    {
+                        <div class="step-card p-4 rounded-4 border">
+                            <!-- Step Top Header -->
+                            <div class="d-flex align-items-center justify-content-between gap-3 mb-2.5 flex-wrap">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="step-circle-badge">@step.StepNo</div>
+                                    <div>
+                                        <div class="fw-bold text-white fs-6">@step.Title</div>
+                                        <div class="text-muted small">@step.SubTitle</div>
+                                    </div>
+                                </div>
+                                <button class="btn btn-outline-cyan btn-sm rounded-pill px-3.5 py-1.5 d-inline-flex align-items-center gap-2 shadow-sm" 
+                                        @onclick='() => CopyCode(step.Command, "step-cmd-" + step.StepNo)'>
+                                    <i class="bi @(IsCopied("step-cmd-" + step.StepNo) ? "bi-check2 text-success" : "bi-clipboard")"></i>
+                                    <span class="fw-semibold">@(IsCopied("step-cmd-" + step.StepNo) ? "Kopyalandı!" : "Komutu Kopyala")</span>
+                                </button>
+                            </div>
+
+                            <!-- İlkokul Düzeyinde "Nereden ve Nasıl Yapılır?" Yönlendirme Kutusu -->
+                            <div class="how-to-box p-3 rounded-3 mb-3 d-flex align-items-start gap-2.5">
+                                <i class="bi bi-geo-alt-fill text-cyan fs-5 flex-shrink-0 mt-0.5"></i>
+                                <div>
+                                    <div class="text-cyan fw-bold small text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.05em;">
+                                        Nereden & Nasıl Yapacaksınız?
+                                    </div>
+                                    <div class="text-white small fw-medium" style="font-size: 0.875rem; line-height: 1.5;">
+                                        @((MarkupString)step.WhereAndHow)
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Terminal Code Box -->
+                            <div class="terminal-box mb-3.5">
+                                <div class="terminal-header d-flex align-items-center justify-content-between px-3.5 py-2 border-bottom border-secondary-subtle">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="terminal-dot bg-danger"></span>
+                                        <span class="terminal-dot bg-warning"></span>
+                                        <span class="terminal-dot bg-success"></span>
+                                        <span class="text-muted small font-monospace ms-2" style="font-size: 0.75rem;">@step.ToolName</span>
+                                    </div>
+                                    <span class="badge bg-dark border border-secondary text-muted font-monospace" style="font-size: 0.7rem;">Enter</span>
+                                </div>
+                                <pre class="code-snippet-pre mb-0"><code>@step.Command</code></pre>
+                            </div>
+
+                            <!-- Ekranda Ne Görüyorsunuz? (Ferah Satır Tasarımı) -->
+                            <div class="decision-matrix-wrap">
+                                <div class="text-muted small fw-bold mb-2 text-uppercase d-flex align-items-center gap-1.5" style="font-size: 0.75rem; letter-spacing: 0.05em;">
+                                    <i class="bi bi-signpost-split-fill text-warning"></i>
+                                    <span>Ekrana Çıkan Yazıya Göre Ne Yapacaksınız?</span>
+                                </div>
+
+                                <div class="d-flex flex-column gap-2.5">
+                                    @foreach (var outcome in step.Outcomes)
+                                    {
+                                        <div class="outcome-row p-3 rounded-3 @outcome.ThemeClass d-flex align-items-center justify-content-between flex-wrap gap-3">
+                                            <!-- Sol Taraf: Durum & Açıklama -->
+                                            <div class="d-flex align-items-center gap-3 flex-grow-1 flex-wrap">
+                                                <span class="badge @outcome.BadgeClass px-3 py-1.5 fw-bold font-monospace text-nowrap" style="font-size: 0.8rem;">
+                                                    @outcome.Condition
+                                                </span>
+                                                <div class="text-white small" style="font-size: 0.875rem; line-height: 1.45;">
+                                                    @((MarkupString)outcome.Meaning)
+                                                </div>
+                                            </div>
+
+                                            <!-- Sağ Taraf: Çözüm Komutu / Buton -->
+                                            <div class="d-flex align-items-center gap-2.5 flex-shrink-0 flex-wrap">
+                                                @if (!string.IsNullOrEmpty(outcome.FixCommand))
+                                                {
+                                                    <div class="outcome-code-pill font-monospace">@outcome.FixCommand</div>
+                                                    <button class="btn btn-action-fix btn-sm px-3 py-1.5 rounded-pill d-inline-flex align-items-center gap-1.5 shadow-sm" 
+                                                            @onclick='() => CopyCode(outcome.FixCommand, "fix-cmd-" + step.StepNo + "-" + outcome.Condition)'>
+                                                        <i class="bi @(IsCopied("fix-cmd-" + step.StepNo + "-" + outcome.Condition) ? "bi-check2 text-success" : "bi-lightning-charge-fill text-warning")"></i>
+                                                        <span class="fw-semibold">@(IsCopied("fix-cmd-" + step.StepNo + "-" + outcome.Condition) ? "Kopyalandı!" : "Çözümü Kopyala")</span>
+                                                    </button>
+                                                }
+                                                @if (!string.IsNullOrEmpty(outcome.NextStepHint))
+                                                {
+                                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 fw-bold d-inline-flex align-items-center gap-1.5">
+                                                        <i class="bi bi-arrow-down-circle-fill"></i> @outcome.NextStepHint
+                                                    </span>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<!-- ═══════════════════════════════════════════════════════════════════════════════ -->
+<!-- MOD 2: SIFIRDAN KURULUM & AYARLAR -->
+<!-- ═══════════════════════════════════════════════════════════════════════════════ -->
+@if (currentMode == "INSTALL")
+{
+    <div class="d-flex flex-column gap-3 mb-4">
+        <!-- Step 1: .NET 8 Hosting Bundle -->
+        <div class="glass-card p-4 rounded-4">
+            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="step-num bg-primary">1</div>
+                    <div>
+                        <h6 class="fw-bold text-white mb-0.5">.NET 8.0 ASP.NET Core Hosting Bundle Kurulumu (Zorunlu Önkoşul)</h6>
+                        <div class="text-muted small">Sunucuda .NET 8 yoksa uygulama hiç açılmaz (0x80008083 / hostfxr hatası)</div>
+                    </div>
+                </div>
+                <a href="https://dotnet.microsoft.com/en-us/download/dotnet/8.0" target="_blank" class="btn btn-outline-cyan btn-sm rounded-pill px-3.5 py-1.5">
+                    <i class="bi bi-cloud-arrow-down-fill me-1"></i>Microsoft'tan İndir (.exe)
+                </a>
+            </div>
+
+            <div class="how-to-box p-3 rounded-3 mb-3 d-flex align-items-start gap-2.5">
+                <i class="bi bi-geo-alt-fill text-cyan fs-5 flex-shrink-0 mt-0.5"></i>
+                <div class="text-white small">
+                    <strong>Nereden & Nasıl:</strong> İndirdiğiniz <code>dotnet-hosting-8.0.30-win.exe</code> dosyasını sunucuda çift tıklayıp kurun veya aşağıdaki komutu PowerShell'e yapıştırın.
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <div class="d-flex align-items-center justify-content-between mb-1 text-muted small">
+                    <span>PowerShell (Yönetici) ile Sessiz Kurulum:</span>
+                    <button class="btn-copy-code" @onclick='() => CopyCode(".\\dotnet-hosting-8.0.30-win.exe /install /quiet /norestart", "inst-1")'>
+                        <i class="bi @(IsCopied("inst-1") ? "bi-check2 text-success" : "bi-clipboard") me-1"></i>
+                        <span>@(IsCopied("inst-1") ? "Kopyalandı" : "Kopyala")</span>
+                    </button>
+                </div>
+                <pre class="code-snippet-pre mb-2"><code>.\dotnet-hosting-8.0.30-win.exe /install /quiet /norestart</code></pre>
+            </div>
+
+            <!-- Doğrulama Notu -->
+            <div class="output-interpret-box p-3 rounded-3 small d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div>
+                    <span class="text-warning fw-semibold"><i class="bi bi-check-circle-fill me-1"></i>Nasıl Doğrularım?</span>
+                    <span class="text-muted ms-1">PowerShell'de <code>dotnet --list-runtimes</code> yazın. <code>Microsoft.AspNetCore.App 8.0.x</code> görünmelidir.</span>
+                </div>
+                <button class="btn-copy-code" @onclick='() => CopyCode("dotnet --list-runtimes", "chk-rt")'>
+                    <i class="bi @(IsCopied("chk-rt") ? "bi-check2 text-success" : "bi-clipboard") me-1"></i>
+                    <span>Test Komutunu Kopyala</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 2: Dosyaları Kopyalama -->
+        <div class="glass-card p-4 rounded-4">
+            <div class="d-flex align-items-center gap-3 mb-3">
+                <div class="step-num bg-primary">2</div>
+                <div>
+                    <h6 class="fw-bold text-white mb-0.5">Dosyaları <code>C:\Program Files\OzBi</code> Klasörüne Yerleştirin</h6>
+                    <div class="text-muted small">Uygulama klasörünü oluşturup dağıtım dosyalarını içine kopyalayın</div>
+                </div>
+            </div>
+
+            <div class="how-to-box p-3 rounded-3 mb-3 d-flex align-items-start gap-2.5">
+                <i class="bi bi-geo-alt-fill text-cyan fs-5 flex-shrink-0 mt-0.5"></i>
+                <div class="text-white small">
+                    <strong>Nereden & Nasıl:</strong> Windows Dosya Gezgini'ni açıp <code>C:\Program Files\OzBi</code> klasörünü oluşturun ve zip'ten çıkardığınız dosyaları buraya yapıştırın.
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <div class="d-flex align-items-center justify-content-between mb-1 text-muted small">
+                    <span>PowerShell ile Otomatik Klasör Açma & Kopyalama:</span>
+                    <button class="btn-copy-code" @onclick='() => CopyCode("New-Item -ItemType Directory -Path \"C:\\Program Files\\OzBi\" -Force\nCopy-Item -Path \".\\*\" -Destination \"C:\\Program Files\\OzBi\\\" -Recurse -Force", "inst-2")'>
+                        <i class="bi @(IsCopied("inst-2") ? "bi-check2 text-success" : "bi-clipboard") me-1"></i>
+                        <span>@(IsCopied("inst-2") ? "Kopyalandı" : "Kopyala")</span>
+                    </button>
+                </div>
+                <pre class="code-snippet-pre mb-2"><code>New-Item -ItemType Directory -Path "C:\Program Files\OzBi" -Force
+Copy-Item -Path ".\*" -Destination "C:\Program Files\OzBi\" -Recurse -Force</code></pre>
+            </div>
+
+            <div class="output-interpret-box p-3 rounded-3 small">
+                <span class="text-warning fw-semibold"><i class="bi bi-info-circle-fill me-1"></i>Kontrol:</span>
+                <span class="text-muted ms-1"><code>C:\Program Files\OzBi\AgentBi.exe</code> dosyasının klasör içinde olduğunu görün.</span>
+            </div>
+        </div>
+
+        <!-- Step 3: appsettings.json Oluşturucu -->
+        <div class="glass-card p-4 rounded-4">
+            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="step-num bg-info text-dark">3</div>
+                    <div>
+                        <h6 class="fw-bold text-white mb-0.5">Müşteri Veritabanı Bilgileri & <code>appsettings.json</code> Üretici</h6>
+                        <div class="text-muted small">Aşağıdaki bilgileri doldurun; dosya otomatik oluşsun, elle JSON düzenleme hatası yapmayın:</div>
+                    </div>
+                </div>
+                <button class="btn btn-outline-cyan btn-sm rounded-pill px-3 py-1.5" @onclick='() => CopyCode(SaveAppsettingsScript, "save-cfg-ps")'>
+                    <i class="bi @(IsCopied("save-cfg-ps") ? "bi-check2 text-success" : "bi-filetype-json") me-1"></i>
+                    <span>@(IsCopied("save-cfg-ps") ? "Script Kopyalandı!" : "appsettings.json'ı Otomatik Kaydet (PowerShell)")</span>
+                </button>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-md-3">
+                    <label class="form-label text-muted small fw-semibold">ERP Türü</label>
+                    <select class="form-select form-select-sm bg-dark text-white border-secondary" @bind="cfgErpType">
+                        <option value="LOGO">Logo Tiger / Go3</option>
+                        <option value="MIKRO">Mikro ERP</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-5">
+                    <label class="form-label text-muted small fw-semibold">SQL Server (IP / Sunucu Adı)</label>
+                    <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="192.168.1.100 veya localhost" @bind="cfgSqlHost" />
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label text-muted small fw-semibold">Veritabanı Adı</label>
+                    <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="TIGERDB" @bind="cfgDatabase" />
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <label class="form-label text-muted small fw-semibold">SQL Kullanıcı (sa)</label>
+                    <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" @bind="cfgSqlUser" />
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label text-muted small fw-semibold">SQL Şifresi</label>
+                    <input type="password" class="form-control form-control-sm bg-dark text-white border-secondary" @bind="cfgSqlPassword" />
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label text-muted small fw-semibold">Logo Firma No (001)</label>
+                    <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" maxlength="3" @bind="cfgFirmaNo" />
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label text-muted small fw-semibold">Logo Dönem No (01)</label>
+                    <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" maxlength="2" @bind="cfgDonemNo" />
+                </div>
+            </div>
+
+            <!-- Canlı JSON Önizleme -->
+            <div class="p-3 rounded-3 bg-dark border border-secondary mb-2">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="text-muted small font-monospace"><i class="bi bi-file-code me-1 text-warning"></i><code>C:\Program Files\OzBi\appsettings.json</code> Önizleme:</span>
+                    <button class="btn-copy-code" @onclick='() => CopyCode(GeneratedConfigJson, "cfg-raw")'>
+                        <i class="bi @(IsCopied("cfg-raw") ? "bi-check2 text-success" : "bi-clipboard") me-1"></i>
+                        <span>JSON Kopyala</span>
+                    </button>
+                </div>
+                <pre class="code-snippet-pre mb-0" style="font-size: 0.775rem;"><code>@GeneratedConfigJson</code></pre>
+            </div>
+        </div>
+
+        <!-- Step 4: Altın Kural Manuel Test (Servis Kurmadan Önce!) -->
+        <div class="glass-card p-4 rounded-4 border-warning-subtle">
+            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="step-num bg-warning text-dark">4</div>
+                    <div>
+                        <h6 class="fw-bold text-white mb-0.5">Manuel Konsol Testi (Altın Kural — Servis Kurmadan Önce!)</h6>
+                        <div class="text-muted small">Servis kurmadan önce konsoldan çalıştırıp SQL bağlantısının ve portun çalıştığını 5 saniyede görün:</div>
+                    </div>
+                </div>
+                <span class="badge bg-warning text-dark px-3 py-1.5 rounded-pill fw-bold">Kritik Kontrol</span>
+            </div>
+
+            <div class="how-to-box p-3 rounded-3 mb-3 d-flex align-items-start gap-2.5">
+                <i class="bi bi-geo-alt-fill text-cyan fs-5 flex-shrink-0 mt-0.5"></i>
+                <div class="text-white small">
+                    <strong>Nereden & Nasıl:</strong> Windows Başlat &rarr; <code>PowerShell</code> açın &rarr; aşağıdaki 2 satırı yapıştırıp Enter'a basın.
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <div class="d-flex align-items-center justify-content-between mb-1 text-muted small">
+                    <span>PowerShell ile Konsoldan Başlatın:</span>
+                    <button class="btn-copy-code" @onclick='() => CopyCode("cd \"C:\\Program Files\\OzBi\"\n.\\AgentBi.exe", "test-step")'>
+                        <i class="bi @(IsCopied("test-step") ? "bi-check2 text-success" : "bi-clipboard") me-1"></i>
+                        <span>Kopyala</span>
+                    </button>
+                </div>
+                <pre class="code-snippet-pre mb-2"><code>cd "C:\Program Files\OzBi"
+.\AgentBi.exe</code></pre>
+            </div>
+
+            <div class="output-interpret-box p-3 rounded-3 small">
+                <div class="text-warning fw-bold mb-1"><i class="bi bi-eye-fill me-1"></i>ÇIKTIYI KONTROL EDİN:</div>
+                <div class="text-white mb-1">✅ Konsolda <code>Now listening on: http://0.0.0.0:8500</code> görüyorsanız ve tarayıcıda <code>http://localhost:8500</code> açıldıysa her şey doğrudur! (Konsolu <code>Ctrl+C</code> ile kapatıp Adım 5'e geçin).</div>
+                <div class="text-danger">❌ Kırmızı bir SQL veya .NET hatası çıkarsa hemen yukarıdaki <code>Adım Adım Hata Teşhisi</code> sekmesinden hatayı çözün.</div>
+            </div>
+        </div>
+
+        <!-- Step 5: Servis & Güvenlik Duvarı Kurulumu (Canlıya Alma) -->
+        <div class="glass-card p-4 rounded-4">
+            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="step-num bg-success text-white">5</div>
+                    <div>
+                        <h6 class="fw-bold text-white mb-0.5">Windows Servisi Kur & Güvenlik Duvarı İzni Aç (Canlıya Alma)</h6>
+                        <div class="text-muted small">Servisi otomatik kurtarmalı oluşturur, başlatır ve port 8500 için gelen kuralı açar:</div>
+                    </div>
+                </div>
+                <button class="btn btn-success px-3.5 py-2.5 rounded-pill fw-bold d-inline-flex align-items-center gap-2 shadow"
+                        @onclick='() => CopyCode(CompleteSetupScript, "full-setup")'>
+                    <i class="bi @(IsCopied("full-setup") ? "bi-check2-circle" : "bi-play-circle-fill") fs-5"></i>
+                    <span>@(IsCopied("full-setup") ? "Tüm Komut Kopyalandı!" : "⚡ Tek Tıkla Canlıya Al Komutunu Kopyala")</span>
+                </button>
+            </div>
+
+            <div class="how-to-box p-3 rounded-3 mb-3 d-flex align-items-start gap-2.5">
+                <i class="bi bi-geo-alt-fill text-cyan fs-5 flex-shrink-0 mt-0.5"></i>
+                <div class="text-white small">
+                    <strong>Nereden & Nasıl:</strong> Windows Başlat &rarr; <code>PowerShell</code> &rarr; Sağ tık <strong>"Yönetici Olarak Çalıştır"</strong> deyin ve aşağıdaki komutu yapıştırın.
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <div class="d-flex align-items-center justify-content-between mb-1 text-muted small">
+                    <span>PowerShell (Yönetici Olarak Çalıştırın):</span>
+                </div>
+                <pre class="code-snippet-pre mb-2" style="font-size: 0.775rem;"><code>@CompleteSetupScript</code></pre>
+            </div>
+
+            <div class="output-interpret-box p-3 rounded-3 small text-muted">
+                <span class="text-success fw-semibold"><i class="bi bi-check-all me-1"></i>Tebrikler!</span>
+                <span>Artık OzBI arka planda çalışıyor. Tarayıcıda <code>http://localhost:8500</code> veya ağdaki bilgisayarlardan <code>http://&lt;SUNUCU_IP&gt;:8500</code> adresine girerek kullanabilirsiniz.</span>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string currentMode = "DIAGNOSE"; // DIAGNOSE or INSTALL
+    private string selectedScenarioId = "refused";
+    private bool isDiagCopied = false;
+    private HashSet<string> copiedKeys = new();
+
+    // Config Generator Fields
+    private string cfgErpType = "LOGO";
+    private string cfgSqlHost = "192.168.1.100";
+    private string cfgDatabase = "TIGERDB";
+    private string cfgSqlUser = "sa";
+    private string cfgSqlPassword = "Password123!";
+    private string cfgFirmaNo = "001";
+    private string cfgDonemNo = "01";
+
+    private string GeneratedConfigJson =>
+        "{\n" +
+        "  \"ConnectionStrings\": {\n" +
+        $"    \"DefaultConnection\": \"Server={cfgSqlHost},1433;Database={cfgDatabase};User Id={cfgSqlUser};Password={cfgSqlPassword};TrustServerCertificate=True;Encrypt=False;\"\n" +
+        "  },\n" +
+        "  \"AppSettings\": {\n" +
+        "    \"Port\": 8500,\n" +
+        $"    \"ErpType\": \"{cfgErpType}\",\n" +
+        $"    \"FirmaNo\": \"{cfgFirmaNo}\",\n" +
+        $"    \"DonemNo\": \"{cfgDonemNo}\"\n" +
+        "  },\n" +
+        "  \"Logging\": {\n" +
+        "    \"LogLevel\": {\n" +
+        "      \"Default\": \"Information\",\n" +
+        "      \"Microsoft.AspNetCore\": \"Warning\"\n" +
+        "    }\n" +
+        "  }\n" +
+        "}";
+
+    private string SaveAppsettingsScript =>
+        $"$config = @'\n{GeneratedConfigJson}\n'@\n" +
+        "$config | Out-File -FilePath \"C:\\Program Files\\OzBi\\appsettings.json\" -Encoding UTF8 -Force\n" +
+        "Write-Host \"[+] appsettings.json basariyla olusturuldu.\" -ForegroundColor Green";
+
+    private string CompleteSetupScript => 
+        $"# 1. Servisi olustur (otomatik baslangic)\n" +
+        $"sc.exe create OzBiService binPath= \"\\\"C:\\Program Files\\OzBi\\AgentBi.exe\\\"\" DisplayName= \"OzBi Agent Service\" start= auto obj= \"LocalSystem\"\n" +
+        $"# 2. Cokme durumunda 3 kez otomatik yeniden baslatma (Recovery)\n" +
+        $"sc.exe failure OzBiService reset= 86400 actions= restart/60000/restart/60000/restart/60000\n" +
+        $"# 3. Servisi baslat\n" +
+        $"Start-Service OzBiService\n" +
+        $"# 4. Windows Guvenlik Duvarinda 8500 portunu ac\n" +
+        $"New-NetFirewallRule -DisplayName \"OzBi Agent (8500)\" -Direction Inbound -Protocol TCP -LocalPort 8500 -Action Allow -Profile Any\n" +
+        $"Get-Service OzBiService";
+
+    private DiagnosticScenario? selectedScenario => diagnosticScenarios.FirstOrDefault(s => s.Id == selectedScenarioId);
+
+    private bool IsCopied(string key) => copiedKeys.Contains(key);
+
+    private async Task CopyCode(string code, string key)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", code);
+            copiedKeys.Add(key);
+            StateHasChanged();
+
+            _ = Task.Delay(2000).ContinueWith(_ =>
+            {
+                copiedKeys.Remove(key);
+                InvokeAsync(StateHasChanged);
+            });
+        }
+        catch { }
+    }
+
+    private async Task CopyQuickDiagnosticScript()
+    {
+        await CopyCode(remoteDiagScript, "quick-diag");
+        isDiagCopied = true;
+        StateHasChanged();
+        _ = Task.Delay(2000).ContinueWith(_ =>
+        {
+            isDiagCopied = false;
+            InvokeAsync(StateHasChanged);
+        });
+    }
+
+    public class DiagnosticScenario
+    {
+        public string Id { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string ErrorCode { get; set; } = "";
+        public string Icon { get; set; } = "bi-exclamation-circle";
+        public string ThemeClass { get; set; } = "theme-danger";
+        public string BadgeClass { get; set; } = "bg-danger";
+        public string Description { get; set; } = "";
+        public string ProbableCauses { get; set; } = "";
+        public string OneClickFix { get; set; } = "";
+        public int StepCount => Steps.Count;
+        public string EstimatedTime { get; set; } = "1 Dk";
+        public List<DiagnosticStep> Steps { get; set; } = new();
+    }
+
+    public class StepOutcome
+    {
+        public string Condition { get; set; } = "";
+        public string Meaning { get; set; } = "";
+        public string BadgeClass { get; set; } = "bg-danger text-white";
+        public string ThemeClass { get; set; } = "outcome-danger";
+        public string? FixCommand { get; set; }
+        public string? NextStepHint { get; set; }
+    }
+
+    public class DiagnosticStep
+    {
+        public int StepNo { get; set; }
+        public string Title { get; set; } = "";
+        public string SubTitle { get; set; } = "";
+        public string ToolName { get; set; } = "PowerShell (Yönetici)";
+        public string WhereAndHow { get; set; } = "";
+        public string Command { get; set; } = "";
+        public List<StepOutcome> Outcomes { get; set; } = new();
+    }
+
+    private List<DiagnosticScenario> diagnosticScenarios = new()
+    {
+        new()
+        {
+            Id = "refused",
+            Title = "Sayfa Açılmıyor (Port 8500 Bağlantı Reddedildi)",
+            ErrorCode = "ERR_CONNECTION_REFUSED",
+            Icon = "bi-wifi-off",
+            ThemeClass = "theme-danger",
+            BadgeClass = "bg-danger text-white",
+            Description = "localhost:8500 açılmıyor, beyaz sayfa kalıyor veya 'Bağlanmayı reddetti' diyor.",
+            ProbableCauses = "OzBI servisi durmuş, henüz başlamamış veya farklı bir portta çalışıyor.",
+            OneClickFix = "Start-Service OzBiService\nnetstat -ano | findstr :8500\nGet-Service OzBiService",
+            EstimatedTime = "30 Saniye",
+            Steps = new()
+            {
+                new()
+                {
+                    StepNo = 1,
+                    Title = "1. Servis Gerçekten Çalışıyor mu?",
+                    SubTitle = "Windows Hizmetleri arasında OzBI durumunu kontrol edin",
+                    ToolName = "PowerShell (Yönetici)",
+                    WhereAndHow = "Windows Başlat düğmesine tıklayın &rarr; <code>PowerShell</code> yazın &rarr; Sağ tıklayıp <strong>\"Yönetici Olarak Çalıştır\"</strong> deyin &rarr; Aşağıdaki komutu yapıştırıp <strong>Enter</strong>'a basın:",
+                    Command = "Get-Service | Where-Object { $_.DisplayName -like \"*ozbi*\" -or $_.Name -like \"*ozbi*\" }\n# veya klavyeden Win+R yapıp: services.msc yazın",
+                    Outcomes = new()
+                    {
+                        new()
+                        {
+                            Condition = "Status: Stopped (Durmuş)",
+                            Meaning = "Servis kurulu ama kapalıdır. Sağdaki butondan tek tıkla başlatın:",
+                            BadgeClass = "bg-danger text-white",
+                            ThemeClass = "outcome-danger",
+                            FixCommand = "Start-Service OzBiService",
+                            NextStepHint = "Başlattıktan sonra tarayıcıyı yenileyin."
+                        },
+                        new()
+                        {
+                            Condition = "Status: Running (Çalışıyor)",
+                            Meaning = "Servis açık görünüyor. Sorun port dinleme veya ağ kaynaklıdır:",
+                            BadgeClass = "bg-success text-white",
+                            ThemeClass = "outcome-success",
+                            NextStepHint = "Adım 2'ye geçin ↓"
+                        },
+                        new()
+                        {
+                            Condition = "Boş Liste (Servis Yok)",
+                            Meaning = "OzBI servisi Windows'a hiç kurulmamış.",
+                            BadgeClass = "bg-warning text-dark",
+                            ThemeClass = "outcome-warning",
+                            FixCommand = "cd \"C:\\Program Files\\OzBi\"\n.\\AgentBi.exe",
+                            NextStepHint = "Sıfırdan Kurulum sekmesinden servisi kurun."
+                        }
+                    }
+                },
+                new()
+                {
+                    StepNo = 2,
+                    Title = "2. 8500 Portunu Kim Dinliyor (veya Dinlemiyor)?",
+                    SubTitle = "Portun açık olup olmadığını ve dinleme durumunu kontrol edin",
+                    ToolName = "PowerShell (Yönetici)",
+                    WhereAndHow = "Aynı açık olan PowerShell siyah ekranına aşağıdaki komutu yapıştırıp <strong>Enter</strong>'a basın:",
+                    Command = "netstat -ano | findstr :8500",
+                    Outcomes = new()
+                    {
+                        new()
+                        {
+                            Condition = "Boş Sonuç (Kimse Dinlemiyor)",
+                            Meaning = "Hiçbir uygulama 8500 portunu dinlemiyor. Servis çökmüş veya farklı portta kalkmış olabilir:",
+                            BadgeClass = "bg-danger text-white",
+                            ThemeClass = "outcome-danger",
+                            NextStepHint = "Adım 3 ve 4'e geçin ↓"
+                        },
+                        new()
+                        {
+                            Condition = "LISTENING (Dinliyor)",
+                            Meaning = "Port açık! Tarayıcıda adres çubuğuna <code>https://</code> değil mutlaka <code>http://localhost:8500</code> yazdığınızdan emin olun.",
+                            BadgeClass = "bg-success text-white",
+                            ThemeClass = "outcome-success",
+                            NextStepHint = "Adres çubuğunu kontrol edin."
+                        }
+                    }
+                },
+                new()
+                {
+                    StepNo = 3,
+                    Title = "3. OzBI Farklı Bir Portta mı Ayağa Kalktı?",
+                    SubTitle = "Sunucuda dinleyen tüm portları listeleyin",
+                    ToolName = "PowerShell (Yönetici)",
+                    WhereAndHow = "PowerShell ekranına komutu yapıştırıp Enter'a basın; listede 8501, 5000, 8080 gibi portlar var mı bakın:",
+                    Command = "netstat -ano | findstr LISTENING",
+                    Outcomes = new()
+                    {
+                        new()
+                        {
+                            Condition = "Farklı Port (80, 5000, 8080 vb.)",
+                            Meaning = "OzBI 8500 yerine başka bir portta ayağa kalkmış olabilir. <code>appsettings.json</code> dosyasını kontrol edin.",
+                            BadgeClass = "bg-warning text-dark",
+                            ThemeClass = "outcome-warning",
+                            NextStepHint = "Adım 4'e geçin ↓"
+                        }
+                    }
+                },
+                new()
+                {
+                    StepNo = 4,
+                    Title = "4. Konfigürasyon Dosyasındaki (appsettings.json) Portu Kontrol Edin",
+                    SubTitle = "Port tanımı doğru mu? 8500 olarak mı set edilmiş?",
+                    ToolName = "Dosya Gezgini & Not Defteri",
+                    WhereAndHow = "Windows Dosya Gezgini'nden <code>C:\\Program Files\\OzBi\\appsettings.json</code> dosyasını Not Defteri ile açın veya PowerShell'den çalıştırın:",
+                    Command = "Get-Content \"C:\\Program Files\\OzBi\\appsettings.json\" | Select-String -Pattern \"Port\", \"Urls\"",
+                    Outcomes = new()
+                    {
+                        new()
+                        {
+                            Condition = "Port 8500 Değilse / Yanlışsa",
+                            Meaning = "Dosyayı açıp <code>\"Port\": 8500</code> yapın ve servisi yeniden başlatın:",
+                            BadgeClass = "bg-warning text-dark",
+                            ThemeClass = "outcome-warning",
+                            FixCommand = "notepad \"C:\\Program Files\\OzBi\\appsettings.json\"\nRestart-Service OzBiService"
+                        },
+                        new()
+                        {
+                            Condition = "Port 8500 Olarak Doğruysa",
+                            Meaning = "Ayar dosyası doğru. Eğer sistem IIS'e bağlıysa IIS ayarlarını kontrol edin:",
+                            BadgeClass = "bg-success text-white",
+                            ThemeClass = "outcome-success",
+                            NextStepHint = "Adım 5'e geçin ↓"
+                        }
+                    }
+                },
+                new()
+                {
+                    StepNo = 5,
+                    Title = "5. IIS Üzerinden mi Çalışıyor?",
+                    SubTitle = "Eğer sistem IIS'e bağlıysa Site ve Application Pool durumuna bakın",
+                    ToolName = "IIS Yöneticisi (inetmgr)",
+                    WhereAndHow = "Windows Başlat &rarr; <code>inetmgr</code> yazıp açın &rarr; <strong>Siteler &rarr; OzBi</strong> üzerine tıklayın &rarr; Durumun <strong>'Started'</strong> olduğunu ve Bindings portunun <strong>8500</strong> olduğunu görün:",
+                    Command = "Get-IISSite -Name \"*OzBi*\" -ErrorAction SilentlyContinue\nGet-WebAppPoolState -Name \"*OzBi*\" -ErrorAction SilentlyContinue",
+                    Outcomes = new()
+                    {
+                        new()
+                        {
+                            Condition = "AppPool / Site 'Stopped'",
+                            Meaning = "IIS üzerinde OzBI sitesi durdurulmuş. Hemen başlatın:",
+                            BadgeClass = "bg-danger text-white",
+                            ThemeClass = "outcome-danger",
+                            FixCommand = "Start-WebAppPool -Name \"OzBi\"\nStart-IISSite -Name \"OzBi\""
+                        },
+                        new()
+                        {
+                            Condition = "IIS Kullanılmıyor (Kestrel)",
+                            Meaning = "OzBI bağımsız Windows Servisi olarak çalışıyorsa doğrudan çökme loglarına bakın:",
+                            BadgeClass = "bg-info text-dark",
+                            ThemeClass = "outcome-info",
+                            NextStepHint = "Adım 6'ya geçin ↓"
+                        }
+                    }
+                },
+                new()
+                {
+                    StepNo = 6,
+                    Title = "6. Event Log Kontrolü (Crash / Çökme Nedeni)",
+                    SubTitle = "Windows Application Log'daki son çökme hatalarını okuyun",
+                    ToolName = "Olay Görüntüleyicisi (eventvwr.msc)",
+                    WhereAndHow = "Klavyeden <strong>Win + R</strong> yapıp <code>eventvwr.msc</code> yazın &rarr; <strong>Windows Günlükleri &rarr; Uygulama (Application)</strong> kısmına bakın veya PowerShell'den son hataları dökün:",
+                    Command = "Get-EventLog -LogName Application -Newest 20 -EntryType Error | Select-Object TimeGenerated, Source, Message | Format-List",
+                    Outcomes = new()
+                    {
+                        new()
+                        {
+                            Condition = "DB / SQL Hatası Görüyorsanız",
+                            Meaning = "SQL Server IP veya şifresi yanlıştır. <code>appsettings.json</code> içinde şifreyi düzeltin.",
+                            BadgeClass = "bg-danger text-white",
+                            ThemeClass = "outcome-danger",
+                            FixCommand = "notepad \"C:\\Program Files\\OzBi\\appsettings.json\""
+                        },
+                        new()
+                        {
+                            Condition = ".NET Runtime / hostfxr Hatası Varsa",
+                            Meaning = "Sunucuda .NET 8 Hosting Bundle eksiktir. Hemen kurup sunucuyu yeniden başlatın.",
+                            BadgeClass = "bg-warning text-dark",
+                            ThemeClass = "outcome-warning",
+                            FixCommand = ".\\dotnet-hosting-8.0.30-win.exe /install /quiet /norestart"
+                        }
+                    }
+                }
+            }
+        },
+        new()
+        {
+            Id = "1053",
+            Title = "Servis Başlatılamıyor (Hata 1053 / Zaman Aşımı)",
+            ErrorCode = "Windows Hata 1053",
+            Icon = "bi-gear-wide-connected",
+            ThemeClass = "theme-danger",
+            BadgeClass = "bg-danger text-white",
+            Description = "Hizmetler'den 'Başlat' deyince 'Hizmet zamanında yanıt vermedi' uyarısı çıkıyor.",
+            ProbableCauses = "Uygulama açılırken crash oluyor (SQL şifresi yanlış, .NET eksik veya appsettings.json hatalı).",
+            OneClickFix = "cd \"C:\\Program Files\\OzBi\"\n.\\AgentBi.exe",
+            EstimatedTime = "1 Dakika",
+            Steps = new()
+            {
+                new()
+                {
+                    StepNo = 1,
+                    Title = "1. En Hızlı Teşhis: Konsoldan Elle Çalıştırın!",
+                    SubTitle = "Konsola düşen kırmızı hata mesajı direkt sebebi gösterir",
+                    ToolName = "PowerShell",
+                    WhereAndHow = "Windows Başlat &rarr; <code>PowerShell</code> açın &rarr; aşağıdaki 2 satırı yapıştırıp <strong>Enter</strong>'a basın &rarr; Ekrana gelen kırmızı yazıyı okuyun:",
+                    Command = "cd \"C:\\Program Files\\OzBi\"\n.\\AgentBi.exe",
+                    Outcomes = new()
+                    {
+                        new()
+                        {
+                            Condition = "SQL / DB Connection Error",
+                            Meaning = "SQL IP veya şifresi yanlıştır. <code>appsettings.json</code> içindeki bağlantı bilgilerini düzeltin.",
+                            BadgeClass = "bg-danger text-white",
+                            ThemeClass = "outcome-danger",
+                            FixCommand = "notepad \"C:\\Program Files\\OzBi\\appsettings.json\""
+                        },
+                        new()
+                        {
+                            Condition = "hostfxr.dll / 0x80008083",
+                            Meaning = ".NET 8 Hosting Bundle eksiktir. Aşağıdaki 2. adımdan paketi kurun.",
+                            BadgeClass = "bg-warning text-dark",
+                            ThemeClass = "outcome-warning",
+                            NextStepHint = "Adım 2'ye geçin ↓"
+                        },
+                        new()
+                        {
+                            Condition = "Now listening on: http://0.0.0.0:8500",
+                            Meaning = "Program başarıyla çalıştı! Servis ayarlarında izin veya path hatası var.",
+                            BadgeClass = "bg-success text-white",
+                            ThemeClass = "outcome-success",
+                            NextStepHint = "Sıfırdan Kurulum sekmesinden servisi onarın."
+                        }
+                    }
+                },
+                new()
+                {
+                    StepNo = 2,
+                    Title = "2. .NET 8 Runtime Yüklü mü?",
+                    SubTitle = "Sunucudaki .NET paketlerini listeleyin",
+                    ToolName = "PowerShell",
+                    WhereAndHow = "PowerShell ekranına komutu yapıştırıp Enter'a basın:",
+                    Command = "dotnet --list-runtimes",
+                    Outcomes = new()
+                    {
+                        new()
+                        {
+                            Condition = "Microsoft.AspNetCore.App 8.0 Yoksa",
+                            Meaning = "Hosting Bundle yükleyin ve sunucuyu yeniden başlatın:",
+                            BadgeClass = "bg-danger text-white",
+                            ThemeClass = "outcome-danger",
+                            FixCommand = ".\\dotnet-hosting-8.0.30-win.exe /install /quiet /norestart"
+                        },
+                        new()
+                        {
+                            Condition = "8.0.x Listeleniyorsa",
+                            Meaning = ".NET kuruludur. SQL bağlantısını ve appsettings.json dosyasını kontrol edin.",
+                            BadgeClass = "bg-success text-white",
+                            ThemeClass = "outcome-success"
+                        }
+                    }
+                }
+            }
+        },
+
+        new()
+        {
+            Id = "network",
+            Title = "Sunucuda Açılıyor Ama Diğer Bilgisayarlardan Girilmiyor",
+            ErrorCode = "Güvenlik Duvarı / Port 8500",
+            Icon = "bi-shield-slash-fill",
+            ThemeClass = "theme-warning",
+            BadgeClass = "bg-warning text-dark",
+            Description = "Sunucu masaüstünde http://localhost:8500 açılıyor ama çalışanların PC'sinden bağlanamıyor.",
+            ProbableCauses = "Windows Güvenlik Duvarı (Firewall) 8500 portuna gelen TCP bağlantılarını engelliyor.",
+            OneClickFix = "New-NetFirewallRule -DisplayName \"OzBi Agent (8500)\" -Direction Inbound -Protocol TCP -LocalPort 8500 -Action Allow -Profile Any",
+            EstimatedTime = "30 Saniye",
+            Steps = new()
+            {
+                new()
+                {
+                    StepNo = 1,
+                    Title = "1. Port 8500 İçin Inbound Firewall Kuralı Ekleyin",
+                    SubTitle = "PowerShell (Yönetici) ile gelen kuralı açın",
+                    ToolName = "PowerShell (Yönetici)",
+                    WhereAndHow = "Windows Başlat &rarr; <code>PowerShell</code> &rarr; Sağ tık <strong>'Yönetici Olarak Çalıştır'</strong> deyin &rarr; Komutu yapıştırıp Enter'a basın:",
+                    Command = "New-NetFirewallRule -DisplayName \"OzBi Agent (8500)\" -Direction Inbound -Protocol TCP -LocalPort 8500 -Action Allow -Profile Any",
+                    Outcomes = new()
+                    {
+                        new()
+                        {
+                            Condition = "Kural Eklendiğinde",
+                            Meaning = "İstemci bilgisayarın tarayıcısında sunucunun yerel IP adresini açın: <code>http://192.168.1.100:8500</code>",
+                            BadgeClass = "bg-success text-white",
+                            ThemeClass = "outcome-success"
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    private string remoteDiagScript = @"# =========================================================
+# OzBI Hızlı Tanı ve Sistem Raporu Oluşturucu
+# =========================================================
+$report = @()
+$report += ""===============================================""
+$report += ""OZBI TANI VE SISTEM RAPORU - $(Get-Date)""
+$report += ""===============================================""
+
+$report += ""`n[1] .NET RUNTIME BILGISI:""
+$report += (dotnet --list-runtimes 2>&1 | Out-String)
+
+$report += ""`n[2] OZBİ WINDOWS SERVISI DURUMU:""
+$report += (Get-Service OzBiService 2>&1 | Format-List Status, StartType, DisplayName | Out-String)
+
+$report += ""`n[3] PORT 8500 DINLEME DURUMU:""
+$portChk = netstat -ano | findstr "":8500""
+if ($portChk) { $report += $portChk } else { $report += ""UYARI: Port 8500 üzerinde dinleyen uygulama yok."" }
+
+$report += ""`n[4] OZBİ KURULUM DIZINI DOSYALARI:""
+$report += (Get-ChildItem ""C:\Program Files\OzBi"" -ErrorAction SilentlyContinue | Select-Object Name, Length, LastWriteTime | Format-Table | Out-String)
+
+$report += ""`n[5] SON WINDOWS APPLICATION LOG HATALARI:""
+$report += (Get-EventLog -LogName Application -Newest 10 -EntryType Error 2>&1 | Select-Object TimeGenerated, Source, Message | Format-List | Out-String)
+
+$report += ""`n[6] OZBİ UYGULAMA LOGLARI (SON 20 SATIR):""
+$log = Get-ChildItem ""C:\Program Files\OzBi\logs\*"" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if ($log) { $report += (Get-Content $log.FullName -Tail 20 | Out-String) } else { $report += ""Log dosyasi bulunamadi."" }
+
+$outPath = ""$env:USERPROFILE\Desktop\OzBi_Tani_Raporu.txt""
+$report | Out-File $outPath -Encoding UTF8
+Write-Host ""[+] Rapor basariyla olusturuldu: $outPath"" -ForegroundColor Green
+notepad $outPath";
+}
+
+<style>
+    .text-cyan {
+        color: #06b6d4 !important;
+    }
+
+    .bg-cyan-subtle {
+        background: rgba(6, 182, 212, 0.12) !important;
+    }
+
+    .border-cyan-subtle {
+        border-color: rgba(6, 182, 212, 0.3) !important;
+    }
+
+    .btn-outline-cyan {
+        color: #06b6d4;
+        border-color: rgba(6, 182, 212, 0.5);
+        background: rgba(6, 182, 212, 0.05);
+        transition: all 0.2s ease;
+    }
+
+    .btn-outline-cyan:hover {
+        background: #06b6d4;
+        border-color: #06b6d4;
+        color: #0b0f19;
+    }
+
+    .btn-primary-gradient {
+        background: linear-gradient(135deg, #0284c7, #06b6d4);
+        color: white;
+        border: none;
+        transition: all 0.2s ease;
+    }
+
+    .btn-primary-gradient:hover {
+        background: linear-gradient(135deg, #0369a1, #0891b2);
+        color: white;
+    }
+
+    /* Golden Rule Banner */
+    .golden-rule-banner {
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(6, 182, 212, 0.1));
+        border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+
+    .golden-badge {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        background: rgba(245, 158, 11, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    /* 2-Segment Switcher */
+    .segmented-control {
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        display: inline-flex;
+        gap: 0.25rem;
+    }
+
+    .segment-btn {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        padding: 0.6rem 1.6rem;
+        border-radius: 9999px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .segment-btn:hover {
+        color: white;
+    }
+
+    .segment-btn.active {
+        background: rgba(6, 182, 212, 0.2);
+        color: #38bdf8;
+        box-shadow: 0 2px 8px rgba(6, 182, 212, 0.25);
+    }
+
+    /* Diagnostic Nav Card */
+    .diagnostic-nav-card {
+        background: rgba(15, 23, 42, 0.75);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 1.35rem;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .diagnostic-nav-card:hover {
+        background: rgba(22, 33, 56, 0.95);
+        border-color: rgba(6, 182, 212, 0.4);
+        transform: translateY(-2px);
+    }
+
+    .diagnostic-nav-card.selected {
+        background: rgba(6, 182, 212, 0.12);
+        border-color: #06b6d4;
+        box-shadow: 0 0 20px rgba(6, 182, 212, 0.25);
+    }
+
+    .scenario-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+
+    .theme-danger {
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+    }
+
+    .theme-warning {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+    }
+
+    .theme-info {
+        background: rgba(6, 182, 212, 0.15);
+        color: #38bdf8;
+    }
+
+    /* Scenario Detail Box */
+    .scenario-detail-box {
+        background: rgba(11, 15, 25, 0.98);
+        border-color: rgba(6, 182, 212, 0.35) !important;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    /* How-To Box (Nereden & Nasıl) */
+    .how-to-box {
+        background: rgba(6, 182, 212, 0.06);
+        border: 1px solid rgba(6, 182, 212, 0.25);
+    }
+
+    /* Step Flow Cards */
+    .step-card {
+        background: rgba(15, 23, 42, 0.85) !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        transition: all 0.2s ease;
+    }
+
+    .step-card:hover {
+        border-color: rgba(6, 182, 212, 0.4) !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .step-circle-badge {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #0284c7, #06b6d4);
+        color: white;
+        font-weight: 800;
+        font-size: 0.95rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        box-shadow: 0 2px 8px rgba(6, 182, 212, 0.3);
+    }
+
+    /* Terminal Box */
+    .terminal-box {
+        background: #060913;
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .terminal-header {
+        background: rgba(255, 255, 255, 0.03);
+    }
+
+    .terminal-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .code-snippet-pre {
+        padding: 1rem 1.25rem;
+        color: #38bdf8;
+        font-family: 'JetBrains Mono', Consolas, monospace;
+        font-size: 0.85rem;
+        line-height: 1.6;
+        overflow-x: auto;
+        background: transparent;
+    }
+
+    /* Outcome Rows (Spacious & Clean) */
+    .outcome-row {
+        border: 1px solid;
+        transition: all 0.15s ease;
+    }
+
+    .outcome-row:hover {
+        transform: translateX(2px);
+    }
+
+    .outcome-danger {
+        background: rgba(239, 68, 68, 0.08);
+        border-color: rgba(239, 68, 68, 0.35);
+    }
+
+    .outcome-warning {
+        background: rgba(245, 158, 11, 0.08);
+        border-color: rgba(245, 158, 11, 0.35);
+    }
+
+    .outcome-success {
+        background: rgba(16, 185, 129, 0.08);
+        border-color: rgba(16, 185, 129, 0.35);
+    }
+
+    .outcome-info {
+        background: rgba(6, 182, 212, 0.08);
+        border-color: rgba(6, 182, 212, 0.35);
+    }
+
+    .outcome-code-pill {
+        background: rgba(0, 0, 0, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: #38bdf8;
+        padding: 0.35rem 0.75rem;
+        border-radius: 8px;
+        font-size: 0.775rem;
+        max-width: 320px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .btn-action-fix {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: white;
+        transition: all 0.2s ease;
+    }
+
+    .btn-action-fix:hover {
+        background: #06b6d4;
+        border-color: #06b6d4;
+        color: #0b0f19;
+    }
+
+    .step-num {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        color: white;
+        font-weight: 800;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .output-interpret-box {
+        background: rgba(5, 8, 17, 0.7);
+        border: 1px dashed rgba(255, 255, 255, 0.15);
+    }
+
+    .btn-copy-code {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #cbd5e1;
+        font-size: 0.75rem;
+        padding: 0.25rem 0.65rem;
+        border-radius: 6px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        transition: all 0.15s ease;
+    }
+
+    .btn-copy-code:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: white;
+    }
+</style>

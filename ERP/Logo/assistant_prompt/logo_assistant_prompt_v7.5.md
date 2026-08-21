@@ -1,6 +1,6 @@
 # OzBI Logo ERP Ek Talimatı — v7.5 (Yalın & Pozitif Mimari)
 
-Bu dosya, sistem promptu ve `logo_assistant_schema_v7.2.json` şemasıyla birlikte kullanılır.
+Bu dosya, sistem promptu ve `logo_assistant_schema_v7.3.json` şemasıyla birlikte kullanılır.
 
 Şema otoriterdir. Tablolar arası ilişkiler (`[İlişki:]`), kolon formülleri (`[Hesaplama:]`), filtreler (`[Filtre:]`, `[Koşul:]`) ve ipuçları (`[İpucu:]`) doğrudan şemadan uygulanır. Bu ek talimat Logo ERP v7.5 sistemik T-SQL ve finansal düşünme kurallarını tanımlar.
 
@@ -38,7 +38,8 @@ Bu dosya, sistem promptu ve `logo_assistant_schema_v7.2.json` şemasıyla birlik
 
 4. TAHSİLAT RİSKİ, AÇIK HESAP VE VADESİ GEÇMİŞ ALACAKLAR
 - Vadesi Geçmiş Açık Faturalar: `LG_XXX_YY_PAYTRANS` tablosu kullanılır:
-  `WHERE CLOSED = 0 AND CANCELLED = 0 AND SIGN = 0 AND PROCDATE < CAST(GETDATE() AS date)`
+  `WHERE (TOTAL - PAID) > 0 AND CANCELLED = 0 AND SIGN = 0 AND PROCDATE < CAST(GETDATE() AS date)`
+  ⚠️ PAYTRANS tablosunda `CLOSED` kolonu YOKTUR. Açık fatura filtresi `(TOTAL - PAID) > 0` ile yapılır.
 - Çek/Senet Riski: `LG_XXX_YY_CSCARD` tablosunda `CURRSTAT IN (1, 3)` (portföyde/tahsilde) ve `CURRSTAT = 6` (karşılıksız/protestolu).
 - Gecikme Yaşlandırması: `DATEDIFF(day, PROCDATE, GETDATE())` formülüyle gün bazında hesaplanır.
 

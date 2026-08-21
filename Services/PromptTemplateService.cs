@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using OzBiPortalCRM.Data;
@@ -11,18 +13,14 @@ namespace OzBiPortalCRM.Services
     public class PromptTemplateService : IPromptTemplateService
     {
         private readonly AppDbContext _appDbContext;
-        private readonly OzBiDbContext _ozBiDbContext;
         private static readonly Random _random = new();
 
-        // In-memory cache for dynamically generated questions during session
-        private static readonly List<PromptTemplate> _dynamicGeneratedCache = new();
+        // User-scoped cache for dynamically generated questions (key = portalUserId)
+        private static readonly ConcurrentDictionary<int, List<PromptTemplate>> _dynamicCacheByUser = new();
 
-        public PromptTemplateService(
-            AppDbContext appDbContext,
-            OzBiDbContext ozBiDbContext)
+        public PromptTemplateService(AppDbContext appDbContext)
         {
             _appDbContext = appDbContext;
-            _ozBiDbContext = ozBiDbContext;
         }
 
         public async Task<List<PromptTemplate>> GetAllQuestionsAsync(
@@ -34,24 +32,36 @@ namespace OzBiPortalCRM.Services
             int portalUserId = 0)
         {
             var questions = new List<PromptTemplate>();
+            var effectiveUserId = portalUserId > 0 ? portalUserId : 1;
 
-            // 1. Add dynamically generated questions first (so latest generated appear on top)
-            lock (_dynamicGeneratedCache)
+            // 1. Add user-scoped dynamically generated questions first
+            if (_dynamicCacheByUser.TryGetValue(effectiveUserId, out var userDynCache))
             {
-                questions.AddRange(_dynamicGeneratedCache);
+                lock (userDynCache)
+                {
+                    questions.AddRange(userDynCache);
+                }
             }
 
             // 2. Add curated question catalog
             questions.AddRange(GetCuratedQuestions());
 
-            var effectiveUserId = portalUserId > 0 ? portalUserId : 1;
-
-            // 3. Load custom questions added via SQLite
+            // 3. Load custom questions added via SQLite (with AlternativePhrasingsJson parsing)
             try
             {
                 var customItems = await _appDbContext.CustomPromptTemplates.ToListAsync();
                 foreach (var c in customItems)
                 {
+                    var altPhrasings = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(c.AlternativePhrasingsJson))
+                    {
+                        try
+                        {
+                            altPhrasings = JsonSerializer.Deserialize<List<string>>(c.AlternativePhrasingsJson) ?? new();
+                        }
+                        catch { }
+                    }
+
                     questions.Add(new PromptTemplate
                     {
                         Id = c.Id,
@@ -69,6 +79,7 @@ namespace OzBiPortalCRM.Services
                         ErpCompatibility = c.ErpCompatibility ?? "Logo & Mikro Uyumlu",
                         HighlightBadge = "Özel Soru",
                         IsCustom = true,
+                        AlternativePhrasings = altPhrasings,
                         CreatedAt = c.CreatedAt
                     });
                 }
@@ -91,42 +102,8 @@ namespace OzBiPortalCRM.Services
             }
             catch { }
 
-            // Filter by Category
-            if (category != PromptCategoryType.All)
-            {
-                questions = questions.Where(q => q.Category == category).ToList();
-            }
-
-            // Filter by Origin Type (Sorulmuş vs Sorulabilecek)
-            if (originType != QuestionOriginType.All)
-            {
-                questions = questions.Where(q => q.OriginType == originType).ToList();
-            }
-
-            // Filter by Target Role
-            if (!string.IsNullOrWhiteSpace(targetRole) && targetRole != "Tümü")
-            {
-                questions = questions.Where(q => q.TargetRole.Contains(targetRole, StringComparison.OrdinalIgnoreCase)).ToList();
-            }
-
-            // Filter by Complexity
-            if (!string.IsNullOrWhiteSpace(complexity) && complexity != "Tümü")
-            {
-                questions = questions.Where(q => q.Complexity.Equals(complexity, StringComparison.OrdinalIgnoreCase)).ToList();
-            }
-
-            // Filter by Search Term
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var st = searchTerm.Trim().ToLowerInvariant();
-                questions = questions.Where(q =>
-                    q.Title.ToLowerInvariant().Contains(st) ||
-                    q.Prompt.ToLowerInvariant().Contains(st) ||
-                    q.TargetRole.ToLowerInvariant().Contains(st) ||
-                    q.AlternativePhrasings.Any(a => a.ToLowerInvariant().Contains(st)) ||
-                    q.Tags.Any(t => t.ToLowerInvariant().Contains(st))
-                ).ToList();
-            }
+            // Filtreleme artık UI katmanında (PromptTemplates.razor ApplyFilters) yapılıyor.
+            // Servis tüm soruları döndürür, böylece GetCategoriesSummaryAsync ile veri paylaşılabilir.
 
             return questions;
         }
@@ -136,7 +113,7 @@ namespace OzBiPortalCRM.Services
             PromptCategoryType category = PromptCategoryType.All, 
             int portalUserId = 0)
         {
-            var newQuestions = new List<PromptTemplate>();
+            var effectiveUserId = portalUserId > 0 ? portalUserId : 1;
             var targetCategories = category == PromptCategoryType.All
                 ? new[] {
                     PromptCategoryType.FinanceAndCashFlow,
@@ -199,7 +176,7 @@ namespace OzBiPortalCRM.Services
                         Tags = new List<string> { "Nakit Farkı", "Çek Senet", "Likidite" }
                     };
                 },
-                // 3. Satış & Müşteri
+                // 3. Satış & Müşteri (Bug4 Fix: OriginType → StrategicRecommendation)
                 () => {
                     var tf = timeframes[_random.Next(timeframes.Length)];
                     var topN = new[] { "5", "10", "15", "20" }[_random.Next(4)];
@@ -210,7 +187,7 @@ namespace OzBiPortalCRM.Services
                         Prompt = $"{tf} en yüksek satış cirosu üreten ilk {topN} ürün kategorisini ve toplam satış adetlerini getir",
                         Category = PromptCategoryType.SalesAndRevenue,
                         CategoryName = "Satış & Ciro",
-                        OriginType = QuestionOriginType.RealTenantAsked,
+                        OriginType = QuestionOriginType.StrategicRecommendation,
                         OriginLabel = "Yeni Üretildi",
                         TargetRole = "Satış Direktörü",
                         Complexity = "Temel",
@@ -244,7 +221,7 @@ namespace OzBiPortalCRM.Services
                         Tags = new List<string> { "Bölge Satışı", "İl Bazında Ciro", "Kârlılık" }
                     };
                 },
-                // 5. Cari & Risk
+                // 5. Cari & Risk (Bug4 Fix: OriginType → StrategicRecommendation)
                 () => {
                     var delayDays = new[] { "30 günü", "45 günü", "60 günü", "90 günü" }[_random.Next(4)];
                     var th = thresholds[_random.Next(thresholds.Length)];
@@ -255,7 +232,7 @@ namespace OzBiPortalCRM.Services
                         Prompt = $"Vadesi {delayDays} aşmış ve toplam borcu {th} olan müşterileri ve yetkili iletişim bilgilerini listele",
                         Category = PromptCategoryType.CustomerAndReceivables,
                         CategoryName = "Müşteriler & Tahsilat",
-                        OriginType = QuestionOriginType.RealTenantAsked,
+                        OriginType = QuestionOriginType.StrategicRecommendation,
                         OriginLabel = "Yeni Üretildi",
                         TargetRole = "Kredi & Tahsilat Müdürü",
                         Complexity = "Orta",
@@ -311,7 +288,7 @@ namespace OzBiPortalCRM.Services
                         Tags = new List<string> { "Maliyet Artışı", "Satınalma", "Enflasyon" }
                     };
                 },
-                // 8. Stok & Ambar
+                // 8. Stok & Ambar (Bug4 Fix: OriginType → StrategicRecommendation)
                 () => {
                     return new PromptTemplate
                     {
@@ -320,7 +297,7 @@ namespace OzBiPortalCRM.Services
                         Prompt = "Üretim için kritik olan ve depodaki mevcut miktarı 1 haftalık tüketim miktarının altına inen hammaddeleri listele",
                         Category = PromptCategoryType.StockAndInventory,
                         CategoryName = "Stok & Envanter",
-                        OriginType = QuestionOriginType.RealTenantAsked,
+                        OriginType = QuestionOriginType.StrategicRecommendation,
                         OriginLabel = "Yeni Üretildi",
                         TargetRole = "Üretim Planlama & Depo",
                         Complexity = "İleri Düzey",
@@ -332,7 +309,7 @@ namespace OzBiPortalCRM.Services
                         Tags = new List<string> { "Emniyet Stoku", "Hammadde", "Üretim" }
                     };
                 },
-                // 9. Sipariş & Lojistik
+                // 9. Sipariş & Lojistik (Bug4 Fix: OriginType → StrategicRecommendation)
                 () => {
                     var tf = timeframes[_random.Next(timeframes.Length)];
                     return new PromptTemplate
@@ -342,7 +319,7 @@ namespace OzBiPortalCRM.Services
                         Prompt = $"{tf} bir kısmı sevk edilmiş ancak kalan bakiyesi henüz müşteriye teslim edilmemiş açık siparişleri listele",
                         Category = PromptCategoryType.OrdersAndLogistics,
                         CategoryName = "Sipariş & Sevkiyat",
-                        OriginType = QuestionOriginType.RealTenantAsked,
+                        OriginType = QuestionOriginType.StrategicRecommendation,
                         OriginLabel = "Yeni Üretildi",
                         TargetRole = "Lojistik & Sevkiyat Şefi",
                         Complexity = "Temel",
@@ -382,24 +359,34 @@ namespace OzBiPortalCRM.Services
             var shuffledGens = dynamicGenerators.OrderBy(_ => _random.Next()).ToList();
             var chosen = shuffledGens.Take(Math.Min(count, shuffledGens.Count)).Select(g => g()).ToList();
 
-            lock (_dynamicGeneratedCache)
+            // Bug2 Fix: Clear old generated questions, replace with fresh ones
+            var userCache = _dynamicCacheByUser.GetOrAdd(effectiveUserId, _ => new List<PromptTemplate>());
+            lock (userCache)
             {
-                // Prepend newly generated items so they show at the very top of the feed
-                _dynamicGeneratedCache.InsertRange(0, chosen);
-
-                // Keep cache bounded to 40 dynamic items
-                if (_dynamicGeneratedCache.Count > 40)
-                {
-                    _dynamicGeneratedCache.RemoveRange(40, _dynamicGeneratedCache.Count - 40);
-                }
+                userCache.Clear();
+                userCache.AddRange(chosen);
             }
 
-            return await GetAllQuestionsAsync(category, portalUserId: portalUserId);
+            return await GetAllQuestionsAsync(portalUserId: portalUserId);
         }
 
         public async Task<List<TemplateCategoryInfo>> GetCategoriesSummaryAsync()
         {
             var all = await GetAllQuestionsAsync();
+            return BuildCategorySummary(all);
+        }
+
+        /// <summary>
+        /// Önceden yüklenmiş soru listesinden kategori özetini oluşturur.
+        /// UI'dan LoadData() çağrısında duplike DB sorgusu yapılmaması için kullanılır.
+        /// </summary>
+        public List<TemplateCategoryInfo> GetCategoriesSummary(List<PromptTemplate> preloaded)
+        {
+            return BuildCategorySummary(preloaded);
+        }
+
+        private static List<TemplateCategoryInfo> BuildCategorySummary(List<PromptTemplate> all)
+        {
             return new List<TemplateCategoryInfo>
             {
                 new() { Category = PromptCategoryType.All, Name = "Tüm Sorular", Icon = "", BadgeClass = "badge-primary", Description = "Tüm işlevsel alanlardaki doğrulanmış sorular", TemplateCount = all.Count },
@@ -454,6 +441,11 @@ namespace OzBiPortalCRM.Services
         public async Task<Dictionary<string, int>> GetQuestionStatsAsync()
         {
             var all = await GetAllQuestionsAsync();
+            return BuildStats(all);
+        }
+
+        private static Dictionary<string, int> BuildStats(List<PromptTemplate> all)
+        {
             return new Dictionary<string, int>
             {
                 ["Total"] = all.Count,

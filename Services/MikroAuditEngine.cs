@@ -100,6 +100,11 @@ namespace OzBiPortalCRM.Services
 
         public MikroComplianceReport EvaluateQuery(string tsqlQuery, string? userPrompt = null, string? tenantName = null)
         {
+            return EvaluateQuery(tsqlQuery, userPrompt, tenantName, forceEvaluation: false);
+        }
+
+        public MikroComplianceReport EvaluateQuery(string tsqlQuery, string? userPrompt, string? tenantName, bool forceEvaluation)
+        {
             var report = new MikroComplianceReport();
             if (string.IsNullOrWhiteSpace(tsqlQuery)) return report;
 
@@ -111,7 +116,7 @@ namespace OzBiPortalCRM.Services
             bool isMikroTenant = tenantName != null && tenantName.ToLowerInvariant().Contains("mikro");
             bool containsMikroTables = _knownMikroTables.Any(t => IsTableInSql(upperSql, t));
 
-            if (!isMikroTenant && !containsMikroTables)
+            if (!forceEvaluation && !isMikroTenant && !containsMikroTables)
             {
                 report.IsMikroQuery = false;
                 report.SummaryText = "Bu sorgu Mikro ERP veritabanı haricinde bir veri kaynağına aittir.";

@@ -127,13 +127,27 @@ namespace OzBiPortalCRM.Models
         public string DataConnectionId { get; set; } = string.Empty;
         public string AIModelId { get; set; } = string.Empty;
         public string? SubModel { get; set; }
+        public string? DatabaseDefinition { get; set; }
+        public string? DatabaseDefinitionSelected { get; set; }
+        public string? DatabaseDefinitionPrompt { get; set; }
         public double? Temperature { get; set; }
         public double? TopP { get; set; }
+        public string? PrePromptQueryWithAnalytics { get; set; }
+        public string? PrePromptQueryWithoutAnalytics { get; set; }
+        public string? PrePromptAnalytics { get; set; }
+        public string? UserAdditionalPrompt { get; set; }
+        public string? UserAdditionalAgentPrompt { get; set; }
+        public int? TokenCount { get; set; }
+        public int? LimitSize { get; set; }
         public string TenantId { get; set; } = string.Empty;
         public bool IsActive { get; set; }
         public DateTime? DateCreated { get; set; }
         public DateTime? DateModified { get; set; }
         public string? AIModelName { get; set; }
+        public string? CustomSystemPrompt { get; set; }
+        public bool? UseCustomSystemPrompt { get; set; }
+        public string? ReasoningEffort { get; set; }
+        public string? StarterQuestionKey { get; set; }
 
         [ForeignKey("DataConnectionId")]
         public virtual OzBiConnection? DataConnection { get; set; }

@@ -144,6 +144,20 @@ else
                 <!-- 1. Top Header Bar: Status, Metadata & Action -->
                 <div class="feedback-card-header">
                     <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <!-- Mode Badge -->
+                        @if (item.IsAssistantModeEffective)
+                        {
+                            <span class="turn-mode-badge agent" title="Agent Modu">
+                                <i class="bi bi-robot me-1"></i> Agent Modu
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="turn-mode-badge query" title="Sorgu Modu (SQL Raporu)">
+                                <i class="bi bi-table me-1"></i> Sorgu Modu
+                            </span>
+                        }
+
                         <!-- Reaction Pill -->
                         @if (isDisliked)
                         {
@@ -400,6 +414,29 @@ else
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         flex-wrap: wrap;
         gap: 1rem;
+    }
+
+    .turn-mode-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.35rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.775rem;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+    }
+
+    .turn-mode-badge.agent {
+        background: rgba(168, 85, 247, 0.15);
+        border: 1px solid rgba(192, 132, 252, 0.45);
+        color: #c084fc;
+    }
+
+    .turn-mode-badge.query {
+        background: rgba(14, 165, 233, 0.15);
+        border: 1px solid rgba(56, 189, 248, 0.45);
+        color: #38bdf8;
     }
 
     .status-pill {

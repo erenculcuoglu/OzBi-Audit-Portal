@@ -62,7 +62,6 @@ else
         @foreach (var feedItem in feedItems)
         {
             var item = feedItem.MessageItem;
-            var compliance = feedItem.Compliance;
             var isFailed = !string.IsNullOrEmpty(item.ErrorMessage);
             var isDisliked = item.IsLiked == false;
             var isLiked = item.IsLiked == true;
@@ -70,83 +69,93 @@ else
             var cardBorderClass = isFailed ? "query-card-error" : (isDisliked ? "query-card-disliked" : (isLiked ? "query-card-liked" : (hasComment ? "query-card-comment" : "query-card-default")));
 
             <div class="query-feed-card @cardBorderClass">
-                <!-- Top Header Bar: Metadata, Model, Duration, Date, Action -->
+                <!-- Top Header Bar: Unified, sleek metadata & badges -->
                 <div class="query-card-header">
-                    <div class="d-flex align-items-center gap-3 flex-wrap">
-                        <!-- Mode Badge -->
+                    <div class="header-left-group">
+                        <!-- Mode Badge (Agent vs Query) -->
                         @if (item.IsAssistantModeEffective)
                         {
-                            <span class="turn-mode-badge agent" title="Agent Modu">
-                                <i class="bi bi-robot me-1"></i> Agent Modu
+                            <span class="badge-mode badge-mode-agent" title="Agent Modu">
+                                <i class="bi bi-robot me-1.5"></i>Agent Modu
                             </span>
                         }
                         else
                         {
-                            <span class="turn-mode-badge query" title="Sorgu Modu (SQL Raporu)">
-                                <i class="bi bi-table me-1"></i> Sorgu Modu
+                            <span class="badge-mode badge-mode-query" title="Sorgu Modu (SQL Raporu)">
+                                <i class="bi bi-table me-1.5"></i>Sorgu Modu
                             </span>
                         }
 
-                        <!-- Status Pill -->
+                        <!-- SQL Execution Status & Count -->
                         @if (isFailed)
                         {
-                            <span class="sql-status-badge error">
-                                <i class="bi bi-exclamation-triangle-fill me-1"></i> SQL Hatası
+                            <span class="badge-pill badge-pill-error" title="Sorguda hata oluştu">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i>SQL Hatası
+                            </span>
+                        }
+                        else if (feedItem.SqlQueries.Count > 0)
+                        {
+                            <span class="badge-pill badge-pill-sql" title="Asistan bu işlem için toplam @feedItem.SqlQueries.Count adet SQL sorgusu çalıştırdı">
+                                <i class="bi bi-cpu-fill me-1.5"></i>@(feedItem.SqlQueries.Count) SQL Çalıştırıldı
                             </span>
                         }
                         else
                         {
-                            <span class="sql-status-badge success">
-                                <i class="bi bi-check2 me-1"></i> SQL Çalıştırıldı
+                            <span class="badge-pill badge-pill-success" title="İşlem Başarılı">
+                                <i class="bi bi-check2-circle me-1"></i>Başarılı
                             </span>
                         }
 
                         <!-- Reaction Pill (If any) -->
                         @if (isDisliked)
                         {
-                            <span class="status-pill status-pill-disliked">
-                                <i class="bi bi-hand-thumbs-down-fill me-1"></i> Beğenilmedi
+                            <span class="badge-pill badge-pill-disliked">
+                                <i class="bi bi-hand-thumbs-down-fill me-1"></i>Beğenilmedi
                             </span>
                         }
                         else if (isLiked)
                         {
-                            <span class="status-pill status-pill-liked">
-                                <i class="bi bi-hand-thumbs-up-fill me-1"></i> Beğenildi
+                            <span class="badge-pill badge-pill-liked">
+                                <i class="bi bi-hand-thumbs-up-fill me-1"></i>Beğenildi
                             </span>
                         }
 
-                        <!-- Structured Meta Tags -->
-                        <div class="meta-tags-container">
-                            <span class="meta-tag" title="Firma / Tenant">
-                                <i class="bi bi-building text-info opacity-75"></i>
-                                <span class="fw-semibold">@(item.Chat?.Tenant?.Name ?? "Tenant")</span>
+                        <!-- Structured Metadata Strip (Tenant, User, AI Model) -->
+                        <div class="meta-strip">
+                            <span class="meta-chip" title="Firma / Tenant">
+                                <i class="bi bi-building text-info"></i>
+                                <span class="meta-text-highlight">@(item.Chat?.Tenant?.Name ?? "Tenant")</span>
                             </span>
-                            <span class="meta-divider">•</span>
-                            <span class="meta-tag" title="Kullanıcı">
-                                <i class="bi bi-person text-secondary opacity-75"></i>
+                            <span class="meta-separator">•</span>
+                            <span class="meta-chip" title="Kullanıcı">
+                                <i class="bi bi-person text-secondary"></i>
                                 <span>@(item.Chat?.CreatedByUser?.NameSurname ?? item.Chat?.CreatedByUser?.Email ?? "Kullanıcı")</span>
                             </span>
                             @if (item.AIModel != null || item.Assistant != null)
                             {
-                                <span class="meta-divider">•</span>
-                                <span class="meta-tag" title="AI Modeli ve Asistan">
-                                    <i class="bi bi-cpu text-primary opacity-75"></i>
-                                    <span>@(item.AIModel?.Name ?? item.AIModel?.ProgrammaticName ?? "AI") @(item.Assistant != null ? $"· {item.Assistant.Name}" : "")</span>
+                                <span class="meta-separator">•</span>
+                                <span class="meta-chip" title="AI Modeli ve Asistan">
+                                    <i class="bi bi-cpu text-primary"></i>
+                                    <span>@(item.AIModel?.Name ?? item.AIModel?.ProgrammaticName ?? "AI")@(item.Assistant != null ? $" · {item.Assistant.Name}" : "")</span>
                                 </span>
                             }
                         </div>
                     </div>
 
-                    <!-- Right Side: Duration, Date & Sohbete Git Button (With generous spacing) -->
-                    <div class="d-flex align-items-center gap-3 flex-wrap ms-auto">
+                    <!-- Right Side: Duration, Date & Sohbete Git Button -->
+                    <div class="header-right-group">
                         @if (item.TotalDurationMs.HasValue && item.TotalDurationMs > 0)
                         {
-                            <span class="duration-pill"><i class="bi bi-stopwatch me-1 opacity-75"></i>@(item.TotalDurationMs)ms</span>
+                            <span class="duration-chip" title="Toplam Süre">
+                                <i class="bi bi-stopwatch opacity-75"></i>
+                                <span>@FormatDuration(item.TotalDurationMs.Value)</span>
+                            </span>
                         }
-                        <span class="date-chip">
-                            <i class="bi bi-clock me-1 opacity-75"></i>@(item.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")
+                        <span class="date-chip" title="İşlem Tarihi">
+                            <i class="bi bi-clock opacity-75"></i>
+                            <span>@(item.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")</span>
                         </span>
-                        <a href="chat/@item.ChatId" class="btn-goto-chat ms-md-2" title="Bu sohbetin tüm akışını ve geçmişini aç">
+                        <a href="chat/@item.ChatId" class="btn-goto-chat" title="Bu sohbetin tüm akışını ve geçmişini aç">
                             <span>Sohbete Git</span>
                             <i class="bi bi-arrow-up-right"></i>
                         </a>
@@ -178,42 +187,67 @@ else
                     </div>
                 </div>
 
-                <!-- macOS Style SQL Terminal Box -->
-                <div class="sql-flow-card">
-                    <div class="sql-flow-topbar">
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                            <span class="terminal-dots">
-                                <span class="dot red"></span>
-                                <span class="dot yellow"></span>
-                                <span class="dot green"></span>
-                            </span>
-                            <span class="sql-tag-title"><i class="bi bi-terminal-fill me-1 text-info opacity-75"></i>SQL Sorgusu</span>
-
-                            <!-- Multi-ERP Compliance Score Badge -->
-                            @if (compliance.IsMikroQuery)
-                            {
-                                var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro v27";
-                                <button type="button" class="compliance-chip" @onclick="() => OpenComplianceModal(compliance, feedItem.Sql)" title="Detaylı ERP Uyum Raporunu İncele">
-                                    <span class="compliance-dot" style="background-color: @GetScoreColor(compliance.Score);"></span>
-                                    <span>@erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)</span>
-                                    <i class="bi bi-chevron-right ms-1 opacity-50" style="font-size: 0.65rem;"></i>
-                                </button>
-                            }
-                        </div>
-
-                        <button class="btn-copy-sql" @onclick="() => CopySql(feedItem.Sql)" title="SQL Panoya Kopyala">
-                            <i class="bi bi-clipboard me-1"></i> Kopyala
-                        </button>
-                    </div>
-
-                    @if (!string.IsNullOrEmpty(feedItem.Description))
+                <!-- All Executed SQL Queries Rendered Sequentially (No internal vertical scroll) -->
+                <div class="d-flex flex-column gap-3">
+                    @for (int i = 0; i < feedItem.SqlQueries.Count; i++)
                     {
-                        <div class="sql-desc-text">@feedItem.Description</div>
-                    }
+                        var sqlIndex = i + 1;
+                        var sqlItem = feedItem.SqlQueries[i];
+                        var compliance = sqlItem.Compliance;
+                        var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Logo ERP";
 
-                    <div class="sql-code-wrapper">
-                        <code>@feedItem.Sql</code>
-                    </div>
+                        <div class="sql-flow-card">
+                            <div class="sql-flow-topbar">
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <span class="terminal-dots">
+                                        <span class="dot red"></span>
+                                        <span class="dot yellow"></span>
+                                        <span class="dot green"></span>
+                                    </span>
+                                    <span class="sql-tag-title">
+                                        <i class="bi bi-terminal-fill me-1 text-info opacity-75"></i>
+                                        @(feedItem.SqlQueries.Count > 1 ? $"SQL Sorgusu #{sqlIndex}" : "SQL Sorgusu")
+                                    </span>
+
+                                    <!-- Multi-ERP Compliance Score Badge -->
+                                    @if (compliance.IsMikroQuery)
+                                    {
+                                        <button type="button" class="compliance-chip" @onclick="() => OpenComplianceModal(compliance, sqlItem.Sql)" title="Detaylı ERP Uyum Raporunu İncele">
+                                            <span class="compliance-dot" style="background-color: @GetScoreColor(compliance.Score);"></span>
+                                            <span>@erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)</span>
+                                            @if (compliance.Violations.Count > 0)
+                                            {
+                                                <span class="badge bg-danger bg-opacity-25 text-danger ms-1" style="font-size: 0.68rem; font-weight: 700;">
+                                                    @compliance.Violations.Count İhlal
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-success bg-opacity-25 text-success ms-1" style="font-size: 0.68rem; font-weight: 700;">
+                                                    Tam Uyum
+                                                </span>
+                                            }
+                                            <i class="bi bi-chevron-right ms-1 opacity-50" style="font-size: 0.65rem;"></i>
+                                        </button>
+                                    }
+                                </div>
+
+                                <button class="btn-copy-sql" @onclick="() => CopySql(sqlItem.Sql)" title="SQL Panoya Kopyala">
+                                    <i class="bi bi-clipboard me-1"></i> Kopyala
+                                </button>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(sqlItem.Description))
+                            {
+                                <div class="sql-desc-text">@sqlItem.Description</div>
+                            }
+
+                            <!-- Full Code View without Clipping / Scrollbar -->
+                            <div class="sql-code-wrapper">
+                                <code>@sqlItem.Sql</code>
+                            </div>
+                        </div>
+                    }
                 </div>
 
                 <!-- Error Message if present -->
@@ -239,7 +273,7 @@ else
 
 @code {
     private List<OzBiChatMessage>? rawQueriesList;
-    private List<UnrolledQueryFeedItem>? feedItems;
+    private List<QueryFeedCardItem>? feedItems;
     private string searchQuery = string.Empty;
     private bool failedOnly = false;
     private bool isLoading = true;
@@ -254,13 +288,18 @@ else
         public string Sql { get; set; } = string.Empty;
     }
 
-    public class UnrolledQueryFeedItem
+    public class FeedSqlItemWithCompliance
     {
-        public OzBiChatMessage MessageItem { get; set; } = default!;
-        public string QuestionText { get; set; } = string.Empty;
         public string Sql { get; set; } = string.Empty;
         public string? Description { get; set; }
         public MikroComplianceReport Compliance { get; set; } = default!;
+    }
+
+    public class QueryFeedCardItem
+    {
+        public OzBiChatMessage MessageItem { get; set; } = default!;
+        public string QuestionText { get; set; } = string.Empty;
+        public List<FeedSqlItemWithCompliance> SqlQueries { get; set; } = new();
     }
 
     protected override async Task OnInitializedAsync()
@@ -293,7 +332,7 @@ else
 
     private void BuildFeedItems()
     {
-        feedItems = new List<UnrolledQueryFeedItem>();
+        feedItems = new List<QueryFeedCardItem>();
         if (rawQueriesList == null) return;
 
         foreach (var item in rawQueriesList)
@@ -304,53 +343,58 @@ else
                 sqlItems.Add(new FeedSqlItem { Sql = item.Query.Trim() });
             }
 
-            foreach (var sqlItem in sqlItems)
+            // Determine question text
+            string qText;
+            if (!string.IsNullOrWhiteSpace(item.Prompt))
             {
-                // Determine question text
-                string qText;
-                if (!string.IsNullOrWhiteSpace(sqlItem.Description))
-                {
-                    qText = sqlItem.Description.Trim();
-                }
-                else if (!string.IsNullOrWhiteSpace(item.Prompt))
-                {
-                    qText = item.Prompt.Trim();
-                }
-                else if (!string.IsNullOrWhiteSpace(item.Chat?.Title))
-                {
-                    qText = item.Chat.Title.Trim();
-                }
-                else
-                {
-                    qText = "Sohbet Sorgusu";
-                }
+                qText = item.Prompt.Trim();
+            }
+            else if (sqlItems.Count > 0 && !string.IsNullOrWhiteSpace(sqlItems[0].Description))
+            {
+                qText = sqlItems[0].Description.Trim();
+            }
+            else if (!string.IsNullOrWhiteSpace(item.Chat?.Title))
+            {
+                qText = item.Chat.Title.Trim();
+            }
+            else
+            {
+                qText = "Sohbet Sorgusu";
+            }
 
-                // Filter by searchQuery if present
-                if (!string.IsNullOrWhiteSpace(searchQuery))
-                {
-                    var term = searchQuery.Trim().ToLower();
-                    bool matchesQuery = sqlItem.Sql.ToLower().Contains(term);
-                    bool matchesQText = qText.ToLower().Contains(term);
-                    bool matchesPrompt = item.Prompt?.ToLower().Contains(term) ?? false;
-                    bool matchesChatTitle = item.Chat?.Title?.ToLower().Contains(term) ?? false;
+            // Filter by searchQuery if present
+            if (!string.IsNullOrWhiteSpace(searchQuery))
+            {
+                var term = searchQuery.Trim().ToLower();
+                bool matchesQuery = sqlItems.Any(s => s.Sql.ToLower().Contains(term) || (!string.IsNullOrEmpty(s.Description) && s.Description.ToLower().Contains(term)));
+                bool matchesQText = qText.ToLower().Contains(term);
+                bool matchesPrompt = item.Prompt?.ToLower().Contains(term) ?? false;
+                bool matchesChatTitle = item.Chat?.Title?.ToLower().Contains(term) ?? false;
 
-                    if (!matchesQuery && !matchesQText && !matchesPrompt && !matchesChatTitle)
-                    {
-                        continue;
-                    }
+                if (!matchesQuery && !matchesQText && !matchesPrompt && !matchesChatTitle)
+                {
+                    continue;
                 }
+            }
 
-                var compliance = MikroAuditEngine.EvaluateQuery(sqlItem.Sql, qText, item.Chat?.Tenant?.Name);
-
-                feedItems.Add(new UnrolledQueryFeedItem
+            var sqlWithCompliance = new List<FeedSqlItemWithCompliance>();
+            foreach (var s in sqlItems)
+            {
+                var compliance = MikroAuditEngine.EvaluateQuery(s.Sql, qText, item.Chat?.Tenant?.Name);
+                sqlWithCompliance.Add(new FeedSqlItemWithCompliance
                 {
-                    MessageItem = item,
-                    QuestionText = qText,
-                    Sql = sqlItem.Sql,
-                    Description = sqlItem.Description,
+                    Sql = s.Sql,
+                    Description = s.Description,
                     Compliance = compliance
                 });
             }
+
+            feedItems.Add(new QueryFeedCardItem
+            {
+                MessageItem = item,
+                QuestionText = qText,
+                SqlQueries = sqlWithCompliance
+            });
         }
     }
 
@@ -372,6 +416,15 @@ else
         if (score >= 75) return "#3b82f6"; // Blue
         if (score >= 60) return "#f59e0b"; // Yellow/Amber
         return "#ef4444"; // Red
+    }
+
+    private string FormatDuration(long ms)
+    {
+        if (ms >= 1000)
+        {
+            return $"{(ms / 1000.0):0.0}s";
+        }
+        return $"{ms}ms";
     }
 
     private List<FeedSqlItem> ExtractSqlItemsFromQuery(string? rawQuery)
@@ -529,119 +582,175 @@ else
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding-bottom: 1rem;
-        margin-bottom: 1.15rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding-bottom: 0.85rem;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
         flex-wrap: wrap;
-        gap: 1rem;
+        gap: 0.75rem;
     }
 
-    .turn-mode-badge {
+    .header-left-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .header-right-group {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+        margin-left: auto;
+    }
+
+    /* Mode Badges */
+    .badge-mode {
         display: inline-flex;
         align-items: center;
-        padding: 0.35rem 0.75rem;
-        border-radius: 7px;
-        font-size: 0.775rem;
+        height: 28px;
+        padding: 0 0.65rem;
+        border-radius: 6px;
+        font-size: 0.75rem;
         font-weight: 700;
         letter-spacing: 0.3px;
+        white-space: nowrap;
     }
 
-    .turn-mode-badge.agent {
-        background: rgba(168, 85, 247, 0.15);
-        border: 1px solid rgba(192, 132, 252, 0.4);
+    .badge-mode-agent {
+        background: rgba(168, 85, 247, 0.12);
+        border: 1px solid rgba(192, 132, 252, 0.35);
         color: #c084fc;
     }
 
-    .turn-mode-badge.query {
-        background: rgba(14, 165, 233, 0.15);
-        border: 1px solid rgba(56, 189, 248, 0.4);
+    .badge-mode-query {
+        background: rgba(14, 165, 233, 0.12);
+        border: 1px solid rgba(56, 189, 248, 0.35);
         color: #38bdf8;
     }
 
-    .status-pill {
+    /* Status & Count Badges */
+    .badge-pill {
         display: inline-flex;
         align-items: center;
-        padding: 0.35rem 0.75rem;
-        border-radius: 9999px;
-        font-size: 0.775rem;
-        font-weight: 700;
-        letter-spacing: 0.3px;
-        text-transform: uppercase;
+        height: 28px;
+        padding: 0 0.65rem;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        white-space: nowrap;
     }
 
-    .status-pill-disliked {
-        background: rgba(244, 63, 94, 0.15);
-        border: 1px solid rgba(244, 63, 94, 0.45);
-        color: #fb7185;
+    .badge-pill-sql {
+        background: rgba(20, 184, 166, 0.12);
+        border: 1px solid rgba(45, 212, 191, 0.35);
+        color: #2dd4bf;
     }
 
-    .status-pill-liked {
-        background: rgba(16, 185, 129, 0.15);
-        border: 1px solid rgba(16, 185, 129, 0.45);
+    .badge-pill-success {
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.35);
         color: #34d399;
     }
 
-    .meta-tags-container {
+    .badge-pill-error {
+        background: rgba(244, 63, 94, 0.15);
+        border: 1px solid rgba(244, 63, 94, 0.4);
+        color: #fb7185;
+    }
+
+    .badge-pill-liked {
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.35);
+        color: #34d399;
+    }
+
+    .badge-pill-disliked {
+        background: rgba(244, 63, 94, 0.15);
+        border: 1px solid rgba(244, 63, 94, 0.4);
+        color: #fb7185;
+    }
+
+    /* Metadata Bar */
+    .meta-strip {
         display: inline-flex;
         align-items: center;
-        gap: 0.65rem;
-        background: rgba(15, 23, 42, 0.6);
+        gap: 0.5rem;
+        height: 28px;
+        background: rgba(15, 23, 42, 0.65);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 8px;
-        padding: 0.35rem 0.9rem;
-        font-size: 0.825rem;
-        color: #94a3b8;
-    }
-
-    .meta-tag {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        color: #cbd5e1;
-    }
-
-    .meta-divider {
-        color: rgba(255, 255, 255, 0.2);
-        font-size: 0.75rem;
-    }
-
-    .duration-pill {
+        border-radius: 6px;
+        padding: 0 0.75rem;
         font-size: 0.775rem;
-        font-family: monospace;
         color: #94a3b8;
-        background: rgba(255, 255, 255, 0.05);
-        padding: 0.3rem 0.65rem;
-        border-radius: 7px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        white-space: nowrap;
+    }
+
+    .meta-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .meta-text-highlight {
+        color: #f1f5f9;
+        font-weight: 600;
+    }
+
+    .meta-separator {
+        color: rgba(255, 255, 255, 0.18);
+        font-size: 0.65rem;
+    }
+
+    /* Right side stats */
+    .duration-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        height: 28px;
+        font-size: 0.75rem;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        color: #94a3b8;
+        background: rgba(255, 255, 255, 0.04);
+        padding: 0 0.55rem;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.07);
     }
 
     .date-chip {
-        font-size: 0.825rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        height: 28px;
+        font-size: 0.775rem;
         color: #94a3b8;
-        font-family: monospace;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
     }
 
     /* Go To Chat Button */
     .btn-goto-chat {
         display: inline-flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.4rem;
+        height: 28px;
+        padding: 0 0.85rem;
         background: linear-gradient(135deg, rgba(59, 130, 246, 0.18) 0%, rgba(99, 102, 241, 0.25) 100%);
-        border: 1px solid rgba(96, 165, 250, 0.45);
+        border: 1px solid rgba(96, 165, 250, 0.4);
         color: #bfdbfe;
-        padding: 0.4rem 1.05rem;
-        border-radius: 8px;
-        font-size: 0.825rem;
+        border-radius: 6px;
+        font-size: 0.775rem;
         font-weight: 600;
         text-decoration: none;
         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        white-space: nowrap;
     }
 
     .btn-goto-chat:hover {
-        background: linear-gradient(135deg, rgba(59, 130, 246, 0.4) 0%, rgba(99, 102, 241, 0.55) 100%);
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.35) 0%, rgba(99, 102, 241, 0.5) 100%);
         border-color: #60a5fa;
         color: #ffffff;
-        box-shadow: 0 0 16px rgba(59, 130, 246, 0.45);
+        box-shadow: 0 0 12px rgba(59, 130, 246, 0.35);
         transform: translateY(-1px);
     }
 
@@ -851,17 +960,20 @@ else
     }
 
     .sql-code-wrapper {
-        padding: 0.65rem 0.85rem;
-        max-height: 180px;
-        overflow-y: auto;
+        padding: 0.85rem 1.15rem;
+        max-height: none !important;
+        overflow-y: visible !important;
+        overflow-x: auto;
     }
 
     .sql-code-wrapper code {
-        font-family: 'JetBrains Mono', 'Fira Code', monospace;
-        font-size: 0.825rem;
+        font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+        font-size: 0.85rem;
         color: #e2e8f0;
-        line-height: 1.5;
+        line-height: 1.6;
         white-space: pre-wrap;
+        word-break: break-word;
+        display: block;
     }
 
     /* Error Alert */
@@ -872,4 +984,3 @@ else
         padding: 0.75rem 1rem;
     }
 </style>
-

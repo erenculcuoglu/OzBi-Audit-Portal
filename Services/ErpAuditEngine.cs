@@ -34,31 +34,31 @@ namespace OzBiPortalCRM.Services
 
             if (erpType == ErpSystemType.Logo)
             {
-                report.SystemTypeName = "Logo ERP (v1.0)";
-                var baseReport = _logoEvaluator.Evaluate(tsqlQuery, userPrompt, tenantName);
+                report.SystemTypeName = "Logo ERP (v8.0)";
+                var baseReport = _logoEvaluator.Evaluate(tsqlQuery, userPrompt, tenantName, forceEvaluation: true);
 
                 report.Score = baseReport.Score;
                 report.Grade = baseReport.Grade;
                 report.GradeLabel = baseReport.GradeLabel;
                 report.SummaryText = baseReport.SummaryText;
-                report.IsMikroQuery = baseReport.IsMikroQuery;
+                report.IsMikroQuery = true;
                 report.PassedChecks = baseReport.PassedChecks;
                 report.Violations = baseReport.Violations;
                 report.ProposedTsqlFix = baseReport.ProposedTsqlFix;
 
                 // Perform Cross-Check Sync Analysis for Logo Tenant
-                PerformCrossCheckSync(report, erpConfig, "Logo ERP v1.0", "v1.0", "Logo ERP Ek Talimatı — v1.0", new[] { "v7", "v1" });
+                PerformCrossCheckSync(report, erpConfig, "Logo ERP v8.0", "v8.0", "Logo ERP Ek Talimatı — v8.0", new[] { "v8.0", "v8", "v7.5", "v7.4", "v7.3", "v7", "v1" });
             }
             else if (erpType == ErpSystemType.Mikro)
             {
                 report.SystemTypeName = "Mikro ERP (v1.0)";
-                var baseReport = _mikroEvaluator.EvaluateQuery(tsqlQuery, userPrompt, tenantName);
+                var baseReport = _mikroEvaluator.EvaluateQuery(tsqlQuery, userPrompt, tenantName, forceEvaluation: true);
 
                 report.Score = baseReport.Score;
                 report.Grade = baseReport.Grade;
                 report.GradeLabel = baseReport.GradeLabel;
                 report.SummaryText = baseReport.SummaryText;
-                report.IsMikroQuery = baseReport.IsMikroQuery;
+                report.IsMikroQuery = true;
                 report.PassedChecks = baseReport.PassedChecks;
                 report.Violations = baseReport.Violations;
                 report.ProposedTsqlFix = baseReport.ProposedTsqlFix;
@@ -69,8 +69,15 @@ namespace OzBiPortalCRM.Services
             else
             {
                 report.SystemTypeName = "Genel ERP";
-                report.IsMikroQuery = false;
-                report.SummaryText = "Bu sorgu Mikro veya Logo harici genel bir veritabanına aittir.";
+                var baseReport = _mikroEvaluator.EvaluateQuery(tsqlQuery, userPrompt, tenantName, forceEvaluation: true);
+                report.Score = baseReport.Score;
+                report.Grade = baseReport.Grade;
+                report.GradeLabel = baseReport.GradeLabel;
+                report.SummaryText = baseReport.SummaryText;
+                report.IsMikroQuery = true;
+                report.PassedChecks = baseReport.PassedChecks;
+                report.Violations = baseReport.Violations;
+                report.ProposedTsqlFix = baseReport.ProposedTsqlFix;
             }
 
             return report;
@@ -117,27 +124,27 @@ namespace OzBiPortalCRM.Services
             var erpType = _schemaProvider.DetectErpTypeFromSql(tsqlQuery, tenantName);
             if (erpType == ErpSystemType.Logo)
             {
-                var logoRep = _logoEvaluator.Evaluate(tsqlQuery, userPrompt, tenantName);
+                var logoRep = _logoEvaluator.Evaluate(tsqlQuery, userPrompt, tenantName, forceEvaluation: true);
                 return new ErpComplianceReport
                 {
                     SystemType = ErpSystemType.Logo,
-                    SystemTypeName = "Logo ERP (v1.0)",
+                    SystemTypeName = "Logo ERP (v8.0)",
                     Score = logoRep.Score,
                     Grade = logoRep.Grade,
                     GradeLabel = logoRep.GradeLabel,
                     SummaryText = logoRep.SummaryText,
-                    IsMikroQuery = logoRep.IsMikroQuery,
+                    IsMikroQuery = true,
                     PassedChecks = logoRep.PassedChecks,
                     Violations = logoRep.Violations,
                     ProposedTsqlFix = logoRep.ProposedTsqlFix,
                     IsPromptSynced = true,
                     PromptVersionLabel = "Logo ERP Standart",
-                    PromptSyncDetails = "Sorgu Logo ERP v1.0 standartları çerçevesinde denetlenmiştir."
+                    PromptSyncDetails = "Sorgu Logo ERP v8.0 standartları çerçevesinde denetlenmiştir."
                 };
             }
             else if (erpType == ErpSystemType.Mikro)
             {
-                var mikroRep = _mikroEvaluator.EvaluateQuery(tsqlQuery, userPrompt, tenantName);
+                var mikroRep = _mikroEvaluator.EvaluateQuery(tsqlQuery, userPrompt, tenantName, forceEvaluation: true);
                 return new ErpComplianceReport
                 {
                     SystemType = ErpSystemType.Mikro,
@@ -146,7 +153,7 @@ namespace OzBiPortalCRM.Services
                     Grade = mikroRep.Grade,
                     GradeLabel = mikroRep.GradeLabel,
                     SummaryText = mikroRep.SummaryText,
-                    IsMikroQuery = mikroRep.IsMikroQuery,
+                    IsMikroQuery = true,
                     PassedChecks = mikroRep.PassedChecks,
                     Violations = mikroRep.Violations,
                     ProposedTsqlFix = mikroRep.ProposedTsqlFix,
@@ -157,12 +164,22 @@ namespace OzBiPortalCRM.Services
             }
             else
             {
+                var mikroRep = _mikroEvaluator.EvaluateQuery(tsqlQuery, userPrompt, tenantName, forceEvaluation: true);
                 return new ErpComplianceReport
                 {
                     SystemType = ErpSystemType.Generic,
-                    SystemTypeName = "Genel Veritabanı",
-                    IsMikroQuery = false,
-                    SummaryText = "Bu sorgu Mikro veya Logo harici genel bir veritabanına aittir."
+                    SystemTypeName = "Genel ERP",
+                    Score = mikroRep.Score,
+                    Grade = mikroRep.Grade,
+                    GradeLabel = mikroRep.GradeLabel,
+                    SummaryText = mikroRep.SummaryText,
+                    IsMikroQuery = true,
+                    PassedChecks = mikroRep.PassedChecks,
+                    Violations = mikroRep.Violations,
+                    ProposedTsqlFix = mikroRep.ProposedTsqlFix,
+                    IsPromptSynced = true,
+                    PromptVersionLabel = "Genel Standart",
+                    PromptSyncDetails = "Sorgu genel standartlar çerçevesinde denetlenmiştir."
                 };
             }
         }

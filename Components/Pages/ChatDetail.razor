@@ -87,22 +87,28 @@ else if (messagesList == null || messagesList.Count == 0)
 }
 else
 {
-    <!-- Tab Switcher Header (Agent Modu | Sorgu Modu) -->
-    <div class="tab-container mb-4">
-        <button class="btn-tab @(activeTab == "veri" ? "active" : "")" @onclick='() => SetActiveTab("veri")'>
-            <i class="bi bi-robot me-1.5" style="color: #c084fc;"></i> Agent Modu (@GetConversationTurns().Count)
-        </button>
-        <button class="btn-tab @(activeTab == "sorgu" ? "active" : "")" @onclick='() => SetActiveTab("sorgu")'>
-            <i class="bi bi-terminal-fill me-1.5" style="color: #38bdf8;"></i> Sorgu Modu (@TotalSqlCount)
-        </button>
+    <!-- Tab Switcher Header (Tüm Akış | Agent Modu | Sorgu Modu) -->
+    <div class="tab-container mb-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            @if (agentTurns.Count > 0 && queryTurns.Count > 0)
+            {
+                <button class="btn-tab @(activeTab == "tum" ? "active" : "")" @onclick='() => SetActiveTab("tum")'>
+                    <i class="bi bi-chat-square-text me-1.5" style="color: #94a3b8;"></i> Tüm Akış (@allTurns.Count)
+                </button>
+            }
+            <button class="btn-tab @(activeTab == "agent" ? "active" : "")" @onclick='() => SetActiveTab("agent")'>
+                <i class="bi bi-robot me-1.5" style="color: #c084fc;"></i> Agent Modu (@agentTurns.Count)
+            </button>
+            <button class="btn-tab @(activeTab == "sorgu" ? "active" : "")" @onclick='() => SetActiveTab("sorgu")'>
+                <i class="bi bi-table me-1.5" style="color: #38bdf8;"></i> Sorgu Modu (@queryTurns.Count)
+            </button>
+        </div>
     </div>
 
-    @if (activeTab == "veri")
+    @if (activeTab == "tum")
     {
-        <!-- VERİ / AKIŞ TAB: Unified Question & AI Response Turn Cards -->
-        var turns = GetConversationTurns();
-
-        if (turns.Count == 0)
+        <!-- TÜM AKIŞ TAB: Chronological Flow of All Turns -->
+        if (allTurns.Count == 0)
         {
             <div class="glass-card text-center py-5">
                 <i class="bi bi-chat-square-dots text-muted" style="font-size: 3rem;"></i>
@@ -112,12 +118,12 @@ else
         else
         {
             <div class="d-flex flex-column gap-4">
-                @foreach (var turn in turns)
+                @foreach (var turn in allTurns)
                 {
                     var isTurnDisliked = turn.IsLiked == false;
                     var isTurnLiked = turn.IsLiked == true;
                     var hasTurnComment = !string.IsNullOrWhiteSpace(turn.FeedbackReason);
-                    var turnCardClass = isTurnDisliked ? "turn-card-disliked" : (isTurnLiked ? "turn-card-liked" : (hasTurnComment ? "turn-card-comment" : "turn-card-default"));
+                    var turnCardClass = isTurnDisliked ? "turn-card-disliked" : (isTurnLiked ? "turn-card-liked" : (hasTurnComment ? "turn-card-comment" : (turn.IsAsistantMode ? "turn-card-agent" : "turn-card-query")));
 
                     <div class="turn-card @turnCardClass mb-3">
                         <!-- Top Header Bar -->
@@ -179,7 +185,7 @@ else
                                 </div>
                             </div>
 
-                            <!-- Right Side: Duration & Timestamp (Spacious layout) -->
+                            <!-- Right Side: Duration & Timestamp -->
                             <div class="d-flex align-items-center gap-3 flex-wrap ms-auto">
                                 @if (turn.TotalDurationMs.HasValue && turn.TotalDurationMs > 0)
                                 {
@@ -216,7 +222,7 @@ else
                             </div>
                         </div>
 
-                        <!-- 2. AI YANITI & ÇIKTISI (In the same card) -->
+                        <!-- 2. AI YANITI & ÇIKTISI -->
                         <div class="turn-ai-response-container">
                             <div class="turn-ai-header mb-2.5">
                                 <div class="d-flex align-items-center gap-2">
@@ -251,7 +257,7 @@ else
                                     @foreach (var sqlItem in turn.SqlQueries)
                                     {
                                         var compliance = MikroAuditEngine.EvaluateQuery(sqlItem.Sql, turn.UserQuestion, chat?.Tenant?.Name);
-                                        var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro v27";
+                                        var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro ERP";
 
                                         <div class="sql-flow-card">
                                             <div class="sql-flow-topbar">
@@ -263,14 +269,23 @@ else
                                                     </span>
                                                     <span class="sql-tag-title"><i class="bi bi-terminal-fill me-1 text-info opacity-75"></i>SQL Sorgusu</span>
 
-                                                    @if (compliance.IsMikroQuery)
-                                                    {
-                                                        <button type="button" class="compliance-chip" @onclick="() => OpenComplianceModal(compliance, sqlItem.Sql)" title="Detaylı ERP Uyum Raporunu İncele">
-                                                            <span class="compliance-dot" style="background-color: @GetScoreColor(compliance.Score);"></span>
-                                                            <span>@erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)</span>
-                                                            <i class="bi bi-chevron-right ms-1 opacity-50" style="font-size: 0.65rem;"></i>
-                                                        </button>
-                                                    }
+                                                    <button type="button" class="compliance-chip" @onclick="() => OpenComplianceModal(compliance, sqlItem.Sql)" title="Detaylı ERP Uyum Raporunu İncele">
+                                                        <span class="compliance-dot" style="background-color: @GetScoreColor(compliance.Score);"></span>
+                                                        <span>@erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)</span>
+                                                        @if (compliance.Violations.Count > 0)
+                                                        {
+                                                            <span class="badge bg-danger bg-opacity-25 text-danger ms-1" style="font-size: 0.68rem; font-weight: 700;">
+                                                                @compliance.Violations.Count İhlal
+                                                            </span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-success bg-opacity-25 text-success ms-1" style="font-size: 0.68rem; font-weight: 700;">
+                                                                Tam Uyum
+                                                            </span>
+                                                        }
+                                                        <i class="bi bi-chevron-right ms-1 opacity-50" style="font-size: 0.65rem;"></i>
+                                                    </button>
 
                                                     @if (!string.IsNullOrEmpty(sqlItem.ErrorMessage) || !string.IsNullOrEmpty(turn.ErrorMessage))
                                                     {
@@ -290,6 +305,23 @@ else
                                                     <i class="bi bi-clipboard me-1"></i> Kopyala
                                                 </button>
                                             </div>
+
+                                            @if (compliance.Violations.Count > 0)
+                                            {
+                                                <div class="px-3 py-1.5 border-bottom border-secondary border-opacity-10 d-flex align-items-center gap-2 flex-wrap" style="background: rgba(239, 68, 68, 0.06); font-size: 0.775rem;">
+                                                    <span class="text-danger fw-bold"><i class="bi bi-exclamation-triangle-fill me-1"></i>Puan Kırma / İhlal:</span>
+                                                    @foreach (var v in compliance.Violations.Take(3))
+                                                    {
+                                                        <span class="badge bg-danger bg-opacity-20 text-danger border border-danger border-opacity-30" title="@v.IssueDescription">
+                                                            -@v.PenaltyPoints Puan (@v.Title)
+                                                        </span>
+                                                    }
+                                                    @if (compliance.Violations.Count > 3)
+                                                    {
+                                                        <span class="text-muted small">+@(compliance.Violations.Count - 3) diğer</span>
+                                                    }
+                                                </div>
+                                            }
 
                                             @if (!string.IsNullOrEmpty(sqlItem.Description))
                                             {
@@ -331,65 +363,61 @@ else
             </div>
         }
     }
-    else if (activeTab == "sorgu")
+    else if (activeTab == "agent")
     {
-        <!-- SORGU MODU TAB: Dedicated SQL Audit View with Identical Executive UI/UX -->
-        var questionGroups = GetQuestionSqlGroups();
-
-        if (questionGroups.Count == 0)
+        <!-- AGENT MODU TAB: Strictly Agent/Assistant Inquiries Only -->
+        if (agentTurns.Count == 0)
         {
             <div class="glass-card text-center py-5">
-                <i class="bi bi-terminal-x text-muted" style="font-size: 3rem;"></i>
-                <h5 class="mt-3 text-muted">Bu sohbete ait üretilmiş SQL sorgusu bulunamadı</h5>
+                <i class="bi bi-robot text-muted mb-2" style="font-size: 3.5rem; color: #c084fc !important; opacity: 0.6;"></i>
+                <h5 class="mt-2 text-light fw-bold">Bu Sohbette Agent Modu Kaydı Bulunmuyor</h5>
+                <p class="text-muted small mb-3">Bu sohbetteki tüm sorular doğrudan Sorgu Modu (SQL Raporu) üzerinden yöneltilmiştir.</p>
+                @if (queryTurns.Count > 0)
+                {
+                    <button class="btn btn-sm btn-outline-info px-3" @onclick='() => SetActiveTab("sorgu")'>
+                        <i class="bi bi-table me-1"></i> Sorgu Modu Kayıtlarını İncele (@queryTurns.Count)
+                    </button>
+                }
             </div>
         }
         else
         {
             <div class="d-flex flex-column gap-4">
-                @foreach (var qGroup in questionGroups)
+                @foreach (var turn in agentTurns)
                 {
-                    var isGroupDisliked = qGroup.IsLiked == false;
-                    var isGroupLiked = qGroup.IsLiked == true;
-                    var hasGroupComment = !string.IsNullOrWhiteSpace(qGroup.FeedbackReason);
-                    var turnCardClass = isGroupDisliked ? "turn-card-disliked" : (isGroupLiked ? "turn-card-liked" : (hasGroupComment ? "turn-card-comment" : "turn-card-default"));
+                    var isTurnDisliked = turn.IsLiked == false;
+                    var isTurnLiked = turn.IsLiked == true;
+                    var hasTurnComment = !string.IsNullOrWhiteSpace(turn.FeedbackReason);
+                    var turnCardClass = isTurnDisliked ? "turn-card-disliked" : (isTurnLiked ? "turn-card-liked" : (hasTurnComment ? "turn-card-comment" : "turn-card-agent"));
 
                     <div class="turn-card @turnCardClass mb-3">
                         <!-- Top Header Bar -->
                         <div class="turn-card-header">
                             <div class="d-flex align-items-center gap-3 flex-wrap">
-                                <!-- Question Index -->
+                                <!-- Turn Index -->
                                 <span class="turn-index-badge">
-                                    #@qGroup.QuestionIndex Soru & SQL
+                                    #@turn.TurnIndex Soru & Agent Yanıtı
                                 </span>
 
-                                <!-- Mode Badge -->
-                                @if (qGroup.IsAsistantMode)
-                                {
-                                    <span class="turn-mode-badge agent" title="Agent Modu: Doğal dil ile açıklama ve yanıt metni üretilir">
-                                        <i class="bi bi-robot me-1"></i> Agent Modu
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span class="turn-mode-badge query" title="Sorgu Modu (SQL Raporu): Doğrudan veritabanı sorgusu ve dinamik tablo üretilir">
-                                        <i class="bi bi-table me-1"></i> Sorgu Modu
-                                    </span>
-                                }
+                                <!-- Strictly Agent Modu Badge -->
+                                <span class="turn-mode-badge agent" title="Agent Modu: Doğal dil ile açıklama, asistan muhakemesi ve yanıt metni">
+                                    <i class="bi bi-robot me-1"></i> Agent Modu
+                                </span>
 
                                 <!-- Feedback Reaction Badge (If any) -->
-                                @if (isGroupDisliked)
+                                @if (isTurnDisliked)
                                 {
                                     <span class="status-pill status-pill-disliked">
                                         <i class="bi bi-hand-thumbs-down-fill me-1"></i> Beğenilmedi
                                     </span>
                                 }
-                                else if (isGroupLiked)
+                                else if (isTurnLiked)
                                 {
                                     <span class="status-pill status-pill-liked">
                                         <i class="bi bi-hand-thumbs-up-fill me-1"></i> Beğenildi
                                     </span>
                                 }
-                                else if (hasGroupComment)
+                                else if (hasTurnComment)
                                 {
                                     <span class="status-pill status-pill-comment">
                                         <i class="bi bi-chat-square-text-fill me-1"></i> Yorum Girildi
@@ -400,32 +428,33 @@ else
                                 <div class="meta-tags-container">
                                     <span class="meta-tag" title="Kullanıcı">
                                         <i class="bi bi-person text-secondary opacity-75"></i>
-                                        <span>@(chat?.CreatedByUser?.NameSurname ?? chat?.CreatedByUser?.Email ?? "Kullanıcı")</span>
+                                        <span>@turn.UserName</span>
                                     </span>
-                                    @if (!string.IsNullOrEmpty(qGroup.AiModelName) || !string.IsNullOrEmpty(qGroup.AssistantName))
+                                    @if (!string.IsNullOrEmpty(turn.AiModelName) || !string.IsNullOrEmpty(turn.AssistantName))
                                     {
                                         <span class="meta-divider">•</span>
                                         <span class="meta-tag" title="Model & Asistan">
                                             <i class="bi bi-cpu text-primary opacity-75"></i>
-                                            <span>@(qGroup.AiModelName ?? "AI") @(!string.IsNullOrEmpty(qGroup.AssistantName) ? $"· {qGroup.AssistantName}" : "")</span>
+                                            <span>@(turn.AiModelName ?? "AI") @(!string.IsNullOrEmpty(turn.AssistantName) ? $"· {turn.AssistantName}" : "")</span>
                                         </span>
                                     }
                                 </div>
                             </div>
 
-                            <!-- Right Side: Date & Sql Count -->
+                            <!-- Right Side: Duration & Timestamp -->
                             <div class="d-flex align-items-center gap-3 flex-wrap ms-auto">
-                                <span class="badge-status" style="background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; font-size: 0.775rem; font-weight: 700;">
-                                    <i class="bi bi-database-check me-1"></i> @qGroup.SqlQueries.Count SQL Sorgusu
-                                </span>
+                                @if (turn.TotalDurationMs.HasValue && turn.TotalDurationMs > 0)
+                                {
+                                    <span class="duration-pill"><i class="bi bi-stopwatch me-1 opacity-75"></i>@(turn.TotalDurationMs)ms</span>
+                                }
                                 <span class="date-chip">
-                                    <i class="bi bi-clock me-1 opacity-75"></i>@(qGroup.DateCreated?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")
+                                    <i class="bi bi-clock me-1 opacity-75"></i>@((turn.ResponseDate ?? turn.QuestionDate)?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")
                                 </span>
                             </div>
                         </div>
 
-                        <!-- Customer Voice / Feedback Callout (If customer wrote a comment) -->
-                        @if (hasGroupComment)
+                        <!-- Customer Voice / Feedback Callout -->
+                        @if (hasTurnComment)
                         {
                             <div class="customer-quote-box">
                                 <div class="quote-header">
@@ -433,18 +462,271 @@ else
                                     <span class="quote-title">MÜŞTERİ GERİ BİLDİRİMİ / ELEŞTİRİSİ</span>
                                 </div>
                                 <div class="quote-body">
-                                    “@qGroup.FeedbackReason”
+                                    “@turn.FeedbackReason”
                                 </div>
                             </div>
                         }
 
-                        <!-- 1. KULLANICI SORUSU (Prompt Flow Block) -->
+                        <!-- 1. KULLANICI SORUSU (Prompt) -->
                         <div class="prompt-flow-block">
                             <div class="prompt-flow-header">
                                 <span class="prompt-icon-badge"><i class="bi bi-question-lg"></i></span>
                                 <div class="prompt-flow-content">
                                     <span class="prompt-flow-label">Kullanıcı Sorusu:</span>
-                                    <span class="prompt-flow-text">@qGroup.QuestionText</span>
+                                    <span class="prompt-flow-text">@turn.UserQuestion</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. AI ASİSTAN YANITI & AÇIKLAMASI -->
+                        <div class="turn-ai-response-container">
+                            <div class="turn-ai-header mb-2.5">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-stars fs-5" style="color: #c084fc;"></i>
+                                    <span class="turn-ai-title">AI ASİSTAN YANITI & AÇIKLAMASI</span>
+                                </div>
+                                @if (turn.SqlQueries.Count > 0)
+                                {
+                                    <span class="badge-status" style="background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(192, 132, 252, 0.4); color: #c084fc; font-size: 0.725rem;">
+                                        <i class="bi bi-cpu me-1"></i> Asistan @turn.SqlQueries.Count SQL Çalıştırdı
+                                    </span>
+                                }
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(turn.AiMessage))
+                            {
+                                <div class="ai-markdown-view mb-3">
+                                    @turn.AiMessage
+                                </div>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(turn.AiSummary))
+                            {
+                                <div class="ai-markdown-view mb-3">
+                                    @turn.AiSummary
+                                </div>
+                            }
+
+                            <!-- Background SQL Queries Executed by Agent -->
+                            @if (turn.SqlQueries.Count > 0)
+                            {
+                                <div class="mt-3">
+                                    <div class="text-muted small fw-semibold mb-2 d-flex align-items-center gap-1.5" style="color: #94a3b8 !important;">
+                                        <i class="bi bi-terminal-fill text-info"></i> Asistan Tarafından Üretilen SQL Sorguları:
+                                    </div>
+                                    <div class="sql-flow-container">
+                                        @foreach (var sqlItem in turn.SqlQueries)
+                                        {
+                                            var compliance = MikroAuditEngine.EvaluateQuery(sqlItem.Sql, turn.UserQuestion, chat?.Tenant?.Name);
+                                            var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro ERP";
+
+                                            <div class="sql-flow-card">
+                                                <div class="sql-flow-topbar">
+                                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                        <span class="terminal-dots">
+                                                            <span class="dot red"></span>
+                                                            <span class="dot yellow"></span>
+                                                            <span class="dot green"></span>
+                                                        </span>
+                                                        <span class="sql-tag-title"><i class="bi bi-terminal-fill me-1 text-info opacity-75"></i>SQL Sorgusu</span>
+
+                                                        <button type="button" class="compliance-chip" @onclick="() => OpenComplianceModal(compliance, sqlItem.Sql)" title="Detaylı ERP Uyum Raporunu İncele">
+                                                            <span class="compliance-dot" style="background-color: @GetScoreColor(compliance.Score);"></span>
+                                                            <span>@erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)</span>
+                                                            @if (compliance.Violations.Count > 0)
+                                                            {
+                                                                <span class="badge bg-danger bg-opacity-25 text-danger ms-1" style="font-size: 0.68rem; font-weight: 700;">
+                                                                    @compliance.Violations.Count İhlal
+                                                                </span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="badge bg-success bg-opacity-25 text-success ms-1" style="font-size: 0.68rem; font-weight: 700;">
+                                                                    Tam Uyum
+                                                                </span>
+                                                            }
+                                                            <i class="bi bi-chevron-right ms-1 opacity-50" style="font-size: 0.65rem;"></i>
+                                                        </button>
+
+                                                        @if (!string.IsNullOrEmpty(sqlItem.ErrorMessage) || !string.IsNullOrEmpty(turn.ErrorMessage))
+                                                        {
+                                                            <span class="sql-status-badge error">
+                                                                <i class="bi bi-exclamation-triangle-fill me-1"></i> SQL Hatası
+                                                            </span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="sql-status-badge success">
+                                                                <i class="bi bi-check2 me-1"></i> SQL Başarılı
+                                                            </span>
+                                                        }
+                                                    </div>
+
+                                                    <button class="btn-copy-sql" @onclick="() => CopySql(sqlItem.Sql)" title="SQL Panoya Kopyala">
+                                                        <i class="bi bi-clipboard me-1"></i> Kopyala
+                                                    </button>
+                                                </div>
+
+                                                @if (compliance.Violations.Count > 0)
+                                                {
+                                                    <div class="px-3 py-1.5 border-bottom border-secondary border-opacity-10 d-flex align-items-center gap-2 flex-wrap" style="background: rgba(239, 68, 68, 0.06); font-size: 0.775rem;">
+                                                        <span class="text-danger fw-bold"><i class="bi bi-exclamation-triangle-fill me-1"></i>Puan Kırma / İhlal:</span>
+                                                        @foreach (var v in compliance.Violations.Take(3))
+                                                        {
+                                                            <span class="badge bg-danger bg-opacity-20 text-danger border border-danger border-opacity-30" title="@v.IssueDescription">
+                                                                -@v.PenaltyPoints Puan (@v.Title)
+                                                            </span>
+                                                        }
+                                                        @if (compliance.Violations.Count > 3)
+                                                        {
+                                                            <span class="text-muted small">+@(compliance.Violations.Count - 3) diğer</span>
+                                                        }
+                                                    </div>
+                                                }
+
+                                                @if (!string.IsNullOrEmpty(sqlItem.Description))
+                                                {
+                                                    <div class="sql-desc-text">@sqlItem.Description</div>
+                                                }
+
+                                                <div class="sql-code-wrapper">
+                                                    <code>@sqlItem.Sql</code>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            <!-- Error Box (If any) -->
+                            @if (!string.IsNullOrEmpty(turn.ErrorMessage))
+                            {
+                                <div class="error-alert-box mt-2.5">
+                                    <div class="d-flex align-items-start gap-2.5">
+                                        <i class="bi bi-exclamation-octagon-fill text-danger fs-5 mt-0.5 flex-shrink-0"></i>
+                                        <div>
+                                            <div class="fw-bold text-danger small text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Hata Detayı</div>
+                                            <div class="font-monospace text-light small mt-1" style="white-space: pre-wrap; font-size: 0.825rem; line-height: 1.5;">@turn.ErrorMessage</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+    else if (activeTab == "sorgu")
+    {
+        <!-- SORGU MODU TAB: Strictly Direct Query Mode (SQL Reports) Only -->
+        if (queryTurns.Count == 0)
+        {
+            <div class="glass-card text-center py-5">
+                <i class="bi bi-table text-muted mb-2" style="font-size: 3.5rem; color: #38bdf8 !important; opacity: 0.6;"></i>
+                <h5 class="mt-2 text-light fw-bold">Bu Sohbette Doğrudan Sorgu Modu Kaydı Bulunmuyor</h5>
+                <p class="text-muted small mb-3">Bu sohbetteki tüm @agentTurns.Count soru Agent Modu (Asistan) üzerinden iletilmiştir.</p>
+                @if (agentTurns.Count > 0)
+                {
+                    <button class="btn btn-sm btn-outline-purple px-3" style="border-color: #c084fc; color: #c084fc;" @onclick='() => SetActiveTab("agent")'>
+                        <i class="bi bi-robot me-1"></i> Agent Modu Kayıtlarını İncele (@agentTurns.Count)
+                    </button>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="d-flex flex-column gap-4">
+                @foreach (var turn in queryTurns)
+                {
+                    var isTurnDisliked = turn.IsLiked == false;
+                    var isTurnLiked = turn.IsLiked == true;
+                    var hasTurnComment = !string.IsNullOrWhiteSpace(turn.FeedbackReason);
+                    var turnCardClass = isTurnDisliked ? "turn-card-disliked" : (isTurnLiked ? "turn-card-liked" : (hasTurnComment ? "turn-card-comment" : "turn-card-query"));
+
+                    <div class="turn-card @turnCardClass mb-3">
+                        <!-- Top Header Bar -->
+                        <div class="turn-card-header">
+                            <div class="d-flex align-items-center gap-3 flex-wrap">
+                                <!-- Turn Index -->
+                                <span class="turn-index-badge">
+                                    #@turn.TurnIndex Soru & Dinamik SQL Raporu
+                                </span>
+
+                                <!-- Strictly Sorgu Modu Badge -->
+                                <span class="turn-mode-badge query" title="Sorgu Modu (SQL Raporu): Doğrudan veritabanı sorgusu ve dinamik tablo üretilir">
+                                    <i class="bi bi-table me-1"></i> Sorgu Modu
+                                </span>
+
+                                <!-- Feedback Reaction Badge (If any) -->
+                                @if (isTurnDisliked)
+                                {
+                                    <span class="status-pill status-pill-disliked">
+                                        <i class="bi bi-hand-thumbs-down-fill me-1"></i> Beğenilmedi
+                                    </span>
+                                }
+                                else if (isTurnLiked)
+                                {
+                                    <span class="status-pill status-pill-liked">
+                                        <i class="bi bi-hand-thumbs-up-fill me-1"></i> Beğenildi
+                                    </span>
+                                }
+                                else if (hasTurnComment)
+                                {
+                                    <span class="status-pill status-pill-comment">
+                                        <i class="bi bi-chat-square-text-fill me-1"></i> Yorum Girildi
+                                    </span>
+                                }
+
+                                <!-- Metadata Group -->
+                                <div class="meta-tags-container">
+                                    <span class="meta-tag" title="Kullanıcı">
+                                        <i class="bi bi-person text-secondary opacity-75"></i>
+                                        <span>@turn.UserName</span>
+                                    </span>
+                                    @if (!string.IsNullOrEmpty(turn.AiModelName))
+                                    {
+                                        <span class="meta-divider">•</span>
+                                        <span class="meta-tag" title="Model">
+                                            <i class="bi bi-cpu text-info opacity-75"></i>
+                                            <span>@turn.AiModelName</span>
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Right Side: Duration & Timestamp -->
+                            <div class="d-flex align-items-center gap-3 flex-wrap ms-auto">
+                                @if (turn.TotalDurationMs.HasValue && turn.TotalDurationMs > 0)
+                                {
+                                    <span class="duration-pill"><i class="bi bi-stopwatch me-1 opacity-75"></i>@(turn.TotalDurationMs)ms</span>
+                                }
+                                <span class="date-chip">
+                                    <i class="bi bi-clock me-1 opacity-75"></i>@((turn.ResponseDate ?? turn.QuestionDate)?.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Customer Voice / Feedback Callout -->
+                        @if (hasTurnComment)
+                        {
+                            <div class="customer-quote-box">
+                                <div class="quote-header">
+                                    <i class="bi bi-chat-quote-fill quote-icon"></i>
+                                    <span class="quote-title">MÜŞTERİ GERİ BİLDİRİMİ / ELEŞTİRİSİ</span>
+                                </div>
+                                <div class="quote-body">
+                                    “@turn.FeedbackReason”
+                                </div>
+                            </div>
+                        }
+
+                        <!-- 1. KULLANICI SORUSU (Prompt) -->
+                        <div class="prompt-flow-block">
+                            <div class="prompt-flow-header">
+                                <span class="prompt-icon-badge"><i class="bi bi-question-lg"></i></span>
+                                <div class="prompt-flow-content">
+                                    <span class="prompt-flow-label">Kullanıcı Sorusu:</span>
+                                    <span class="prompt-flow-text">@turn.UserQuestion</span>
                                 </div>
                             </div>
                         </div>
@@ -456,87 +738,120 @@ else
                                     <i class="bi bi-terminal-fill text-info fs-5"></i>
                                     <span class="turn-ai-title" style="color: #38bdf8;">ÜRETİLEN SQL SORGULARI & ERP DENETİMİ</span>
                                 </div>
-                                <span class="badge-status" style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(52, 211, 153, 0.3); color: #34d399; font-size: 0.725rem;">
-                                    <i class="bi bi-shield-check me-1"></i> @qGroup.SqlQueries.Count Sorgu Doğrulandı
-                                </span>
+                                @if (turn.SqlQueries.Count > 0)
+                                {
+                                    <span class="badge-status" style="background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; font-size: 0.725rem;">
+                                        <i class="bi bi-database-check me-1"></i> @turn.SqlQueries.Count SQL Sorgusu
+                                    </span>
+                                }
                             </div>
 
-                            <div class="sql-flow-container">
-                                @foreach (var sqlItem in qGroup.SqlQueries)
-                                {
-                                    var compliance = MikroAuditEngine.EvaluateQuery(sqlItem.Sql, qGroup.QuestionText, chat?.Tenant?.Name);
-                                    var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro v27";
+                            @if (turn.SqlQueries.Count > 0)
+                            {
+                                <div class="sql-flow-container">
+                                    @foreach (var sqlItem in turn.SqlQueries)
+                                    {
+                                        var compliance = MikroAuditEngine.EvaluateQuery(sqlItem.Sql, turn.UserQuestion, chat?.Tenant?.Name);
+                                        var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro ERP";
 
-                                    <div class="sql-flow-card">
-                                        <div class="sql-flow-topbar">
-                                            <div class="d-flex align-items-center gap-2 flex-wrap">
-                                                <span class="terminal-dots">
-                                                    <span class="dot red"></span>
-                                                    <span class="dot yellow"></span>
-                                                    <span class="dot green"></span>
-                                                </span>
-                                                <span class="sql-tag-title">
-                                                    <i class="bi bi-terminal-fill me-1 text-info opacity-75"></i>Sorgu #@qGroup.QuestionIndex.@sqlItem.SubIndex
-                                                </span>
+                                        <div class="sql-flow-card">
+                                            <div class="sql-flow-topbar">
+                                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                    <span class="terminal-dots">
+                                                        <span class="dot red"></span>
+                                                        <span class="dot yellow"></span>
+                                                        <span class="dot green"></span>
+                                                    </span>
+                                                    <span class="sql-tag-title"><i class="bi bi-terminal-fill me-1 text-info opacity-75"></i>Sorgu #@turn.TurnIndex.@sqlItem.SubIndex</span>
 
-                                                @if (compliance.IsMikroQuery)
-                                                {
                                                     <button type="button" class="compliance-chip" @onclick="() => OpenComplianceModal(compliance, sqlItem.Sql)" title="Detaylı ERP Uyum Raporunu İncele">
                                                         <span class="compliance-dot" style="background-color: @GetScoreColor(compliance.Score);"></span>
                                                         <span>@erpLabel Uyum: <strong>@compliance.Score/100</strong> (@compliance.Grade)</span>
+                                                        @if (compliance.Violations.Count > 0)
+                                                        {
+                                                            <span class="badge bg-danger bg-opacity-25 text-danger ms-1" style="font-size: 0.68rem; font-weight: 700;">
+                                                                @compliance.Violations.Count İhlal
+                                                            </span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-success bg-opacity-25 text-success ms-1" style="font-size: 0.68rem; font-weight: 700;">
+                                                                Tam Uyum
+                                                            </span>
+                                                        }
                                                         <i class="bi bi-chevron-right ms-1 opacity-50" style="font-size: 0.65rem;"></i>
                                                     </button>
-                                                }
 
-                                                @if (!string.IsNullOrEmpty(sqlItem.ErrorMessage))
-                                                {
-                                                    <span class="sql-status-badge error">
-                                                        <i class="bi bi-exclamation-triangle-fill me-1"></i> SQL Hatası
-                                                    </span>
-                                                }
-                                                else if (sqlItem.IsSucceeded)
-                                                {
-                                                    <span class="sql-status-badge success">
-                                                        <i class="bi bi-check2 me-1"></i> SQL Başarılı
-                                                    </span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="sql-status-badge success">
-                                                        <i class="bi bi-check2 me-1"></i> SQL Çalıştırıldı
-                                                    </span>
-                                                }
-                                            </div>
-
-                                            <button class="btn-copy-sql" @onclick="() => CopySql(sqlItem.Sql)" title="SQL Panoya Kopyala">
-                                                <i class="bi bi-clipboard me-1"></i> Kopyala
-                                            </button>
-                                        </div>
-
-                                        @if (!string.IsNullOrEmpty(sqlItem.Description))
-                                        {
-                                            <div class="sql-desc-text">@sqlItem.Description</div>
-                                        }
-
-                                        <div class="sql-code-wrapper">
-                                            <code>@sqlItem.Sql</code>
-                                        </div>
-
-                                        @if (!string.IsNullOrEmpty(sqlItem.ErrorMessage))
-                                        {
-                                            <div class="error-alert-box mt-2.5">
-                                                <div class="d-flex align-items-start gap-2.5">
-                                                    <i class="bi bi-exclamation-octagon-fill text-danger fs-5 mt-0.5 flex-shrink-0"></i>
-                                                    <div>
-                                                        <div class="fw-bold text-danger small text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Hata Detayı</div>
-                                                        <div class="font-monospace text-light small mt-1" style="white-space: pre-wrap; font-size: 0.825rem; line-height: 1.5;">@sqlItem.ErrorMessage</div>
-                                                    </div>
+                                                    @if (!string.IsNullOrEmpty(sqlItem.ErrorMessage) || !string.IsNullOrEmpty(turn.ErrorMessage))
+                                                    {
+                                                        <span class="sql-status-badge error">
+                                                            <i class="bi bi-exclamation-triangle-fill me-1"></i> SQL Hatası
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="sql-status-badge success">
+                                                            <i class="bi bi-check2 me-1"></i> SQL Başarılı
+                                                        </span>
+                                                    }
                                                 </div>
+
+                                                <button class="btn-copy-sql" @onclick="() => CopySql(sqlItem.Sql)" title="SQL Panoya Kopyala">
+                                                    <i class="bi bi-clipboard me-1"></i> Kopyala
+                                                </button>
                                             </div>
-                                        }
+
+                                            @if (compliance.Violations.Count > 0)
+                                            {
+                                                <div class="px-3 py-1.5 border-bottom border-secondary border-opacity-10 d-flex align-items-center gap-2 flex-wrap" style="background: rgba(239, 68, 68, 0.06); font-size: 0.775rem;">
+                                                    <span class="text-danger fw-bold"><i class="bi bi-exclamation-triangle-fill me-1"></i>Puan Kırma / İhlal:</span>
+                                                    @foreach (var v in compliance.Violations.Take(3))
+                                                    {
+                                                        <span class="badge bg-danger bg-opacity-20 text-danger border border-danger border-opacity-30" title="@v.IssueDescription">
+                                                            -@v.PenaltyPoints Puan (@v.Title)
+                                                        </span>
+                                                    }
+                                                    @if (compliance.Violations.Count > 3)
+                                                    {
+                                                        <span class="text-muted small">+@(compliance.Violations.Count - 3) diğer</span>
+                                                    }
+                                                </div>
+                                            }
+
+                                            @if (!string.IsNullOrEmpty(sqlItem.Description))
+                                            {
+                                                <div class="sql-desc-text">@sqlItem.Description</div>
+                                            }
+
+                                            <div class="sql-code-wrapper">
+                                                <code>@sqlItem.Sql</code>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="p-3 rounded-3" style="background: rgba(14, 165, 233, 0.06); border: 1px solid rgba(56, 189, 248, 0.2);">
+                                    <div class="text-info small fw-semibold">
+                                        <i class="bi bi-info-circle me-1"></i> Bu soru için doğrudan dinamik tablo raporu üretilmiş ve kullanıcı ekranında gösterilmiştir.
                                     </div>
-                                }
-                            </div>
+                                </div>
+                            }
+
+                            <!-- Error Box (If any) -->
+                            @if (!string.IsNullOrEmpty(turn.ErrorMessage))
+                            {
+                                <div class="error-alert-box mt-2.5">
+                                    <div class="d-flex align-items-start gap-2.5">
+                                        <i class="bi bi-exclamation-octagon-fill text-danger fs-5 mt-0.5 flex-shrink-0"></i>
+                                        <div>
+                                            <div class="fw-bold text-danger small text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Hata Detayı</div>
+                                            <div class="font-monospace text-light small mt-1" style="white-space: pre-wrap; font-size: 0.825rem; line-height: 1.5;">@turn.ErrorMessage</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
                         </div>
                     </div>
                 }
@@ -555,17 +870,21 @@ else
     private OzBiChat? chat;
     private List<OzBiChatMessage>? messagesList;
     private bool isLoading = true;
-    private string activeTab = "veri";
+    private string activeTab = "agent";
 
     private bool isComplianceModalOpen = false;
     private MikroComplianceReport? selectedComplianceReport;
     private string selectedTestedSql = string.Empty;
 
-    private int UserPromptCount => messagesList?.Count(m => m.Role?.ToLower() == "user" || !string.IsNullOrEmpty(m.Prompt)) ?? 0;
+    private List<ConversationTurn> allTurns = new();
+    private List<ConversationTurn> agentTurns = new();
+    private List<ConversationTurn> queryTurns = new();
+
+    private int UserPromptCount => allTurns.Count;
     private int AiResponseCount => messagesList?.Count(m => m.Role?.ToLower() != "user") ?? 0;
-    private int QueryModeCount => messagesList?.Count(m => !m.IsAssistantModeEffective && m.Role?.ToLower() != "user") ?? 0;
-    private int AssistantModeCount => messagesList?.Count(m => m.IsAssistantModeEffective && m.Role?.ToLower() != "user") ?? 0;
-    private int TotalSqlCount => GetQuestionSqlGroups().Sum(g => g.SqlQueries.Count);
+    private int QueryModeCount => queryTurns.Count;
+    private int AssistantModeCount => agentTurns.Count;
+    private int TotalSqlCount => allTurns.Sum(t => t.SqlQueries.Count);
     private int DislikedCount => messagesList?.Count(m => m.IsLiked == false) ?? 0;
     private int LikedCount => messagesList?.Count(m => m.IsLiked == true) ?? 0;
     private int FeedbackCommentCount => messagesList?.Count(m => !string.IsNullOrEmpty(m.FeedbackReason)) ?? 0;
@@ -593,19 +912,6 @@ else
         public string? FeedbackReason { get; set; }
     }
 
-    public class QuestionSqlGroup
-    {
-        public int QuestionIndex { get; set; }
-        public string QuestionText { get; set; } = string.Empty;
-        public bool IsAsistantMode { get; set; }
-        public string? AssistantName { get; set; }
-        public string? AiModelName { get; set; }
-        public DateTime? DateCreated { get; set; }
-        public bool? IsLiked { get; set; }
-        public string? FeedbackReason { get; set; }
-        public List<SqlLogItem> SqlQueries { get; set; } = new();
-    }
-
     public class SqlLogItem
     {
         public int SubIndex { get; set; }
@@ -627,6 +933,28 @@ else
         {
             chat = await AuditService.GetChatByIdAsync(ChatId);
             messagesList = await AuditService.GetMessagesForChatAsync(ChatId);
+
+            allTurns = GetConversationTurns();
+            agentTurns = allTurns.Where(t => t.IsAsistantMode).ToList();
+            queryTurns = allTurns.Where(t => !t.IsAsistantMode).ToList();
+
+            // Smart active tab selection based on content
+            if (agentTurns.Count > 0 && queryTurns.Count == 0)
+            {
+                activeTab = "agent";
+            }
+            else if (queryTurns.Count > 0 && agentTurns.Count == 0)
+            {
+                activeTab = "sorgu";
+            }
+            else if (allTurns.Count > 0)
+            {
+                activeTab = "tum";
+            }
+            else
+            {
+                activeTab = "agent";
+            }
         }
         catch (Exception ex)
         {
@@ -754,93 +1082,6 @@ else
         }
 
         return turns;
-    }
-
-    private List<QuestionSqlGroup> GetQuestionSqlGroups()
-    {
-        var groups = new List<QuestionSqlGroup>();
-        if (messagesList == null) return groups;
-
-        QuestionSqlGroup? currentGroup = null;
-        int questionCounter = 0;
-
-        foreach (var msg in messagesList)
-        {
-            var promptText = !string.IsNullOrEmpty(msg.Prompt) ? msg.Prompt : (msg.Role?.ToLower() == "user" ? msg.Message : null);
-            bool isAssistant = msg.IsAssistantModeEffective;
-
-            if (!string.IsNullOrEmpty(promptText))
-            {
-                questionCounter++;
-                currentGroup = new QuestionSqlGroup
-                {
-                    QuestionIndex = questionCounter,
-                    QuestionText = promptText,
-                    IsAsistantMode = isAssistant,
-                    AssistantName = msg.Assistant?.Name,
-                    AiModelName = msg.AIModel?.Name ?? msg.AIModel?.ProgrammaticName,
-                    DateCreated = msg.DateCreated,
-                    IsLiked = msg.IsLiked,
-                    FeedbackReason = msg.FeedbackReason,
-                    SqlQueries = new List<SqlLogItem>()
-                };
-                groups.Add(currentGroup);
-            }
-
-            if (currentGroup != null)
-            {
-                if (isAssistant)
-                {
-                    currentGroup.IsAsistantMode = true;
-                }
-                if (string.IsNullOrEmpty(currentGroup.AssistantName) && msg.Assistant != null)
-                {
-                    currentGroup.AssistantName = msg.Assistant.Name;
-                }
-                if (string.IsNullOrEmpty(currentGroup.AiModelName) && msg.AIModel != null)
-                {
-                    currentGroup.AiModelName = msg.AIModel.Name ?? msg.AIModel.ProgrammaticName;
-                }
-                if (msg.IsLiked.HasValue)
-                {
-                    currentGroup.IsLiked = msg.IsLiked;
-                }
-                if (!string.IsNullOrEmpty(msg.FeedbackReason))
-                {
-                    currentGroup.FeedbackReason = msg.FeedbackReason;
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(msg.Query))
-            {
-                if (currentGroup == null)
-                {
-                    questionCounter++;
-                    currentGroup = new QuestionSqlGroup
-                    {
-                        QuestionIndex = questionCounter,
-                        QuestionText = chat?.Title ?? "Sohbet Sorusu",
-                        IsAsistantMode = isAssistant,
-                        AssistantName = msg.Assistant?.Name,
-                        DateCreated = msg.DateCreated,
-                        IsLiked = msg.IsLiked,
-                        FeedbackReason = msg.FeedbackReason,
-                        SqlQueries = new List<SqlLogItem>()
-                    };
-                    groups.Add(currentGroup);
-                }
-
-                var extractedSqls = ExtractSqlItemsFromQuery(msg.Query, msg.IsSucceeded, msg.ErrorMessage);
-                foreach (var sqlItem in extractedSqls)
-                {
-                    sqlItem.SubIndex = currentGroup.SqlQueries.Count + 1;
-                    currentGroup.SqlQueries.Add(sqlItem);
-                }
-            }
-        }
-
-        var groupsWithSql = groups.Where(g => g.SqlQueries.Count > 0).ToList();
-        return groupsWithSql.Count > 0 ? groupsWithSql : groups;
     }
 
     private List<SqlLogItem> ExtractSqlItemsFromQuery(string rawQuery, bool isSucceeded, string? errorMessage)
@@ -977,6 +1218,14 @@ else
     }
 
     .turn-card-default {
+        border-left: 4px solid #38bdf8 !important;
+    }
+
+    .turn-card-agent {
+        border-left: 4px solid #c084fc !important;
+    }
+
+    .turn-card-query {
         border-left: 4px solid #38bdf8 !important;
     }
 

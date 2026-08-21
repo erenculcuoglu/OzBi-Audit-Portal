@@ -78,6 +78,9 @@ namespace OzBiPortalCRM.Services
         Task<TenantComplianceScorecard> GetTenantComplianceScorecardAsync(string tenantId, bool forceRefresh = false);
         Task<Dictionary<string, TenantComplianceSnapshot>> GetAllTenantComplianceSnapshotsAsync();
 
+        // Tenant Assistant, Schema & Prompt Methods
+        Task<List<OzBiAssistant>> GetAssistantsForTenantAsync(string tenantId);
+
         // Customer Feedbacks & Dislike Hub Methods
         Task<List<OzBiChatMessage>> GetCustomerFeedbacksAsync(
             string? tenantId = null,

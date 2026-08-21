@@ -9,6 +9,7 @@ out/
 ## Local App SQLite DB & Logs
 app/
 *.log
+*.db
 
 ## User-specific & OS files
 *.user
