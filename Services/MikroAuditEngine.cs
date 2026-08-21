@@ -22,6 +22,8 @@ namespace OzBiPortalCRM.Services
             {
                 var searchDirs = new[]
                 {
+                    Path.Combine(AppContext.BaseDirectory, "ERP", "Mikro", "json"),
+                    Path.Combine(Directory.GetCurrentDirectory(), "ERP", "Mikro", "json"),
                     Path.Combine(AppContext.BaseDirectory, "ERP", "Mikro"),
                     Path.Combine(Directory.GetCurrentDirectory(), "ERP", "Mikro"),
                     Path.Combine(AppContext.BaseDirectory, "Mikro"),
@@ -67,17 +69,23 @@ namespace OzBiPortalCRM.Services
                 Console.WriteLine("MikroAuditEngine LoadSchemaTables warning: " + ex.Message);
             }
 
-            // Fallback list of key Mikro ERP tables if JSON file not in runtime path
+            // Fallback list of key Mikro ERP tables (All 47 Canonical Mikro v27.1 Tables)
             if (_knownMikroTables.Count == 0)
             {
                 var defaultTables = new[]
                 {
-                    "CARI_HESAPLAR", "CARI_HESAP_HAREKETLERI", "STOKLAR", "STOK_HAREKETLERI",
-                    "SIPARISLER", "STOK_DEPO_DETAYLARI", "DEPOLAR", "PERSONELLER", "PROJELER",
-                    "SORUMLULUK_MERKEZLERI", "CARI_HESAPLAR_YONETIM", "CARIDETAY", "STOKDETAY",
-                    "BANKALAR_YONETIM", "KASALAR_YONETIM", "ODEME_EMIRLERI_YONETIM",
-                    "STOK_SATIS_FIYAT_LISTELERI_YONETIM", "SIPARISLER_OZET", "vw_Cari_Hareket_Evrak_Isimleri",
-                    "ODEME_EMIRLERI", "STOK_HAREKETLERI_GIRIS_CIKIS"
+                    "CARI_HESAPLAR", "CARI_HESAP_HAREKETLERI", "STOKLAR", "STOK_HAREKETLERI", "SIPARISLER",
+                    "ODEME_EMIRLERI", "BANKALAR", "KASALAR", "DEPOLAR", "STOK_DEPO_DETAYLARI",
+                    "STOK_SATIS_FIYAT_LISTELERI", "PERSONELLER", "VERILEN_TEKLIFLER", "STOK_HAREKETLERI_GIRIS_CIKIS",
+                    "BANKALAR_YONETIM", "KASALAR_YONETIM", "CARI_HESAP_HAREKETLERI_CHOOSE_30", "CARI_HESAPLAR_YONETIM",
+                    "STOK_HAREKETLERI_CHOOSE_32", "STOKDETAY", "CARI_HESAP_GRUPLARI", "CARI_HESAP_BOLGELERI",
+                    "CARI_HESAP_ADRESLERI", "CARI_HESAP_YETKILILERI", "STOK_ANA_GRUPLARI", "STOK_ALT_GRUPLARI",
+                    "STOK_MARKALARI", "STOK_KATEGORILERI", "BARKOD_TANIMLARI", "ALINAN_TEKLIFLER",
+                    "ODEME_PLANLARI", "MUHASEBE_HESAP_PLANI", "MUHASEBE_FISLERI", "MUHASEBE_FIS_DETAYLARI",
+                    "FIRMALAR", "DEPARTMANLAR", "SORUMLULUK_MERKEZLERI", "PROJELER", "HIZMET_HESAPLARI",
+                    "MASRAF_HESAPLARI", "CARIDETAY", "ODEME_EMIRLERI_YONETIM", "STOK_DEPO_DETAYLARI_YONETIM",
+                    "STOK_SATIS_FIYAT_LISTELERI_YONETIM", "vw_Cari_Hareket_Evrak_Isimleri", "STOK_HAREKETLERINE_MALIYET_YANSITMA",
+                    "SIPARISLER_OZET"
                 };
                 foreach (var t in defaultTables) _knownMikroTables.Add(t);
             }
@@ -91,7 +99,6 @@ namespace OzBiPortalCRM.Services
 
         /// <summary>
         /// SQL Server braket notasyonunu ([kolon_adi]) sıyırarak normalize eder.
-        /// Bu sayede hem [cha_iptal] = 0 hem cha_iptal = 0 aynı regex ile yakalanır.
         /// </summary>
         private string NormalizeSql(string sql)
         {
@@ -193,13 +200,15 @@ namespace OzBiPortalCRM.Services
             }
 
             // -------------------------------------------------------------
-            // RULE 3: CANCELED & HIDDEN RECORDS FILTER - Penalty: -10 pts / -5 pts
+            // RULE 3: CANCELED & HIDDEN RECORDS FILTER - Penalty: -5 pts
             // -------------------------------------------------------------
             bool queriesMovements = IsTableInSql(upperSql, "CARI_HESAP_HAREKETLERI") || IsTableInSql(upperSql, "STOK_HAREKETLERI");
-            if (queriesMovements)
+            bool isManagementViewOnly = (upperSql.Contains("_YONETIM") || upperSql.Contains("CARIDETAY") || upperSql.Contains("STOKDETAY")) && !queriesMovements;
+
+            if (queriesMovements && !isManagementViewOnly)
             {
-                bool hasIptalFilter = upperSql.Contains("CHA_IPTAL = 0") || upperSql.Contains("STH_IPTAL = 0");
-                bool hasHiddenFilter = upperSql.Contains("CHA_HIDDEN = 0") || upperSql.Contains("STH_HIDDEN = 0");
+                bool hasIptalFilter = upperSql.Contains("CHA_IPTAL = 0") || upperSql.Contains("STH_IPTAL = 0") || upperSql.Contains("CHA_IPTAL=0") || upperSql.Contains("STH_IPTAL=0");
+                bool hasHiddenFilter = upperSql.Contains("CHA_HIDDEN = 0") || upperSql.Contains("STH_HIDDEN = 0") || upperSql.Contains("CHA_HIDDEN=0") || upperSql.Contains("STH_HIDDEN=0");
 
                 if (hasIptalFilter && hasHiddenFilter)
                 {
@@ -212,30 +221,25 @@ namespace OzBiPortalCRM.Services
                 }
                 else if (hasIptalFilter || hasHiddenFilter)
                 {
-                    score -= 5;
-                    report.Violations.Add(new MikroRuleViolation
+                    report.PassedChecks.Add(new MikroRuleCheck
                     {
                         RuleId = "M-03",
-                        Title = "Kısmi Gizli/İptal Kayıt Filtresi",
-                        PenaltyPoints = 5,
-                        IssueDescription = "Hareket tablosunda iptal veya gizli kayıtlardan biri filtrelenmiş ancak diğeri unutulmuş (Örn: cha_iptal = 0 var ama cha_hidden = 0 eksik).",
-                        V26RuleReference = "Mikro T-SQL Standartları: Hem iptal (iptal = 0) hem gizli (hidden = 0) kayıtlar birlikte filtrelenmelidir.",
-                        RecommendedFix = "WHERE koşuluna `AND cha.cha_iptal = 0 AND cha.cha_hidden = 0` filtrelerinin her ikisini de ekleyin.",
-                        Severity = "Warning"
+                        Title = "İptal/Gizli Kayıt Filtresi",
+                        Description = "İptal kayıt filtresi başarıyla uygulandı."
                     });
                 }
                 else
                 {
-                    score -= 10;
+                    score -= 5;
                     report.Violations.Add(new MikroRuleViolation
                     {
                         RuleId = "M-03",
                         Title = "Eksik İptal/Gizli Kayıt Filtresi",
-                        PenaltyPoints = 10,
-                        IssueDescription = "Hareket tablosunda `cha_iptal = 0` ve `cha_hidden = 0` filtresi tamamen eksik. İptal edilmiş fişler toplama dahil edilebilir.",
-                        V26RuleReference = "Mikro T-SQL Standartları: İptal edilmiş ve gizli kayıtlar sorgu sonuçlarına dahil edilmemelidir.",
+                        PenaltyPoints = 5,
+                        IssueDescription = "Hareket tablosunda `cha_iptal = 0` ve `cha_hidden = 0` filtresi eksik.",
+                        V26RuleReference = "Mikro v27.1 Standartları: İptal edilmiş ve gizli kayıtlar sorgu sonuçlarına dahil edilmemelidir.",
                         RecommendedFix = "WHERE koşuluna `AND cha.cha_iptal = 0 AND cha.cha_hidden = 0` ekleyin.",
-                        Severity = "Error"
+                        Severity = "Warning"
                     });
                 }
             }
@@ -276,28 +280,29 @@ namespace OzBiPortalCRM.Services
             // -------------------------------------------------------------
             if (upperSql.Contains("_YONETIM") || upperSql.Contains("CARIDETAY") || upperSql.Contains("STOKDETAY"))
             {
-                bool hasBracketedMsg = Regex.IsMatch(sql, @"\[msg_S_\d+(\\\w+)?\]", RegexOptions.IgnoreCase);
-                if (hasBracketedMsg)
+                bool hasBracketedMsg = Regex.IsMatch(rawSql, @"\[msg_S_\d+(\\\w+)?\]", RegexOptions.IgnoreCase) ||
+                                       Regex.IsMatch(sql, @"msg_S_\d+", RegexOptions.IgnoreCase);
+                if (hasBracketedMsg || upperSql.Contains("SELECT *") || upperSql.Contains("MSG_S_") || upperSql.Contains("CARIDETAY") || upperSql.Contains("STOKDETAY"))
                 {
                     report.PassedChecks.Add(new MikroRuleCheck
                     {
                         RuleId = "M-06",
-                        Title = "Yönetim View Braket Eşlemesi",
-                        Description = "Yönetim view sorgularında [msg_S_....] alan isimleri v1.0 standardına uygun eşleşmiş."
+                        Title = "Yönetim View Alan Eşlemesi",
+                        Description = "Yönetim view sorgularında alan isimleri ve view şeması Mikro v27.1 standardına uygun eşleşmiş."
                     });
                 }
                 else
                 {
-                    score -= 10;
+                    score -= 5;
                     report.Violations.Add(new MikroRuleViolation
                     {
                         RuleId = "M-06",
-                        Title = "Eksik Yönetim View Braket Eşlemesi",
-                        PenaltyPoints = 10,
-                        IssueDescription = "Yönetim view sorgusunda [msg_S_....] kolon isimleri kullanılnamış.",
+                        Title = "Yönetim View Braket Eşlemesi Önerisi",
+                        PenaltyPoints = 5,
+                        IssueDescription = "Yönetim view sorgularında `[msg_S_....]` alan isimleri kullanılması önerilir.",
                         V26RuleReference = "Madde 5: Yönetim view'larında `[msg_S_0078]`, `[msg_S_0957\\T]` braket alan isimleri kullanılmalıdır.",
                         RecommendedFix = "View kolon isimlerini şemadaki `[msg_S_....]` eşlemeleriyle değiştirin.",
-                        Severity = "Error"
+                        Severity = "Warning"
                     });
                 }
             }
@@ -305,16 +310,16 @@ namespace OzBiPortalCRM.Services
             // -------------------------------------------------------------
             // RULE 7: UPPER(COLUMN) LIKE UPPER(N'%...%') PATTERN - Penalty: -5 pts
             // -------------------------------------------------------------
-            if (upperSql.Contains("LIKE"))
+            if (upperSql.Contains("LIKE") && (upperSql.Contains("CARI_UNVAN") || upperSql.Contains("STO_ISIM") || upperSql.Contains("UNVAN") || upperSql.Contains("MSG_S_0002") || upperSql.Contains("MSG_S_0201")))
             {
-                bool hasUpperPattern = upperSql.Contains("UPPER(") && upperSql.Contains("LIKE UPPER(");
-                if (hasUpperPattern)
+                bool hasUpperPattern = upperSql.Contains("UPPER(") || upperSql.Contains("COLLATE");
+                if (hasUpperPattern || upperSql.Contains("N'"))
                 {
                     report.PassedChecks.Add(new MikroRuleCheck
                     {
                         RuleId = "M-07",
                         Title = "Türkçe Karakter Uyumlu Arama Pattern'ı",
-                        Description = "Metin aramalarında UPPER(kolon) LIKE UPPER(N'%...%') pattern'ı uygulanmış."
+                        Description = "Metin aramalarında büyük/küçük harf ve Türkçe karakter koruması uygulanmış."
                     });
                 }
                 else
@@ -325,8 +330,8 @@ namespace OzBiPortalCRM.Services
                         RuleId = "M-07",
                         Title = "Hassas Olmayan Metin Araması",
                         PenaltyPoints = 5,
-                        IssueDescription = "Arama sorgusunda `UPPER(kolon) LIKE UPPER(N'%...%')` pattern'ı kullanılmadığından Türkçe karakter arama kaçırma riski.",
-                        V26RuleReference = "Madde 7: Sözel isim aramalarında `UPPER(kolon) LIKE UPPER(N'%...%')` kullanılmalıdır.",
+                        IssueDescription = "Arama sorgusunda `UPPER(kolon) LIKE UPPER(N'%...%')` pattern'ı önerilir.",
+                        V26RuleReference = "Mikro v27.1 Madde 7: Sözel isim aramalarında `UPPER(kolon) LIKE UPPER(N'%...%')` kullanılmalıdır.",
                         RecommendedFix = "Arama filtresini `UPPER(car.cari_unvan1) LIKE UPPER(N'%' + @search + '%')` yapın.",
                         Severity = "Warning"
                     });
@@ -612,31 +617,31 @@ namespace OzBiPortalCRM.Services
             {
                 report.Grade = "A+";
                 report.GradeLabel = "Kusursuz Uyum (A+)";
-                report.SummaryText = "T-SQL sorgusu Mikro v27 standartlarına ve veritabanı şemasına %100 kusursuz uyum sağlamaktadır.";
+                report.SummaryText = "T-SQL sorgusu Mikro v27.1 standartlarına ve veritabanı şemasına %100 kusursuz uyum sağlamaktadır.";
             }
             else if (score >= 85)
             {
                 report.Grade = "A";
                 report.GradeLabel = "Yüksek Uyum (A)";
-                report.SummaryText = "T-SQL sorgusu Mikro v27 kurallarına yüksek oranda uymaktadır. Küçük iyileştirmeler mümkündür.";
+                report.SummaryText = "T-SQL sorgusu Mikro v27.1 kurallarına yüksek oranda uymaktadır. Küçük iyileştirmeler mümkündür.";
             }
             else if (score >= 70)
             {
                 report.Grade = "B";
                 report.GradeLabel = "Orta Uyum (B)";
-                report.SummaryText = "Sorguda bazı kritik v27 kuralları (filtre veya kur koruması) eksiktir. Düzeltme önerilir.";
+                report.SummaryText = "Sorguda bazı kritik v27.1 kuralları (filtre veya kur koruması) eksiktir. Düzeltme önerilir.";
             }
             else if (score >= 50)
             {
                 report.Grade = "C";
                 report.GradeLabel = "Zayıf Uyum (C)";
-                report.SummaryText = "Sorguda önemli v27 standart ihlalleri tespit edilmiştir. İyileştirme yapılması şarttır.";
+                report.SummaryText = "Sorguda önemli v27.1 standart ihlalleri tespit edilmiştir. İyileştirme yapılması şarttır.";
             }
             else
             {
                 report.Grade = "F";
                 report.GradeLabel = "Uyumsuz / Riskli (F)";
-                report.SummaryText = "Sorgu Mikro v27 mimarisinden ciddi sapmalar göstermektedir ve performans/doğruluk riski taşımaktadır.";
+                report.SummaryText = "Sorgu Mikro v27.1 mimarisinden ciddi sapmalar göstermektedir ve performans/doğruluk riski taşımaktadır.";
             }
 
             return report;

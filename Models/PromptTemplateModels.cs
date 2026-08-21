@@ -37,7 +37,7 @@ namespace OzBiPortalCRM.Models
         public string Complexity { get; set; } = "Orta";     // "Temel", "Orta", "İleri Düzey"
         public string BusinessImpact { get; set; } = string.Empty; // Bu soru işletmeye ne kazandırır?
         public string ExpectedDecision { get; set; } = string.Empty; // Hangi kararı aldırır?
-        public string ErpCompatibility { get; set; } = "Logo v8.0 & Mikro v27.2 Uyumlu";
+        public string ErpCompatibility { get; set; } = ErpVersionConstants.DefaultErpCompatibility;
         
         // Alternatif Sorma Şekilleri (Kullanıcı aynı konuyu nasıl farklı sorabilir?)
         public List<string> AlternativePhrasings { get; set; } = new();

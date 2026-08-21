@@ -216,6 +216,17 @@ namespace OzBiPortalCRM.Data
                     await cmd7.ExecuteNonQueryAsync();
                 }
                 catch { }
+
+                try
+                {
+                    using var updateCmd = Database.GetDbConnection().CreateCommand();
+                    updateCmd.CommandText = $@"
+                        UPDATE TenantComplianceSnapshots SET ErpTypeName = '{ErpVersionConstants.MikroSystemTypeName}' WHERE ErpType = 'Mikro' AND ErpTypeName != '{ErpVersionConstants.MikroSystemTypeName}';
+                        UPDATE TenantComplianceSnapshots SET ErpTypeName = '{ErpVersionConstants.LogoSystemTypeName}' WHERE ErpType = 'Logo' AND ErpTypeName != '{ErpVersionConstants.LogoSystemTypeName}';
+                    ";
+                    await updateCmd.ExecuteNonQueryAsync();
+                }
+                catch { }
             }
             catch { }
         }

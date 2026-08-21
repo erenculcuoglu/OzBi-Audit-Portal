@@ -194,7 +194,7 @@ else
                         var sqlIndex = i + 1;
                         var sqlItem = feedItem.SqlQueries[i];
                         var compliance = sqlItem.Compliance;
-                        var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Logo ERP";
+                        var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : (compliance.IsMikroQuery ? "Mikro ERP (v27.1)" : "Logo ERP (v8.0)");
 
                         <div class="sql-flow-card">
                             <div class="sql-flow-topbar">

@@ -82,6 +82,7 @@ namespace OzBiPortalCRM.Models
         public int TotalPenaltyPoints { get; set; }
         public string RecommendedFix { get; set; } = string.Empty;
         public string V26RuleReference { get; set; } = string.Empty;
+        public bool IsCoveredByGoldenPrompt { get; set; } = false;
     }
 
     public class TenantQueryComplianceSummary

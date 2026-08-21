@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
+using OzBiPortalCRM.Models;
 
 namespace OzBiPortalCRM.Services
 {
@@ -34,7 +36,7 @@ namespace OzBiPortalCRM.Services
 
             if (erpType == ErpSystemType.Logo)
             {
-                report.SystemTypeName = "Logo ERP (v8.0)";
+                report.SystemTypeName = ErpVersionConstants.LogoSystemTypeName;
                 var baseReport = _logoEvaluator.Evaluate(tsqlQuery, userPrompt, tenantName, forceEvaluation: true);
 
                 report.Score = baseReport.Score;
@@ -47,11 +49,11 @@ namespace OzBiPortalCRM.Services
                 report.ProposedTsqlFix = baseReport.ProposedTsqlFix;
 
                 // Perform Cross-Check Sync Analysis for Logo Tenant
-                PerformCrossCheckSync(report, erpConfig, "Logo ERP v8.0", "v8.0", "Logo ERP Ek Talimatı — v8.0", new[] { "v8.0", "v8", "v7.5", "v7.4", "v7.3", "v7", "v1" });
+                PerformCrossCheckSync(report, erpConfig, ErpVersionConstants.LogoSystemTypeName, ErpVersionConstants.LogoVersionNumber, ErpVersionConstants.LogoPromptSignature, new[] { "v8.0", "v8", "v7.5", "v7.4", "v7.3", "v7", "v1" });
             }
             else if (erpType == ErpSystemType.Mikro)
             {
-                report.SystemTypeName = "Mikro ERP (v1.0)";
+                report.SystemTypeName = ErpVersionConstants.MikroSystemTypeName;
                 var baseReport = _mikroEvaluator.EvaluateQuery(tsqlQuery, userPrompt, tenantName, forceEvaluation: true);
 
                 report.Score = baseReport.Score;
@@ -64,7 +66,7 @@ namespace OzBiPortalCRM.Services
                 report.ProposedTsqlFix = baseReport.ProposedTsqlFix;
 
                 // Perform Cross-Check Sync Analysis for Mikro Tenant
-                PerformCrossCheckSync(report, erpConfig, "Mikro ERP v1.0", "v1.0", "Mikro ERP Ek Talimatı — v1.0", new[] { "v27", "v28", "v1" });
+                PerformCrossCheckSync(report, erpConfig, ErpVersionConstants.MikroSystemTypeName, ErpVersionConstants.MikroVersionNumber, ErpVersionConstants.MikroPromptSignature, new[] { "v27.1", "v27.2", "v27", "v28", "v1" });
             }
             else
             {
@@ -128,7 +130,7 @@ namespace OzBiPortalCRM.Services
                 return new ErpComplianceReport
                 {
                     SystemType = ErpSystemType.Logo,
-                    SystemTypeName = "Logo ERP (v8.0)",
+                    SystemTypeName = ErpVersionConstants.LogoSystemTypeName,
                     Score = logoRep.Score,
                     Grade = logoRep.Grade,
                     GradeLabel = logoRep.GradeLabel,
@@ -138,8 +140,8 @@ namespace OzBiPortalCRM.Services
                     Violations = logoRep.Violations,
                     ProposedTsqlFix = logoRep.ProposedTsqlFix,
                     IsPromptSynced = true,
-                    PromptVersionLabel = "Logo ERP Standart",
-                    PromptSyncDetails = "Sorgu Logo ERP v8.0 standartları çerçevesinde denetlenmiştir."
+                    PromptVersionLabel = $"{ErpVersionConstants.LogoSystemTypeName} Standart",
+                    PromptSyncDetails = $"Sorgu {ErpVersionConstants.LogoSystemTypeName} standartları çerçevesinde denetlenmiştir."
                 };
             }
             else if (erpType == ErpSystemType.Mikro)
@@ -148,7 +150,7 @@ namespace OzBiPortalCRM.Services
                 return new ErpComplianceReport
                 {
                     SystemType = ErpSystemType.Mikro,
-                    SystemTypeName = "Mikro ERP (v1.0)",
+                    SystemTypeName = ErpVersionConstants.MikroSystemTypeName,
                     Score = mikroRep.Score,
                     Grade = mikroRep.Grade,
                     GradeLabel = mikroRep.GradeLabel,
@@ -158,8 +160,8 @@ namespace OzBiPortalCRM.Services
                     Violations = mikroRep.Violations,
                     ProposedTsqlFix = mikroRep.ProposedTsqlFix,
                     IsPromptSynced = true,
-                    PromptVersionLabel = "Mikro v1.0 Standart",
-                    PromptSyncDetails = "Sorgu Mikro ERP v1.0 standartları çerçevesinde denetlenmiştir."
+                    PromptVersionLabel = $"{ErpVersionConstants.MikroSystemTypeName} Standart",
+                    PromptSyncDetails = $"Sorgu {ErpVersionConstants.MikroSystemTypeName} standartları çerçevesinde denetlenmiştir."
                 };
             }
             else
@@ -192,9 +194,9 @@ namespace OzBiPortalCRM.Services
                 Grade = "A",
                 GradeLabel = "Yüksek Uyum (A)",
                 SystemType = ErpSystemType.Mikro,
-                SystemTypeName = "Mikro ERP (v1.0)",
+                SystemTypeName = ErpVersionConstants.MikroSystemTypeName,
                 IsMikroQuery = true,
-                SummaryText = "T-SQL sorgusu Mikro ERP standartlarına büyük oranda uygundur. 1 adet kural ihlali tespit edildi.",
+                SummaryText = $"T-SQL sorgusu {ErpVersionConstants.MikroSystemTypeName} standartlarına büyük oranda uygundur. 1 adet kural ihlali tespit edildi.",
                 PassedChecks = new()
                 {
                     new MikroRuleCheck { RuleId = "M-01", Title = "Ana Hesap Türü Ayrımı", Description = "cha_cari_cins = 0 filtresi doğru uygulanmış." },
@@ -206,8 +208,8 @@ namespace OzBiPortalCRM.Services
                     new MikroRuleViolation { RuleId = "M-07", Title = "Hassas Olmayan Metin Araması", PenaltyPoints = 15, Severity = "Warning", RecommendedFix = "UPPER(kolon) LIKE UPPER(N'%...%') pattern'ını kullanın." }
                 },
                 IsPromptSynced = true,
-                PromptVersionLabel = "Mikro ERP v1.0 Güncel",
-                PromptSyncDetails = "Tenant asistan promptu ve veritabanı şeması OzBi Mikro ERP v1.0 güncel standartlarıyla %100 senkronize."
+                PromptVersionLabel = $"{ErpVersionConstants.MikroSystemTypeName} Güncel",
+                PromptSyncDetails = $"Tenant asistan promptu ve veritabanı şeması OzBi {ErpVersionConstants.MikroSystemTypeName} güncel standartlarıyla %100 senkronize."
             };
         }
     }

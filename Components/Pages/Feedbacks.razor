@@ -261,7 +261,7 @@ else
                         @foreach (var sqlItem in sqlItems)
                         {
                             var compliance = MikroAuditEngine.EvaluateQuery(sqlItem.Sql, promptText, item.Chat?.Tenant?.Name);
-                            var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro v27";
+                            var erpLabel = compliance is ErpComplianceReport erpRep ? erpRep.SystemTypeName : "Mikro ERP (v27.1)";
 
                             <div class="sql-flow-card">
                                 <div class="sql-flow-topbar">

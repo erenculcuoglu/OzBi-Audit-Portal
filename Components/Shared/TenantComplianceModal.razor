@@ -5,147 +5,312 @@
 @if (IsOpen && Scorecard != null)
 {
     <div class="modal-backdrop-custom" @onclick="CloseModal">
-        <div class="modal-dialog-custom glass-card border-secondary border-opacity-50 text-main" style="max-width: 740px; width: 92%; max-height: 90vh; overflow-y: auto;" @onclick:stopPropagation>
+        <div class="modal-dialog-custom compliance-modal-card" style="max-width: 780px; width: 94%; max-height: 92vh; overflow-y: auto;" @onclick:stopPropagation>
             
             <!-- Modal Header -->
             <div class="d-flex align-items-center justify-content-between pb-3 border-bottom border-secondary border-opacity-25 mb-3">
-                <div>
-                    <div class="d-flex align-items-center gap-2 mb-0.5">
-                        <h4 class="fw-bold mb-0 text-main">@Scorecard.TenantName</h4>
-                        <span class="badge-status badge-info" style="font-size: 0.72rem;">@Scorecard.ErpTypeName</span>
-                    </div>
-                    <div class="text-muted small">Sistem ve ERP Sağlık Özeti</div>
-                </div>
-                <button type="button" class="btn-close btn-close-white" @onclick="CloseModal"></button>
-            </div>
-
-            <!-- Executive Summary Card -->
-            <div class="p-3.5 rounded-3 mb-3 d-flex align-items-center justify-content-between flex-wrap gap-3"
-                 style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.85)); border: 1px solid rgba(255, 255, 255, 0.1);">
-                
-                <!-- Left: Score Badge -->
                 <div class="d-flex align-items-center gap-3">
-                    <div class="text-center p-2.5 rounded-circle border"
-                         style="width: 76px; height: 76px; display: flex; align-items: center; justify-content: center; flex-direction: column; background: rgba(0,0,0,0.5); border-color: @GetScoreColor(Scorecard.OverallScore) !important; box-shadow: 0 0 15px @GetScoreGlowColor(Scorecard.OverallScore);">
-                        <span class="fs-2 fw-bold" style="color: @GetScoreColor(Scorecard.OverallScore); line-height: 1;">@Scorecard.OverallScore</span>
-                        <span class="text-muted" style="font-size: 0.65rem;">/ 100</span>
+                    <div class="tenant-avatar-badge">
+                        <i class="bi bi-building"></i>
                     </div>
                     <div>
-                        <div class="d-flex align-items-center gap-2 mb-1">
-                            <span class="badge px-2.5 py-1 fw-bold" style="background: @GetScoreColor(Scorecard.OverallScore); color: #000; font-size: 0.85rem;">
-                                @Scorecard.GradeLabel
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                            <h4 class="fw-bold mb-0 text-white" style="letter-spacing: -0.02em;">@Scorecard.TenantName</h4>
+                            <span class="badge erp-version-badge">
+                                <i class="bi bi-cpu me-1"></i>@Scorecard.ErpTypeName
                             </span>
-                            <span class="text-muted small">(Derece: @Scorecard.Grade)</span>
+                            @if (Scorecard.IsPromptSynced)
+                            {
+                                <span class="badge sync-badge-success" title="@Scorecard.PromptSyncDetails">
+                                    <i class="bi bi-shield-check me-1"></i>Altın Standart Senkronize
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge sync-badge-warning" title="@Scorecard.PromptSyncDetails">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>@Scorecard.PromptVersionLabel
+                                </span>
+                            }
                         </div>
-                        <div class="text-light small" style="max-width: 320px; line-height: 1.35;">
-                            @GetHumanSummary(Scorecard)
+                        <div class="text-muted small d-flex align-items-center gap-2">
+                            <span>Sistem & ERP T-SQL Uyum Analizi Raporu</span>
+                            <span>&bull;</span>
+                            <span>Toplam <strong>@Scorecard.TotalQueriesEvaluated</strong> Canlı Sorgu</span>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn-close-custom" @onclick="CloseModal" title="Kapat">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <!-- Executive Summary Hero Card -->
+            <div class="compliance-hero-card mb-3.5">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                    
+                    <!-- Left: Radial Score & Grade -->
+                    <div class="d-flex align-items-center gap-3.5">
+                        <div class="score-circle-wrapper" style="--score-color: @GetScoreColor(Scorecard.OverallScore); --score-glow: @GetScoreGlowColor(Scorecard.OverallScore);">
+                            <div class="score-circle-inner">
+                                <span class="score-value">@Scorecard.OverallScore</span>
+                                <span class="score-max">/100</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="d-flex align-items-center gap-2 mb-1.5 flex-wrap">
+                                <span class="badge score-grade-badge" style="background: @GetScoreColor(Scorecard.OverallScore); color: #090d16;">
+                                    Not: @Scorecard.Grade (@Scorecard.GradeLabel)
+                                </span>
+                                <span class="compliance-rate-pill">
+                                    %@Scorecard.CompliantPercentage Başarı Oranı
+                                </span>
+                            </div>
+                            <div class="text-light-50 small pe-2" style="max-width: 330px; line-height: 1.45;">
+                                @GetHumanSummary(Scorecard)
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: KPI Counter Tiles -->
+                    <div class="d-flex gap-2 flex-wrap">
+                        <!-- Kusursuz -->
+                        <div class="kpi-metric-tile kpi-success">
+                            <div class="kpi-header">
+                                <i class="bi bi-check2-circle"></i>
+                                <span>Kusursuz</span>
+                            </div>
+                            <div class="kpi-num text-success">@Scorecard.CompliantCount</div>
+                            <div class="kpi-sub">%@Scorecard.CompliantPercentage</div>
+                        </div>
+
+                        <!-- İyileştirilebilir -->
+                        <div class="kpi-metric-tile kpi-warning">
+                            <div class="kpi-header">
+                                <i class="bi bi-lightning-charge"></i>
+                                <span>Optimizasyon</span>
+                            </div>
+                            <div class="kpi-num text-warning">@Scorecard.WarningCount</div>
+                            <div class="kpi-sub">%@Scorecard.WarningPercentage</div>
+                        </div>
+
+                        <!-- Kritik -->
+                        <div class="kpi-metric-tile @(Scorecard.CriticalCount > 0 ? "kpi-danger" : "kpi-neutral")">
+                            <div class="kpi-header">
+                                <i class="bi @(Scorecard.CriticalCount > 0 ? "bi-exclamation-octagon" : "bi-shield-check")"></i>
+                                <span>Kritik Hata</span>
+                            </div>
+                            <div class="kpi-num @(Scorecard.CriticalCount > 0 ? "text-danger" : "text-muted")">@Scorecard.CriticalCount</div>
+                            <div class="kpi-sub">@(Scorecard.CriticalCount > 0 ? $"%{Scorecard.CriticalPercentage}" : "0 Risk")</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Right: Clean Metric Badges -->
-                <div class="d-flex gap-2 flex-wrap">
-                    <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-success border-opacity-30 px-3">
-                        <div class="fs-5 fw-bold text-success">@Scorecard.CompliantCount</div>
-                        <div class="text-muted" style="font-size: 0.72rem;">Kusursuz Sorgu</div>
+                <!-- Multi-segment Distribution Bar -->
+                <div class="mt-3 pt-3 border-top border-white border-opacity-10">
+                    <div class="d-flex justify-content-between align-items-center text-muted small mb-1.5" style="font-size: 0.76rem;">
+                        <span class="d-flex align-items-center gap-1.5 text-light">
+                            <i class="bi bi-bar-chart-fill text-info"></i>
+                            <strong>Sorgu Dağılım Segmenti</strong>
+                        </span>
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="legend-item"><span class="legend-dot bg-success"></span> Kusursuz: @Scorecard.CompliantCount</span>
+                            <span class="legend-item"><span class="legend-dot bg-warning"></span> Optimizasyon: @Scorecard.WarningCount</span>
+                            <span class="legend-item"><span class="legend-dot bg-danger"></span> Kritik: @Scorecard.CriticalCount</span>
+                        </div>
                     </div>
-                    <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-warning border-opacity-30 px-3">
-                        <div class="fs-5 fw-bold text-warning">@Scorecard.WarningCount</div>
-                        <div class="text-muted" style="font-size: 0.72rem;">İyileştirilebilir</div>
-                    </div>
-                    <div class="text-center p-2 rounded bg-black bg-opacity-30 border border-danger border-opacity-30 px-3">
-                        <div class="fs-5 fw-bold @(Scorecard.CriticalCount > 0 ? "text-danger" : "text-muted")">@Scorecard.CriticalCount</div>
-                        <div class="text-muted" style="font-size: 0.72rem;">Kritik Hata</div>
+                    <div class="distribution-track">
+                        @if (Scorecard.CompliantPercentage > 0)
+                        {
+                            <div class="distribution-segment bg-success" style="width: @Scorecard.CompliantPercentage%;" title="Kusursuz: %@Scorecard.CompliantPercentage"></div>
+                        }
+                        @if (Scorecard.WarningPercentage > 0)
+                        {
+                            <div class="distribution-segment bg-warning" style="width: @Scorecard.WarningPercentage%;" title="İyileştirilebilir: %@Scorecard.WarningPercentage"></div>
+                        }
+                        @if (Scorecard.CriticalPercentage > 0)
+                        {
+                            <div class="distribution-segment bg-danger" style="width: @Scorecard.CriticalPercentage%;" title="Kritik: %@Scorecard.CriticalPercentage"></div>
+                        }
                     </div>
                 </div>
             </div>
 
-            <!-- Single Distribution Bar -->
-            <div class="mb-3 px-1">
-                <div class="d-flex justify-content-between text-muted small mb-1" style="font-size: 0.75rem;">
-                    <span><i class="bi bi-bar-chart me-1"></i>Sorgu Başarı Dağılımı (%@Scorecard.CompliantPercentage Başarılı)</span>
-                    <span>Toplam <strong>@Scorecard.TotalQueriesEvaluated</strong> Sorgu</span>
-                </div>
-                <div class="progress" style="height: 8px; background-color: rgba(255, 255, 255, 0.08); border-radius: 4px; overflow: hidden;">
-                    @if (Scorecard.CompliantPercentage > 0)
-                    {
-                        <div class="progress-bar bg-success" style="width: @Scorecard.CompliantPercentage%;"></div>
-                    }
-                    @if (Scorecard.WarningPercentage > 0)
-                    {
-                        <div class="progress-bar bg-warning" style="width: @Scorecard.WarningPercentage%;"></div>
-                    }
-                    @if (Scorecard.CriticalPercentage > 0)
-                    {
-                        <div class="progress-bar bg-danger" style="width: @Scorecard.CriticalPercentage%;"></div>
-                    }
-                </div>
-            </div>
-
-            <!-- Actionable Recommendations (Human Language) -->
+            <!-- Actionable Recommendations Center -->
             <div class="mb-3">
-                <div class="d-flex align-items-center justify-content-between mb-2">
-                    <h6 class="fw-bold text-light mb-0" style="font-size: 0.9rem;">
-                        <i class="bi bi-lightbulb-fill text-warning me-1.5"></i>
-                        @(Scorecard.TopViolations.Count > 0 ? "İyileştirme Tavsiyeleri ve İpuçları" : "Sistem Durumu")
-                    </h6>
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2.5">
+                    <div class="d-flex align-items-center gap-2">
+                        <h6 class="fw-bold text-white mb-0 d-flex align-items-center gap-1.5" style="font-size: 0.92rem;">
+                            <i class="bi bi-magic text-warning"></i>
+                            @(Scorecard.TopViolations.Count > 0 ? "Tespit Edilen İyileştirme Fırsatları" : "Sistem Sağlık Durumu")
+                        </h6>
+                        @if (Scorecard.TopViolations.Count > 0)
+                        {
+                            <span class="badge bg-secondary bg-opacity-30 text-light border border-secondary border-opacity-30">
+                                @filteredViolations.Count Tavsiye
+                            </span>
+                        }
+                    </div>
+
+                    <!-- Filter Tabs -->
                     @if (Scorecard.TopViolations.Count > 0)
                     {
-                        <span class="text-muted small" style="font-size: 0.75rem;">
-                            @Scorecard.TopViolations.Count tavsiye bulundu
-                        </span>
+                        <div class="d-flex gap-1 filter-pill-group">
+                            <button class="filter-pill @(activeFilter == "ALL" ? "active" : "")" @onclick='() => activeFilter = "ALL"'>
+                                Tümü (@Scorecard.TopViolations.Count)
+                            </button>
+                            <button class="filter-pill @(activeFilter == "WARNING" ? "active" : "")" @onclick='() => activeFilter = "WARNING"'>
+                                Optimizasyon (@Scorecard.TopViolations.Count(v => IsWarningSeverity(v.Severity)))
+                            </button>
+                            <button class="filter-pill @(activeFilter == "CRITICAL" ? "active" : "")" @onclick='() => activeFilter = "CRITICAL"'>
+                                Kritik (@Scorecard.TopViolations.Count(v => !IsWarningSeverity(v.Severity)))
+                            </button>
+                        </div>
                     }
                 </div>
+
+                @if (Scorecard.IsPromptSynced && Scorecard.TopViolations.Count > 0)
+                {
+                    <div class="p-2.5 px-3 rounded-3 mb-2.5 d-flex align-items-center gap-2.5" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); font-size: 0.77rem;">
+                        <i class="bi bi-patch-check-fill text-success" style="font-size: 1.25rem;"></i>
+                        <div class="text-light-50">
+                            <strong class="text-white">Aktif Standart Koruması:</strong> Bu tenant'ın asistanı güncel <strong class="text-success">@Scorecard.ErpTypeName Altın Prompt & Şeması</strong> ile tam senkronizedir. Geçmiş sorgularda tespit edilen bu kurallar, aktif prompt talimatları sayesinde yeni sorgularda otomatik olarak uygulanmaktadır.
+                        </div>
+                    </div>
+                }
 
                 @if (Scorecard.TopViolations.Count == 0)
                 {
-                    <div class="p-3 text-center rounded bg-success bg-opacity-10 border border-success border-opacity-25 text-success">
-                        <i class="bi bi-check-circle-fill fs-4 mb-1 d-block"></i>
-                        <div class="fw-semibold small">Harika! Bu firmada hiçbir kural ihlali veya aksama bulunmuyor.</div>
-                        <div class="text-muted small mt-0.5" style="font-size: 0.75rem;">Tüm yapay zeka sorguları standartlara tam uyumlu çalışmaktadır.</div>
+                    <div class="p-4 text-center rounded-3 bg-success bg-opacity-10 border border-success border-opacity-25 text-success">
+                        <div class="empty-success-icon mb-2">
+                            <i class="bi bi-shield-fill-check"></i>
+                        </div>
+                        <h6 class="fw-bold text-white mb-1">Mükemmel Uyum! Sıfır Kural İhlali</h6>
+                        <div class="text-muted small">
+                            İncelenen son @Scorecard.TotalQueriesEvaluated sorgunun tamamı @Scorecard.ErpTypeName standartlarına tam uyumlu ve optimize çalışmaktadır.
+                        </div>
+                    </div>
+                }
+                else if (filteredViolations.Count == 0)
+                {
+                    <div class="p-3 text-center rounded-3 bg-dark border border-secondary border-opacity-25 text-muted small">
+                        Seçilen filtre kriterinde herhangi bir öneri bulunmuyor.
                     </div>
                 }
                 else
                 {
-                    <div class="d-flex flex-column gap-2">
-                        @foreach (var (v, idx) in Scorecard.TopViolations.Select((item, index) => (item, index + 1)))
+                    <div class="d-flex flex-column gap-2.5">
+                        @foreach (var v in filteredViolations)
                         {
                             var isExpanded = expandedViolations.Contains(v.RuleId);
-                            var isWarning = v.Severity.Equals("Warning", StringComparison.OrdinalIgnoreCase);
-                            var cardBg = isWarning ? "bg-warning bg-opacity-10 border-warning border-opacity-25" : "bg-danger bg-opacity-10 border-danger border-opacity-25";
-                            var iconColor = isWarning ? "text-warning" : "text-danger";
+                            var isResolved = v.IsCoveredByGoldenPrompt;
+                            var isWarning = IsWarningSeverity(v.Severity);
+                            var isCopied = copiedRuleId == v.RuleId;
+                            var cardClass = isResolved ? "rec-resolved" : (isWarning ? "rec-warning" : "rec-critical");
 
-                            <div class="p-3 rounded border @cardBg" style="transition: all 0.2s ease;">
-                                <div class="d-flex align-items-start justify-content-between gap-2">
-                                    <div class="d-flex align-items-start gap-2.5">
-                                        <i class="bi @(isWarning ? "bi-exclamation-circle-fill" : "bi-x-circle-fill") @iconColor mt-0.5" style="font-size: 1.1rem;"></i>
-                                        <div>
-                                            <div class="fw-bold text-light mb-0.5" style="font-size: 0.88rem;">
-                                                @GetSimplifiedTitle(v.Title)
+                            <div class="recommendation-card @cardClass @(isExpanded ? "expanded" : "")">
+                                <div class="rec-header" @onclick="() => ToggleViolationDetail(v.RuleId)">
+                                    <div class="d-flex align-items-start gap-2.5 flex-grow-1">
+                                        <div class="rec-icon-wrapper @(isResolved ? "text-success" : (isWarning ? "text-warning" : "text-danger"))">
+                                            <i class="bi @(isResolved ? "bi-shield-fill-check" : (isWarning ? "bi-exclamation-triangle-fill" : "bi-x-octagon-fill"))"></i>
+                                        </div>
+                                        
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                                                <span class="rec-title">@GetSimplifiedTitle(v.Title)</span>
+                                                @if (isResolved)
+                                                {
+                                                    <span class="rec-tag tag-resolved">
+                                                        <i class="bi bi-shield-check me-1"></i>Altın Standartta Güvencede
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="rec-tag @(isWarning ? "tag-warning" : "tag-danger")">
+                                                        @(isWarning ? "Optimizasyon" : "Kritik Kural")
+                                                    </span>
+                                                }
+                                                @if (!string.IsNullOrEmpty(v.RuleId))
+                                                {
+                                                    <span class="rec-code">@v.RuleId</span>
+                                                }
                                             </div>
-                                            <div class="text-muted small" style="font-size: 0.78rem;">
-                                                Bu durum son sorgularda <strong class="text-light">@v.Count kez</strong> (%@v.Percentage) karşılaşıldı.
+
+                                            <div class="rec-stats-row">
+                                                @if (isResolved)
+                                                {
+                                                    <span class="rec-stat-pill">
+                                                        <i class="bi bi-clock-history"></i>
+                                                        Geçmiş sorgularda <strong>@v.Count kez</strong> rastlandı &bull; <span class="text-success fw-semibold">Yeni sorgularda koruma altında</span>
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="rec-stat-pill">
+                                                        <i class="bi bi-repeat"></i>
+                                                        Son sorgularda <strong>@v.Count kez</strong> (%@v.Percentage)
+                                                    </span>
+                                                    @if (v.TotalPenaltyPoints > 0)
+                                                    {
+                                                        <span class="rec-penalty-pill">
+                                                            -@v.TotalPenaltyPoints Puan Kaybı
+                                                        </span>
+                                                    }
+                                                }
+                                                @if (!string.IsNullOrEmpty(v.V26RuleReference))
+                                                {
+                                                    <span class="rec-ref-pill" title="Standart Kural Referansı">
+                                                        <i class="bi bi-journal-code"></i> @v.V26RuleReference
+                                                    </span>
+                                                }
                                             </div>
                                         </div>
                                     </div>
 
-                                    @if (!string.IsNullOrEmpty(v.RecommendedFix))
-                                    {
-                                        <button class="btn btn-sm btn-link text-info p-0 text-decoration-none small" style="font-size: 0.75rem; white-space: nowrap;" @onclick="() => ToggleViolationDetail(v.RuleId)">
-                                            <i class="bi @(isExpanded ? "bi-chevron-up" : "bi-chevron-down") me-0.5"></i>
-                                            @(isExpanded ? "Gizle" : "Detay")
-                                        </button>
-                                    }
+                                    <!-- Expand / Collapse Button -->
+                                    <div class="rec-action-btn">
+                                        <span class="rec-expand-text">@(isExpanded ? "Gizle" : "Çözüm & Detay")</span>
+                                        <i class="bi @(isExpanded ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                                    </div>
                                 </div>
 
-                                @if (isExpanded && !string.IsNullOrEmpty(v.RecommendedFix))
+                                <!-- Expanded Solution & Explanation Drawer -->
+                                @if (isExpanded)
                                 {
-                                    <div class="mt-2.5 pt-2 border-top border-secondary border-opacity-25">
-                                        <div class="text-info small fw-semibold mb-1" style="font-size: 0.75rem;">
-                                            <i class="bi bi-wrench me-1"></i> Tavsiye Edilen Çözüm:
-                                        </div>
-                                        <div class="p-2 rounded bg-black bg-opacity-50 text-light font-monospace small" style="font-size: 0.75rem; word-break: break-word;">
-                                            @v.RecommendedFix
+                                    <div class="rec-body animate-fadeIn">
+                                        @if (!string.IsNullOrEmpty(v.RecommendedFix))
+                                        {
+                                            <div class="mb-2">
+                                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                                    <span class="solution-heading">
+                                                        <i class="bi bi-check-circle-fill text-success me-1"></i> Tavsiye Edilen Altın Standart Çözüm:
+                                                    </span>
+                                                    <button class="btn-copy-fix @(isCopied ? "copied" : "")" @onclick="() => CopyToClipboard(v.RuleId, v.RecommendedFix)" @onclick:stopPropagation>
+                                                        <i class="bi @(isCopied ? "bi-check-lg" : "bi-clipboard") me-1"></i>
+                                                        @(isCopied ? "Kopyalandı!" : "Kopyala")
+                                                    </button>
+                                                </div>
+                                                <div class="code-snippet-box">
+                                                    <code>@v.RecommendedFix</code>
+                                                </div>
+                                            </div>
+                                        }
+
+                                        <div class="rec-insight-note">
+                                            @if (isResolved)
+                                            {
+                                                <i class="bi bi-shield-check text-success me-1"></i>
+                                                <span class="text-light-50">
+                                                    <strong class="text-success">Aktif Durum:</strong> Bu kural @Scorecard.TenantName asistanının <strong>@Scorecard.ErpTypeName Altın Prompt</strong> yönergesinde yer almaktadır ve yeni üretilen tüm sorgularda otomatik olarak uygulanmaktadır.
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-info-circle text-info me-1"></i>
+                                                <span>
+                                                    Bu optimizasyon uygulandığında @Scorecard.TenantName asistanı veritabanı kilitlenmelerini önler ve sorgu performansını artırır.
+                                                </span>
+                                            }
                                         </div>
                                     </div>
                                 }
@@ -156,26 +321,27 @@
             </div>
 
             <!-- Modal Footer -->
-            <div class="d-flex align-items-center justify-content-between pt-2.5 border-top border-secondary border-opacity-25 flex-wrap gap-2">
-                <div class="text-muted small" style="font-size: 0.72rem;">
-                    <i class="bi bi-clock-history me-1"></i> Son Güncelleme: @Scorecard.LastEvaluatedAt.ToString("dd.MM.yyyy HH:mm")
+            <div class="d-flex align-items-center justify-content-between pt-3 border-top border-secondary border-opacity-25 flex-wrap gap-2">
+                <div class="text-muted small d-flex align-items-center gap-1.5" style="font-size: 0.75rem;">
+                    <i class="bi bi-clock-history text-info"></i>
+                    <span>Son Kontrol: <strong>@Scorecard.LastEvaluatedAt.ToString("dd.MM.yyyy HH:mm")</strong></span>
                 </div>
 
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-outline-info btn-sm" @onclick="OnRefreshRequested" disabled="@isRefreshing">
+                    <button type="button" class="btn btn-outline-info btn-sm px-3 d-inline-flex align-items-center gap-1.5" @onclick="OnRefreshRequested" disabled="@isRefreshing">
                         @if (isRefreshing)
                         {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                            <span>Hesaplanıyor...</span>
+                            <span class="spinner-border spinner-border-sm" role="status"></span>
+                            <span>Yeniden Hesaplanıyor...</span>
                         }
                         else
                         {
-                            <i class="bi bi-arrow-clockwise me-1"></i>
-                            <span>Yeniden Analiz Et</span>
+                            <i class="bi bi-arrow-clockwise"></i>
+                            <span>Canlı Skoru Yenile</span>
                         }
                     </button>
 
-                    <button type="button" class="btn btn-secondary btn-sm px-3" @onclick="CloseModal">
+                    <button type="button" class="btn btn-secondary btn-sm px-3.5" @onclick="CloseModal">
                         Kapat
                     </button>
                 </div>
@@ -183,6 +349,451 @@
         </div>
     </div>
 }
+
+<style>
+    .compliance-modal-card {
+        background: radial-gradient(120% 120% at 50% 0%, #151d2f 0%, #0c101a 100%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 40px rgba(56, 189, 248, 0.08) !important;
+        border-radius: 16px;
+        padding: 1.5rem;
+    }
+
+    .tenant-avatar-badge {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.2));
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        color: #38bdf8;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+    }
+
+    .erp-version-badge {
+        background: rgba(56, 189, 248, 0.12);
+        color: #38bdf8;
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        font-weight: 600;
+        font-size: 0.76rem;
+        padding: 0.3rem 0.6rem;
+        border-radius: 6px;
+    }
+
+    .sync-badge-success {
+        background: rgba(16, 185, 129, 0.12);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        font-weight: 600;
+        font-size: 0.74rem;
+        padding: 0.3rem 0.55rem;
+        border-radius: 6px;
+    }
+
+    .sync-badge-warning {
+        background: rgba(245, 158, 11, 0.12);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        font-weight: 600;
+        font-size: 0.74rem;
+        padding: 0.3rem 0.55rem;
+        border-radius: 6px;
+    }
+
+    .btn-close-custom {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: #94a3b8;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-close-custom:hover {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+        border-color: rgba(239, 68, 68, 0.4);
+    }
+
+    /* Hero Card */
+    .compliance-hero-card {
+        background: linear-gradient(135deg, rgba(20, 29, 47, 0.9), rgba(15, 23, 42, 0.95));
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 14px;
+        padding: 1.25rem;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .score-circle-wrapper {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle, rgba(15, 23, 42, 0.95) 60%, transparent 100%);
+        border: 3px solid var(--score-color);
+        box-shadow: 0 0 20px var(--score-glow), inset 0 0 12px var(--score-glow);
+        flex-shrink: 0;
+    }
+
+    .score-circle-inner {
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .score-value {
+        font-size: 1.85rem;
+        font-weight: 800;
+        color: #fff;
+        line-height: 1;
+        letter-spacing: -0.03em;
+    }
+
+    .score-max {
+        font-size: 0.65rem;
+        color: #64748b;
+        font-weight: 600;
+        margin-top: 1px;
+    }
+
+    .score-grade-badge {
+        font-size: 0.84rem;
+        font-weight: 700;
+        padding: 0.3rem 0.65rem;
+        border-radius: 6px;
+    }
+
+    .compliance-rate-pill {
+        font-size: 0.76rem;
+        font-weight: 600;
+        color: #94a3b8;
+        background: rgba(255, 255, 255, 0.06);
+        padding: 0.25rem 0.55rem;
+        border-radius: 5px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* KPI Tiles */
+    .kpi-metric-tile {
+        min-width: 96px;
+        padding: 0.65rem 0.85rem;
+        border-radius: 10px;
+        background: rgba(10, 14, 23, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        text-align: center;
+        transition: transform 0.2s;
+    }
+    .kpi-metric-tile:hover {
+        transform: translateY(-2px);
+    }
+    .kpi-metric-tile.kpi-success {
+        border-color: rgba(16, 185, 129, 0.35);
+        background: linear-gradient(180deg, rgba(16, 185, 129, 0.12) 0%, rgba(10, 14, 23, 0.8) 100%);
+    }
+    .kpi-metric-tile.kpi-warning {
+        border-color: rgba(245, 158, 11, 0.35);
+        background: linear-gradient(180deg, rgba(245, 158, 11, 0.12) 0%, rgba(10, 14, 23, 0.8) 100%);
+    }
+    .kpi-metric-tile.kpi-danger {
+        border-color: rgba(239, 68, 68, 0.35);
+        background: linear-gradient(180deg, rgba(239, 68, 68, 0.12) 0%, rgba(10, 14, 23, 0.8) 100%);
+    }
+    .kpi-metric-tile.kpi-neutral {
+        border-color: rgba(148, 163, 184, 0.15);
+    }
+
+    .kpi-header {
+        font-size: 0.7rem;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.3rem;
+        font-weight: 500;
+        margin-bottom: 2px;
+    }
+    .kpi-num {
+        font-size: 1.35rem;
+        font-weight: 800;
+        line-height: 1.1;
+    }
+    .kpi-sub {
+        font-size: 0.68rem;
+        color: #64748b;
+        font-weight: 600;
+    }
+
+    /* Distribution Bar */
+    .distribution-track {
+        height: 7px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 4px;
+        overflow: hidden;
+        display: flex;
+    }
+    .distribution-segment {
+        height: 100%;
+        transition: width 0.4s ease;
+    }
+    .legend-item {
+        font-size: 0.72rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+    .legend-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    /* Filter Pills */
+    .filter-pill-group {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 2px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .filter-pill {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 0.25rem 0.6rem;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .filter-pill:hover {
+        color: #fff;
+    }
+    .filter-pill.active {
+        background: rgba(56, 189, 248, 0.2);
+        color: #38bdf8;
+        font-weight: 700;
+    }
+
+    /* Recommendation Cards */
+    .recommendation-card {
+        border-radius: 12px;
+        border: 1px solid transparent;
+        background: rgba(18, 24, 38, 0.7);
+        transition: all 0.2s ease;
+        overflow: hidden;
+    }
+    .recommendation-card.rec-resolved {
+        border-color: rgba(16, 185, 129, 0.35);
+        background: rgba(16, 185, 129, 0.04);
+    }
+    .recommendation-card.rec-resolved:hover {
+        border-color: rgba(16, 185, 129, 0.6);
+        box-shadow: 0 4px 16px rgba(16, 185, 129, 0.12);
+    }
+    .recommendation-card.rec-warning {
+        border-color: rgba(245, 158, 11, 0.22);
+    }
+    .recommendation-card.rec-warning:hover {
+        border-color: rgba(245, 158, 11, 0.45);
+        box-shadow: 0 4px 16px rgba(245, 158, 11, 0.08);
+    }
+    .recommendation-card.rec-critical {
+        border-color: rgba(239, 68, 68, 0.25);
+    }
+    .recommendation-card.rec-critical:hover {
+        border-color: rgba(239, 68, 68, 0.5);
+        box-shadow: 0 4px 16px rgba(239, 68, 68, 0.1);
+    }
+    .recommendation-card.expanded {
+        background: rgba(20, 27, 44, 0.95);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+    }
+
+    .rec-header {
+        padding: 0.85rem 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        cursor: pointer;
+        user-select: none;
+    }
+    .rec-icon-wrapper {
+        font-size: 1.15rem;
+        margin-top: 1px;
+    }
+    .rec-title {
+        font-weight: 700;
+        color: #f1f5f9;
+        font-size: 0.88rem;
+    }
+    .rec-tag {
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 0.15rem 0.45rem;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .rec-tag.tag-resolved {
+        background: rgba(16, 185, 129, 0.18);
+        color: #34d399;
+        border: 1px solid rgba(52, 211, 153, 0.4);
+    }
+    .rec-tag.tag-warning {
+        background: rgba(245, 158, 11, 0.15);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .rec-tag.tag-danger {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .rec-prompt-badge {
+        background: rgba(16, 185, 129, 0.18);
+        color: #34d399 !important;
+        border: 1px solid rgba(52, 211, 153, 0.45);
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 0.18rem 0.5rem;
+        border-radius: 5px;
+        display: inline-flex;
+        align-items: center;
+        box-shadow: 0 0 10px rgba(16, 185, 129, 0.15);
+    }
+    .rec-code {
+        font-size: 0.68rem;
+        font-family: monospace;
+        color: #64748b;
+        background: rgba(0, 0, 0, 0.4);
+        padding: 0.1rem 0.35rem;
+        border-radius: 4px;
+    }
+
+    .rec-stats-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 0.2rem;
+    }
+    .rec-stat-pill {
+        font-size: 0.74rem;
+        color: #94a3b8;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    .rec-penalty-pill {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: #f87171;
+        background: rgba(239, 68, 68, 0.12);
+        padding: 0.1rem 0.4rem;
+        border-radius: 4px;
+    }
+    .rec-ref-pill {
+        font-size: 0.68rem;
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.1);
+        padding: 0.1rem 0.4rem;
+        border-radius: 4px;
+        border: 1px solid rgba(56, 189, 248, 0.2);
+    }
+
+    .rec-action-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.74rem;
+        font-weight: 600;
+        color: #38bdf8;
+        flex-shrink: 0;
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+        background: rgba(56, 189, 248, 0.08);
+        border: 1px solid rgba(56, 189, 248, 0.15);
+        transition: all 0.15s;
+    }
+    .rec-action-btn:hover {
+        background: rgba(56, 189, 248, 0.2);
+        color: #fff;
+    }
+
+    /* Rec Drawer Body */
+    .rec-body {
+        padding: 0.85rem 1rem 1rem 1rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(10, 14, 23, 0.5);
+    }
+    .solution-heading {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #38bdf8;
+    }
+    .btn-copy-fix {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: #cbd5e1;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 0.2rem 0.55rem;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .btn-copy-fix:hover {
+        background: rgba(56, 189, 248, 0.25);
+        color: #fff;
+        border-color: rgba(56, 189, 248, 0.4);
+    }
+    .btn-copy-fix.copied {
+        background: rgba(16, 185, 129, 0.25);
+        color: #10b981;
+        border-color: rgba(16, 185, 129, 0.4);
+    }
+
+    .code-snippet-box {
+        background: #090d16;
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        border-radius: 8px;
+        padding: 0.65rem 0.85rem;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 0.76rem;
+        color: #7dd3fc;
+        word-break: break-word;
+        white-space: pre-wrap;
+        box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
+    }
+
+    .rec-insight-note {
+        margin-top: 0.5rem;
+        font-size: 0.72rem;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+    }
+
+    @@keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-4px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fadeIn {
+        animation: fadeIn 0.2s ease-out;
+    }
+</style>
 
 @code {
     [Parameter]
@@ -199,6 +810,28 @@
 
     private HashSet<string> expandedViolations = new();
     private bool isRefreshing = false;
+    private string activeFilter = "ALL";
+    private string? copiedRuleId = null;
+
+    private List<TenantRuleViolationStat> filteredViolations
+    {
+        get
+        {
+            if (Scorecard == null || Scorecard.TopViolations == null) return new();
+            if (activeFilter == "WARNING")
+                return Scorecard.TopViolations.Where(v => IsWarningSeverity(v.Severity)).ToList();
+            if (activeFilter == "CRITICAL")
+                return Scorecard.TopViolations.Where(v => !IsWarningSeverity(v.Severity)).ToList();
+            return Scorecard.TopViolations;
+        }
+    }
+
+    private bool IsWarningSeverity(string? severity)
+    {
+        if (string.IsNullOrWhiteSpace(severity)) return true;
+        return severity.Equals("Warning", StringComparison.OrdinalIgnoreCase) ||
+               severity.Equals("Info", StringComparison.OrdinalIgnoreCase);
+    }
 
     private void ToggleViolationDetail(string ruleId)
     {
@@ -206,6 +839,27 @@
             expandedViolations.Remove(ruleId);
         else
             expandedViolations.Add(ruleId);
+    }
+
+    private async Task CopyToClipboard(string ruleId, string text)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            copiedRuleId = ruleId;
+            StateHasChanged();
+            
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(2000);
+                if (copiedRuleId == ruleId)
+                {
+                    copiedRuleId = null;
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+        }
+        catch { }
     }
 
     private async Task CloseModal()
@@ -235,19 +889,18 @@
     private string GetHumanSummary(TenantComplianceScorecard sc)
     {
         if (sc.OverallScore >= 95)
-            return "Yapay zeka sorguları sisteme tam uyumlu ve çok yüksek performansla çalışıyor.";
+            return "Yapay zeka sorguları sisteme tam uyumlu ve olağanüstü performansla çalışıyor.";
         if (sc.OverallScore >= 80)
-            return "Genel sistem performansı iyi. Birkaç küçük optimizasyon önerisi bulunuyor.";
+            return "Genel sistem ve T-SQL performansı iyi. Birkaç küçük optimizasyon tavsiyesi bulunuyor.";
         if (sc.OverallScore >= 60)
-            return "Bazı sorgularda filtreleme ve şablon uyumsuzlukları mevcut, gözden geçirilmesi önerilir.";
-        return "Sorgularda sıkça hata ve kural ihlali oluşuyor, teknik inceleme önerilir.";
+            return "Sorgularda performans ve filtreleme eksikleri mevcut, optimize edilmesi önerilir.";
+        return "Sorgularda kural ihlali ve sözdizimi riskleri tespit edildi, teknik revizyon gereklidir.";
     }
 
     private string GetSimplifiedTitle(string rawTitle)
     {
         if (string.IsNullOrWhiteSpace(rawTitle)) return "Genel İyileştirme Önerisi";
         
-        // Strip out brackets like [M-06], [M-03] if present in title
         var title = rawTitle;
         if (title.StartsWith("[") && title.Contains("]"))
         {
@@ -261,17 +914,17 @@
 
     private string GetScoreColor(int score)
     {
-        if (score >= 90) return "#10b981"; // emerald green
-        if (score >= 75) return "#38bdf8"; // sky blue
-        if (score >= 60) return "#f59e0b"; // amber
-        return "#ef4444"; // red
+        if (score >= 90) return "#10b981"; // Emerald
+        if (score >= 75) return "#38bdf8"; // Sky Blue
+        if (score >= 60) return "#f59e0b"; // Amber
+        return "#ef4444"; // Red
     }
 
     private string GetScoreGlowColor(int score)
     {
-        if (score >= 90) return "rgba(16, 185, 129, 0.3)";
-        if (score >= 75) return "rgba(56, 189, 248, 0.3)";
-        if (score >= 60) return "rgba(245, 158, 11, 0.3)";
-        return "rgba(239, 68, 68, 0.3)";
+        if (score >= 90) return "rgba(16, 185, 129, 0.4)";
+        if (score >= 75) return "rgba(56, 189, 248, 0.4)";
+        if (score >= 60) return "rgba(245, 158, 11, 0.4)";
+        return "rgba(239, 68, 68, 0.4)";
     }
 }

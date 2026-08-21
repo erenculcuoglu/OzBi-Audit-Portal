@@ -748,12 +748,16 @@ namespace OzBiPortalCRM.Services
 
                     if (snapshot != null && snapshot.LastEvaluatedAt > DateTime.UtcNow.AddHours(-12))
                     {
+                        var normalizedErpTypeName = snapshot.ErpType == "Logo" ? ErpVersionConstants.LogoSystemTypeName :
+                                                    snapshot.ErpType == "Mikro" ? ErpVersionConstants.MikroSystemTypeName :
+                                                    snapshot.ErpTypeName;
+
                         var scorecard = new TenantComplianceScorecard
                         {
                             TenantId = snapshot.TenantId,
                             TenantName = snapshot.TenantName,
                             ErpType = snapshot.ErpType,
-                            ErpTypeName = snapshot.ErpTypeName,
+                            ErpTypeName = normalizedErpTypeName,
                             OverallScore = snapshot.OverallScore,
                             Grade = snapshot.Grade,
                             GradeLabel = snapshot.GradeLabel,
@@ -841,6 +845,10 @@ namespace OzBiPortalCRM.Services
                 int warning = scores.Count(s => s >= 60 && s < 90);
                 int critical = scores.Count(s => s < 60);
 
+                bool isPromptSynced = lastReport?.IsPromptSynced ?? true;
+                string promptVerLabel = lastReport?.PromptVersionLabel ?? "Güncel";
+                string promptSyncDetails = lastReport?.PromptSyncDetails ?? "Tenant şeması ve kuralları güncel sistem standartlarıyla senkronize.";
+
                 // Group top violations by RuleId/Title
                 var topViolations = allViolations
                     .GroupBy(v => v.RuleId)
@@ -858,7 +866,8 @@ namespace OzBiPortalCRM.Services
                             Percentage = pct,
                             TotalPenaltyPoints = g.Sum(x => x.PenaltyPoints),
                             RecommendedFix = first.RecommendedFix,
-                            V26RuleReference = first.V26RuleReference
+                            V26RuleReference = first.V26RuleReference,
+                            IsCoveredByGoldenPrompt = isPromptSynced
                         };
                     })
                     .OrderByDescending(v => v.Count)
@@ -866,12 +875,8 @@ namespace OzBiPortalCRM.Services
                     .Take(6)
                     .ToList();
 
-                var erpTypeName = erpConfig.ErpType == ErpSystemType.Logo ? "Logo ERP (v8.0)" :
-                                  erpConfig.ErpType == ErpSystemType.Mikro ? "Mikro ERP (v1.0)" : "Genel ERP";
-
-                bool isPromptSynced = lastReport?.IsPromptSynced ?? true;
-                string promptVerLabel = lastReport?.PromptVersionLabel ?? "Güncel";
-                string promptSyncDetails = lastReport?.PromptSyncDetails ?? "Tenant şeması ve kuralları güncel sistem standartlarıyla senkronize.";
+                var erpTypeName = erpConfig.ErpType == ErpSystemType.Logo ? ErpVersionConstants.LogoSystemTypeName :
+                                  erpConfig.ErpType == ErpSystemType.Mikro ? ErpVersionConstants.MikroSystemTypeName : "Genel ERP";
 
                 var resultScorecard = new TenantComplianceScorecard
                 {
@@ -982,7 +987,7 @@ namespace OzBiPortalCRM.Services
                 TenantId = tenantId,
                 TenantName = "Demo Test Firması A.Ş.",
                 ErpType = "Mikro",
-                ErpTypeName = "Mikro ERP (v1.0)",
+                ErpTypeName = ErpVersionConstants.MikroSystemTypeName,
                 OverallScore = 86,
                 Grade = "A",
                 GradeLabel = "Çok İyi",
@@ -991,8 +996,8 @@ namespace OzBiPortalCRM.Services
                 WarningCount = 3,
                 CriticalCount = 1,
                 IsPromptSynced = true,
-                PromptVersionLabel = "Mikro v1.0 Senkronize",
-                PromptSyncDetails = "Tenant asistan promptu ve veritabanı şeması OzBi Mikro ERP v1.0 güncel standartlarıyla %100 senkronize.",
+                PromptVersionLabel = $"{ErpVersionConstants.MikroSystemTypeName} Senkronize",
+                PromptSyncDetails = $"Tenant asistan promptu ve veritabanı şeması OzBi {ErpVersionConstants.MikroSystemTypeName} güncel standartlarıyla %100 senkronize.",
                 TopViolations = new List<TenantRuleViolationStat>
                 {
                     new TenantRuleViolationStat

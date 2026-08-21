@@ -97,6 +97,15 @@ namespace OzBiPortalCRM.Services
             return Regex.IsMatch(sqlUpper, pattern);
         }
 
+        /// <summary>
+        /// SQL Server braket notasyonunu ([kolon_adi]) sıyırarak normalize eder.
+        /// Bu sayede [CANCELLED] = 0, [ACTIVE] = 0 gibi v8.0 braket kullanımları kusursuz doğrulanır.
+        /// </summary>
+        private string NormalizeSql(string sql)
+        {
+            return sql.Replace("[", "").Replace("]", "");
+        }
+
         public MikroComplianceReport Evaluate(string tsqlQuery, string? userPrompt = null, string? tenantName = null)
         {
             return Evaluate(tsqlQuery, userPrompt, tenantName, forceEvaluation: false);
@@ -108,7 +117,8 @@ namespace OzBiPortalCRM.Services
 
             if (string.IsNullOrWhiteSpace(tsqlQuery)) return report;
 
-            var sql = tsqlQuery.Trim();
+            var rawSql = tsqlQuery.Trim();
+            var sql = NormalizeSql(rawSql);
             var upperSql = sql.ToUpperInvariant();
 
             bool isLogoTenant = tenantName != null && tenantName.ToLowerInvariant().Contains("logo");

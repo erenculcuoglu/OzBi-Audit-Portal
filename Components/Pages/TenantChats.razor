@@ -97,12 +97,11 @@
 
                     <!-- Right: Action Buttons -->
                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <button class="btn btn-sm btn-outline-primary fw-semibold d-inline-flex align-items-center gap-1.5" @onclick="OpenAssistantConfigModal" title="Tenant'ın Yüklü JSON Şeması ve Promptlarını İncele">
-                            <i class="bi bi-cpu-fill text-cyan"></i> Asistan & Şema
-                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">@(tenantAssistants?.Count ?? 0)</span>
+                        <button class="btn btn-sm btn-outline-primary fw-semibold" @onclick="OpenAssistantConfigModal" title="Tenant'ın Yüklü JSON Şeması ve Promptlarını İncele">
+                            Asistan & Şema
                         </button>
                         <button class="btn btn-sm btn-outline-info" @onclick="() => isComplianceModalOpen = true" title="Detaylı ERP Uyum Analizini Görüntüle">
-                            <i class="bi bi-shield-check me-1"></i> Detaylı Uyum Analizi
+                            Detaylı Uyum Analizi
                         </button>
                         <button class="btn btn-sm btn-outline-secondary" @onclick="RefreshScorecardLive" disabled="@isCalculatingScore" title="Canlı Olarak Skoru Yeniden Hesapla">
                             @if (isCalculatingScore)
